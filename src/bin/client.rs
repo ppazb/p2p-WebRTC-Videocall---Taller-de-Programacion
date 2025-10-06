@@ -1,8 +1,11 @@
+use opencv::highgui;
 use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::room_rtc_errors::{ClientErrors, MessageErrors};
+use room_rtc::video_processing;
 use std::io::Write;
 use std::{io, net::UdpSocket, thread};
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
@@ -52,6 +55,20 @@ impl Client {
             }
         });
 
+        //Thread camara visualizer
+        thread::spawn(move || {
+            let mut camara = video_processing::initialize_camara().unwrap();
+            loop {
+                let mut frame = video_processing::read_frame(&mut camara).unwrap();
+                let _ = video_processing::display_frame(&mut frame).unwrap();
+
+                //No borrar wait o no actualiza 
+                if highgui::wait_key(1).unwrap() == 27 { 
+                    break;
+                }
+            }
+        });
+
         //thread sender
         let stdin = io::stdin();
         loop {
@@ -71,6 +88,7 @@ impl Client {
                     .map_err(ClientErrors::CantSendMsg)?;
             }
         }
+
         Ok(())
     }
 }

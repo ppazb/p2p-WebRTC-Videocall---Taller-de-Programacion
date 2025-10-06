@@ -2,6 +2,7 @@ use core::fmt;
 use std::io;
 //use std::str::FromStr;
 //use std::str::SplitAsciiWhitespace;
+
 pub enum ClientErrors {
     CantBind(io::Error),
     CantConect(io::Error),
@@ -50,9 +51,11 @@ impl fmt::Display for MessageErrors {
 }
 
 //----------------------------------------------Camara error------------------------------------
+#[derive(Debug)]
 pub enum VideoProcessingErrors {
     AccessCamara,
     CamaraSettup,
+    DisplayError,
 }
 
 impl fmt::Display for VideoProcessingErrors {
@@ -60,6 +63,7 @@ impl fmt::Display for VideoProcessingErrors {
         match self {
             Self::AccessCamara => writeln!(f, r#"Error: "No se pudo conectar a la cámara"#),
             Self::CamaraSettup => writeln!(f, r#"Error: "No se pudo configurar a la cámara"#),
+            Self::DisplayError => writeln!(f, r#"Error: "No se pudo mostrar la cámara"#),
         }
     }
 }

@@ -1,16 +1,14 @@
 extern crate opencv;
 use crate::room_rtc_errors::VideoProcessingErrors;
+use opencv::highgui;
 use opencv::videoio::{self, VideoCapture, VideoCaptureTrait};
 
-pub fn capture_frame() -> Result<opencv::core::Mat, VideoProcessingErrors> {
-    let mut cam =
+pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
+    let mut camara: VideoCapture =
         VideoCapture::new(0, videoio::CAP_ANY).map_err(|_| VideoProcessingErrors::AccessCamara)?;
 
-    let _ = camara_set_properties(&mut cam)?;
-
-    let mut mat = opencv::core::Mat::default();
-    cam.read(&mut mat).unwrap();
-    Ok(mat)
+    let _ = camara_set_properties(&mut camara)?;
+    Ok(camara)
 }
 
 pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProcessingErrors> {
@@ -24,4 +22,18 @@ pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProc
         .set(4, 480.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
     Ok(())
+}
+
+pub fn display_frame(frame: &opencv::core::Mat) -> Result<(), VideoProcessingErrors> {
+    // Display frame
+    highgui::imshow("Video", &frame).map_err(|_| VideoProcessingErrors::DisplayError)?;
+    Ok(())
+}
+
+pub fn read_frame(camara: &mut VideoCapture) -> Result<opencv::core::Mat, VideoProcessingErrors> {
+    let mut frame = opencv::core::Mat::default();
+    let _ = camara
+        .read(&mut frame)
+        .map_err(|_| VideoProcessingErrors::AccessCamara);
+    Ok(frame)
 }
