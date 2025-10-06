@@ -65,7 +65,7 @@ impl Client {
                 let msg_send = Message::new_msg_text(input);
                 let bytes_of_message = msg_send
                     .serialize()
-                    .map_err(|_e| ClientErrors::From(MessageErrors::MsgTooLarge))?;
+                    .map_err(|_e| ClientErrors::MessageError(MessageErrors::MsgTooLarge))?;
                 socket_send
                     .send(&bytes_of_message)
                     .map_err(ClientErrors::CantSendMsg)?;
