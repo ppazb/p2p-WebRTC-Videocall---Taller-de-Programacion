@@ -9,7 +9,10 @@ pub fn capture_frame() -> Result<opencv::core::Mat, VideoProcessingErrors> {
     let _ = camara_set_properties(&mut cam)?;
 
     let mut mat = opencv::core::Mat::default();
-    cam.read(&mut mat).unwrap();
+    let _ = cam
+        .read(&mut mat)
+        .map_err(|_| VideoProcessingErrors::AccessCamara);
+
     Ok(mat)
 }
 
