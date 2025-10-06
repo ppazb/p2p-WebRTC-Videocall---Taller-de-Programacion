@@ -46,3 +46,18 @@ impl fmt::Display for MessageErrors {
         }
     }
 }
+
+//----------------------------------------------Camara error------------------------------------
+pub enum VideoProcessingErrors {
+    AccessCamara,
+    CamaraSettup,
+}
+
+impl fmt::Display for VideoProcessingErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AccessCamara => writeln!(f, r#"Error: "No se pudo conectar a la cámara"#),
+            Self::CamaraSettup => writeln!(f, r#"Error: "No se pudo configurar a la cámara"#),
+        }
+    }
+}
