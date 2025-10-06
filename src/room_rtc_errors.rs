@@ -2,7 +2,7 @@ use core::fmt;
 use std::io;
 //use std::str::FromStr;
 //use std::str::SplitAsciiWhitespace;
-
+#[derive(Debug)]
 pub enum ClientErrors {
     CantBind(io::Error),
     CantConect(io::Error),
@@ -15,6 +15,12 @@ pub enum ClientErrors {
 impl From<io::Error> for ClientErrors {
     fn from(err: io::Error) -> Self {
         Self::CantBind(err)
+    }
+}
+
+impl From<VideoProcessingErrors> for ClientErrors {
+    fn from(err: VideoProcessingErrors) -> Self {
+        Self::VideoProcessingError(err)
     }
 }
 
@@ -32,7 +38,7 @@ impl fmt::Display for ClientErrors {
 }
 
 //----------------------------------------------Message error------------------------------------
-
+#[derive(Debug)]
 pub enum MessageErrors {
     CantCreate,
     MsgTooLarge,
