@@ -10,7 +10,7 @@ pub enum SdpError {
     InvalidadAdder,
     MissingField(String),
     OfferFileCreationError,
-    OfferFileWriteError
+    OfferFileWriteError,
 }
 
 impl From<std::num::ParseIntError> for SdpError {

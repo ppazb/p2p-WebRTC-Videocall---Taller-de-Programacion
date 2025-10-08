@@ -9,7 +9,7 @@ pub enum ClientErrors {
     CantClone(io::Error),
     CantSendMsg(io::Error),
     MessageError(MessageErrors),
-    VideoProcessingError(VideoProcessingErrors)
+    VideoProcessingError(VideoProcessingErrors),
 }
 
 impl From<io::Error> for ClientErrors {
@@ -32,7 +32,7 @@ impl fmt::Display for ClientErrors {
             Self::CantClone(_) => writeln!(f, "Error: \"No se pudo clonar el socket\""),
             Self::CantSendMsg(_) => writeln!(f, "Error: \"No se pudo enviar el mensaje\""),
             Self::MessageError(message_error) => writeln!(f, "{}", message_error),
-            Self::VideoProcessingError(message_error) => writeln!(f, "{}", message_error)
+            Self::VideoProcessingError(message_error) => writeln!(f, "{}", message_error),
         }
     }
 }

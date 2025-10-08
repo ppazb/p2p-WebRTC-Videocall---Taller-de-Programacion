@@ -6,15 +6,14 @@
 // m=audio 49170 RTP/AVP 0
 // a=rtpmap:0 PCMU/8000
 
-use std::{fmt, fs::File, vec};
 use std::io::Write;
+use std::{fmt, fs::File, vec};
 
 use crate::sdp_errors::SdpError;
 
 const ORIGIN_COMPONENTS_NUMBER: usize = 6;
 const TIME_COMPONENTS_NUMBER: usize = 2;
 const MEDIA_DESCRIPTION_COMPONENTS_NUMBER: usize = 4;
-
 
 #[derive(Debug)]
 pub enum SdpFileLineType {
@@ -68,40 +67,59 @@ impl SessionDescription {
     }
 
     pub fn create_prov(local_addr: &str) -> Result<Self, SdpError> {
-
         if let Some((ip, port)) = local_addr.split_once(':') {
             let version = 0;
-            let session_name = "demo";  
+            let session_name = "demo";
             let origin_struct = Origin::new(
-            "sobrevivir_taller".to_string(), 
-            1000,
-            1, 
-            "IN".to_string(), 
-            "IP4".to_string(),
-            ip.to_string()); 
+                "sobrevivir_taller".to_string(),
+                1000,
+                1,
+                "IN".to_string(),
+                "IP4".to_string(),
+                ip.to_string(),
+            );
             let time_struct = Time::new(0, 0);
             let media_description = MediaDescription::new(
-                "video".to_string(), 
-                port.to_string(), "UDP/TLS/RTP".to_string(), 
-                97, 
-                vec![]
+                "video".to_string(),
+                port.to_string(),
+                "UDP/TLS/RTP".to_string(),
+                97,
+                vec![],
             );
 
-            Ok(Self::new(version, origin_struct, session_name.to_string(), time_struct, media_description))
+            Ok(Self::new(
+                version,
+                origin_struct,
+                session_name.to_string(),
+                time_struct,
+                media_description,
+            ))
         } else {
             Err(SdpError::InvalidadAdder)
         }
     }
 
-    pub fn create(version: usize, origin: &str, session_name: &str, session_time: &str, media: &str, attributes: Vec<&str>) -> Result<Self, SdpError> {
-
+    pub fn create(
+        version: usize,
+        origin: &str,
+        session_name: &str,
+        session_time: &str,
+        media: &str,
+        attributes: Vec<&str>,
+    ) -> Result<Self, SdpError> {
         let origin_struct = Origin::parse(origin)?;
         let time_struct = Time::parse(session_time)?;
-        let vec_attributes = Attribute::parse_vec_attributes(attributes)?; 
+        let vec_attributes = Attribute::parse_vec_attributes(attributes)?;
         let mut media_description = MediaDescription::parse(media)?;
         media_description.add_attr(vec_attributes);
 
-        Ok(Self::new(version, origin_struct, session_name.to_string(), time_struct, media_description))
+        Ok(Self::new(
+            version,
+            origin_struct,
+            session_name.to_string(),
+            time_struct,
+            media_description,
+        ))
     }
 
     pub fn parse(text_sdp_protocol: &str) -> Result<SessionDescription, SdpError> {
@@ -113,7 +131,7 @@ impl SessionDescription {
         let mut temp_vec_attrs = Vec::new();
 
         for line in text_sdp_protocol.lines() {
-            println!("{}", line); 
+            println!("{}", line);
             if let Some((attr, value)) = line.split_once('=') {
                 match SdpFileLineType::parse_prefix(attr) {
                     SdpFileLineType::Version => version = Some(value.parse::<usize>()?),
@@ -209,10 +227,7 @@ impl fmt::Display for MediaDescription {
         writeln!(
             f,
             "m={} {} {} {}",
-            self.media,
-            self.port,
-            self.transport_protocol,
-            self.payload_type
+            self.media, self.port, self.transport_protocol, self.payload_type
         )?;
         for attr in &self.attributes {
             writeln!(f, "a={}", attr)?;
@@ -238,17 +253,15 @@ impl Attribute {
     }
 
     pub fn parse_vec_attributes(vec_attributes: Vec<&str>) -> Result<Vec<Attribute>, SdpError> {
-
-        let mut vec_struct_attributes = Vec::new(); 
+        let mut vec_struct_attributes = Vec::new();
 
         for attr in vec_attributes {
-            vec_struct_attributes.push(Self::parse(attr)?); 
+            vec_struct_attributes.push(Self::parse(attr)?);
         }
 
         Ok(vec_struct_attributes)
     }
 }
-
 
 impl fmt::Display for Attribute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -259,7 +272,7 @@ impl fmt::Display for Attribute {
     }
 }
 
-/// STRUCT ORIGIN 
+/// STRUCT ORIGIN
 #[derive(Debug, Default, PartialEq, PartialOrd)]
 pub struct Origin {
     username: String,
@@ -322,7 +335,7 @@ impl fmt::Display for Origin {
     }
 }
 
-/// STRUCT TIME 
+/// STRUCT TIME
 #[derive(Debug, Default, PartialEq, PartialOrd)]
 pub struct Time {
     start: usize,
@@ -354,32 +367,34 @@ impl fmt::Display for Time {
     }
 }
 
-
-// Provisoria para 2 clientes, después obtener los datos del .config 
-pub fn generate_offer(session_descrip: &SessionDescription, file_path: &str) -> Result<File, SdpError> {
-
+// Provisoria para 2 clientes, después obtener los datos del .config
+pub fn generate_offer(
+    session_descrip: &SessionDescription,
+    file_path: &str,
+) -> Result<File, SdpError> {
     let mut sdp_offer = match File::create(file_path) {
-        Ok(f) => f, 
-        Err(_) => return Err(SdpError::OfferFileCreationError)
-    }; 
-    
-    match write!(sdp_offer, "{}", session_descrip) {
-        Ok(_) => {},
-        Err(_) => return Err(SdpError::OfferFileWriteError)
+        Ok(f) => f,
+        Err(_) => return Err(SdpError::OfferFileCreationError),
     };
-    
+
+    match write!(sdp_offer, "{}", session_descrip) {
+        Ok(_) => {}
+        Err(_) => return Err(SdpError::OfferFileWriteError),
+    };
+
     Ok(sdp_offer)
 }
 
-pub fn create_sdp_offer(local_adder: &str, file_path: &str) -> Result<SessionDescription, SdpError> {
+pub fn create_sdp_offer(
+    local_adder: &str,
+    file_path: &str,
+) -> Result<SessionDescription, SdpError> {
+    let session_description = SessionDescription::create_prov(local_adder)?;
 
-    let session_description = SessionDescription::create_prov(local_adder)?; 
-
-    let _offer = generate_offer(&session_description, file_path)?; 
+    let _offer = generate_offer(&session_description, file_path)?;
 
     Ok(session_description)
 }
-
 
 #[test]
 fn test_sdp_parsing() -> Result<(), SdpError> {
@@ -404,7 +419,7 @@ fn test_sdp_parsing() -> Result<(), SdpError> {
     let mut sdp_correct_media = MediaDescription::parse(&str_media)?;
 
     let str_attr = "rtpmap:97 H264/90000";
-    let sdp_correct_attribute = Attribute::parse(&str_attr)?;
+    let sdp_correct_attribute = Attribute::parse(str_attr)?;
 
     sdp_correct_media.add_attr(vec![sdp_correct_attribute]);
 

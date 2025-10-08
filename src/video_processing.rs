@@ -7,7 +7,7 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
     let mut camara: VideoCapture =
         VideoCapture::new(0, videoio::CAP_ANY).map_err(|_| VideoProcessingErrors::AccessCamara)?;
 
-    let _ = camara_set_properties(&mut camara)?;
+    camara_set_properties(&mut camara)?;
     Ok(camara)
 }
 

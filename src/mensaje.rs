@@ -5,7 +5,7 @@ pub enum MsgType {
     Texto = 0,
     Audio = 1,
     Video = 2,
-    Signalling = 3
+    Signalling = 3,
 }
 
 pub enum Content {
@@ -28,8 +28,8 @@ impl Message {
 
     pub fn new_msg_signalling(text: &str) -> Self {
         Self {
-            typemsg: MsgType::Signalling, 
-            content: Content::Text(text.to_string()), 
+            typemsg: MsgType::Signalling,
+            content: Content::Text(text.to_string()),
         }
     }
 
@@ -72,7 +72,9 @@ impl Message {
         let content_bytes = &data[5..5 + len];
         let content = match msgtype {
             MsgType::Texto => Content::Text(String::from_utf8_lossy(content_bytes).to_string()),
-            MsgType::Signalling => Content::Text(String::from_utf8_lossy(content_bytes).to_string()),
+            MsgType::Signalling => {
+                Content::Text(String::from_utf8_lossy(content_bytes).to_string())
+            }
             _ => Content::Binary(content_bytes.to_vec()),
         };
         Some(Self {
