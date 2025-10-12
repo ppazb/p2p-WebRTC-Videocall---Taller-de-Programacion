@@ -43,7 +43,7 @@ pub fn read_frame(camara: &mut VideoCapture) -> Result<opencv::core::Mat, VideoP
         .map_err(|_| VideoProcessingErrors::AccessCamara);
     Ok(frame)
 }
-
+/*
 pub fn encode(frame: &opencv::core::Mat,encoder: &mut Encoder) -> Result<Vec<u8>,VideoProcessingErrors> {
     let mut yuv = opencv::core::Mat::default();
     imgproc::cvt_color(frame, &mut yuv, imgproc::COLOR_BGR2YUV_I420, 0).unwrap();
@@ -82,3 +82,4 @@ pub fn create_decoder(width: i32, height: i32, bit_rate: i32, fps: i32) -> decod
     let decoder_h264 = Decoder::new().unwrap();
     decoder_h264
 }
+*/

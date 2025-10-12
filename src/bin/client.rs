@@ -1,4 +1,5 @@
 use opencv::highgui;
+use room_rtc::encoding;
 use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::mensaje::MsgType;
@@ -6,6 +7,7 @@ use room_rtc::room_rtc_errors::VideoProcessingErrors;
 use room_rtc::room_rtc_errors::{ClientErrors, MessageErrors};
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
+use room_rtc::encoding::{encoder_rtc,decoder_rtc};
 use std::io::Write;
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
@@ -99,10 +101,10 @@ impl Client {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
                 })?;
 
-                let mut encoder = video_processing::create_encoder(640,480 , 500, 30);
-                let mut decoder = video_processing::create_decoder(640,480 , 500, 30);
+                let mut encoder = encoder_rtc::new_encoding(640,480 , 500, 30);
+                let mut decoder = decoder_rtc::new_decoder(640,480 , 500, 30);
 
-                let encoded_frame = video_processing::encode(&frame, & mut encoder).unwrap();
+                let encoded_frame = encoder_rtc::encode(&frame, & mut encoder).unwrap();
 
                 //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
                 /*
@@ -112,7 +114,7 @@ impl Client {
                 */
                 let video_to_send = Message::new_msg_binary(encoded_frame);
                 let bytes_to_send = video_to_send.serialize().unwrap();
-                socket_send.send(&bytes_to_send);
+                socket_send.send(&bytes_to_send).unwrap();
             }
         });
         loop {
