@@ -33,7 +33,12 @@ impl Message {
         }
     }
 
-    pub fn new_msg_binary() {}
+    pub fn new_msg_binary(video: Vec<u8>) -> Self {
+        Self {
+            typemsg: MsgType::Video,
+            content: Content::Binary(video)
+        }
+    }
     //Convertimos el mensaje a bytes sea cual sea el mensaje
     pub fn serialize(&self) -> Result<Vec<u8>, MessageErrors> {
         let mut serialize = Vec::new();

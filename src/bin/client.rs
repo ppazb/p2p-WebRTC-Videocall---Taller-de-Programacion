@@ -98,17 +98,27 @@ impl Client {
                 let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
                 })?;
-                video_processing::display_frame(&frame).map_err(|_e| {
+
+                let mut encoder = video_processing::create_encoder(640,480 , 500, 30);
+                let mut decoder = video_processing::create_decoder(640,480 , 500, 30);
+
+                let encoded_frame = video_processing::encode(&frame, & mut encoder).unwrap();
+
+                //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
+                /*
+                video_processing::display_frame(&decoded_frame).map_err(|_e| {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::DisplayError)
                 })?;
-                match highgui::wait_key(1) {
-                    Ok(27) => break Ok(()),
-                    Ok(_) => continue,
-                    Err(_) => break Ok(()),
-                }
+                */
+                let video_to_send = Message::new_msg_binary(encoded_frame);
+                let bytes_to_send = video_to_send.serialize().unwrap();
+                socket_send.send(&bytes_to_send);
             }
         });
-
+        loop {
+            
+        }
+/*
         //thread sender
         let stdin = io::stdin();
         loop {
@@ -144,7 +154,7 @@ impl Client {
                     .map_err(ClientErrors::CantSendMsg)?;
             }
         }
-
+        */
         Ok(())
     }
 }
