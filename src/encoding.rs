@@ -17,8 +17,10 @@ impl encoder_rtc {
 
 
     pub fn new_encoding(width: i32, height: i32, bit_rate: i32, fps: i32) -> Self{
+        let config = EncoderConfig::new().usage_type(openh264::encoder::UsageType::CameraVideoRealTime)
+            .level(openh264::encoder::Level::Level_3_1).skip_frames(true);
         Self {
-            encoderh264:  Encoder::new().unwrap(),
+            encoderh264:  Encoder::with_api_config(openh264::OpenH264API::from_source(), config).unwrap(),
             encoderb: false
         }
     }
