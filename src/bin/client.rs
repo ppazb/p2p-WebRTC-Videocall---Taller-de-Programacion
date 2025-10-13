@@ -100,22 +100,20 @@ impl Client {
             }
         });
 
-        //Thread camara visualizer
-        thread::spawn(move || -> Result<(), ClientErrors> {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
 
             let camara_width = video_processing::get_frame_width(&camara).unwrap();
             let camara_height = video_processing::get_frame_height(&camara).unwrap();
-
+            let mut encoder = EncoderRtc::new_encoding(camara_width,camara_height, 500, 30);
             loop {
                 let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
                 })?;
 
 
-                let mut encoder = EncoderRtc::new_encoding(camara_width,camara_height, 500, 30);
+                
                 //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
 
                 let encoded_frame = EncoderRtc::encode(&frame, & mut encoder).unwrap();
@@ -130,10 +128,40 @@ impl Client {
                 let bytes_to_send = video_to_send.serialize().unwrap();
                 socket_send.send(&bytes_to_send).unwrap();
             }
-        });
-        loop {
-            
-        }
+        /*
+        //Thread camara visualizer
+        thread::spawn(move || -> Result<(), ClientErrors> {
+            let mut camara = video_processing::initialize_camara().map_err(|_e| {
+                ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
+            })?;
+
+            let camara_width = video_processing::get_frame_width(&camara).unwrap();
+            let camara_height = video_processing::get_frame_height(&camara).unwrap();
+            let mut encoder = EncoderRtc::new_encoding(camara_width,camara_height, 500, 30);
+            loop {
+                let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
+                    ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
+                })?;
+
+
+                
+                //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
+
+                let encoded_frame = EncoderRtc::encode(&frame, & mut encoder).unwrap();
+
+                //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
+                /*
+                video_processing::display_frame(&decoded_frame).map_err(|_e| {
+                    ClientErrors::VideoProcessingError(VideoProcessingErrors::DisplayError)
+                })?;
+                */
+                let video_to_send = Message::new_msg_binary(encoded_frame, camara_width,camara_height);
+                let bytes_to_send = video_to_send.serialize().unwrap();
+                socket_send.send(&bytes_to_send).unwrap();
+            }
+        });}
+        */
+        
 /*
         //thread sender
         let stdin = io::stdin();
