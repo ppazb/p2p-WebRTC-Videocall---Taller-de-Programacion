@@ -1,3 +1,4 @@
+
 use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::mensaje::MsgType;
@@ -94,13 +95,18 @@ impl Client {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
+
+            let camara_width = video_processing::get_frame_width(&camara).unwrap();
+            let camara_height = video_processing::get_frame_height(&camara).unwrap();
+
             loop {
                 let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
                 })?;
 
-                let mut encoder = encoder_rtc::new_encoding(640,480 , 500, 30);
-                let mut decoder = decoder_rtc::new_decoder(640,480 , 500, 30);
+
+                let mut encoder = encoder_rtc::new_encoding(camara_width, camara_height, 500, 30);
+                let mut decoder = decoder_rtc::new_decoder(camara_width, camara_height, 500, 30);
 
                 let encoded_frame = encoder_rtc::encode(&frame, & mut encoder).unwrap();
 
