@@ -6,10 +6,11 @@ use room_rtc::video_processing_errors::VideoProcessingErrors;
 use room_rtc::client_errors::ClientErrors;
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
-use room_rtc::encoding::{EncoderRtc};
+use room_rtc::encoding::{EncoderRtc, DecoderRtc};
 use std::io::Write;
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
+use opencv::highgui;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
@@ -66,7 +67,8 @@ impl Client {
 
         //Thread reciver
         thread::spawn(move || {
-            let mut buff = [0; 1024];
+            let mut buff: [u8; 102400] = [0; 102400];
+            let mut decoder = DecoderRtc::new_decoder();
             loop {
                 if let Ok((n, _)) = socket_recev.recv_from(&mut buff)
                     && let Some(msg) = Message::deserializable(&buff[..n])
@@ -82,7 +84,15 @@ impl Client {
                             };
                         }
 
-                        Content::Binary(_) => println!("Binario"),
+                        Content::Binary(video_encoded) => {
+                            let frame =  DecoderRtc::decoder(&mut decoder, &video_encoded, msg.dimension.0, msg.dimension.1);
+                            video_processing::display_frame(& frame).unwrap();
+                            match highgui::wait_key(1) {
+                            Ok(27) => break,
+                            Ok(_) => continue,
+                            Err(_) => break,
+                            }
+                        },
                     };
                 }
 
