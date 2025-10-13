@@ -2,7 +2,7 @@ use opencv::highgui;
 use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::mensaje::MsgType;
-use room_rtc::encoding::{decoder_rtc};
+use room_rtc::encoding::{DecoderRtc};
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
 use room_rtc::client_errors::ClientErrors;
@@ -62,13 +62,13 @@ impl Client {
         //let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let user_peer = String::from(&self.peer);
 
-        let (tx, rx) = mpsc::channel::<String>();
+        let (tx, _rx) = mpsc::channel::<String>();
 
         //Thread reciver
         thread::spawn(move || {
             let mut buff: [u8; 102400] = [0; 102400];
             //Tenemos que ver si enviamos o hacemos trato para que el receptor sepa las dimensiones del video
-            let mut decoder = decoder_rtc::new_decoder(640, 480, 30, 30);
+            let mut decoder = DecoderRtc::new_decoder(640, 480, 30, 30);
             loop {
                 if let Ok((n, _)) = socket_recev.recv_from(&mut buff)
                     && let Some(msg) = Message::deserializable(&buff[..n])
@@ -85,7 +85,7 @@ impl Client {
                         }
 
                         Content::Binary(video_encoded) => {
-                            let frame =  decoder_rtc::decoder(&mut decoder, &video_encoded, 640, 480);
+                            let frame =  DecoderRtc::decoder(&mut decoder, &video_encoded, 640, 480);
                             video_processing::display_frame(& frame).unwrap();
                             match highgui::wait_key(1) {
                             Ok(27) => break,

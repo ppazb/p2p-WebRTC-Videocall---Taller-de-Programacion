@@ -6,7 +6,7 @@ use room_rtc::video_processing_errors::VideoProcessingErrors;
 use room_rtc::client_errors::ClientErrors;
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
-use room_rtc::encoding::{encoder_rtc,decoder_rtc};
+use room_rtc::encoding::{EncoderRtc};
 use std::io::Write;
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
@@ -62,7 +62,7 @@ impl Client {
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let user_peer = String::from(&self.peer);
 
-        let (tx, rx) = mpsc::channel::<String>();
+        let (tx, _rx) = mpsc::channel::<String>();
 
         //Thread reciver
         thread::spawn(move || {
@@ -105,10 +105,10 @@ impl Client {
                 })?;
 
 
-                let mut encoder = encoder_rtc::new_encoding(640,480, 500, 30);
-                //let mut decoder = decoder_rtc::new_decoder(640, 480, 500, 30);
+                let mut encoder = EncoderRtc::new_encoding(640,480, 500, 30);
+                //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
 
-                let encoded_frame = encoder_rtc::encode(&frame, & mut encoder).unwrap();
+                let encoded_frame = EncoderRtc::encode(&frame, & mut encoder).unwrap();
 
                 //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
                 /*
@@ -161,6 +161,5 @@ impl Client {
             }
         }
         */
-        Ok(())
     }
 }
