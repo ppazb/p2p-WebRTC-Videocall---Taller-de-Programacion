@@ -15,7 +15,9 @@ pub enum Content {
 
 pub struct Message {
     pub typemsg: MsgType,
+    pub dimension: (i32,i32),
     pub content: Content,
+
 }
 
 impl Message {
@@ -23,6 +25,7 @@ impl Message {
         Self {
             typemsg: MsgType::Texto,
             content: Content::Text(text.to_string()),
+            dimension: (0,0)
         }
     }
 
@@ -30,19 +33,23 @@ impl Message {
         Self {
             typemsg: MsgType::Signalling,
             content: Content::Text(text.to_string()),
+            dimension: (0,0)
         }
     }
 
-    pub fn new_msg_binary(video: Vec<u8>) -> Self {
+    pub fn new_msg_binary(video: Vec<u8>,_width: i32, _height: i32) -> Self {
         Self {
             typemsg: MsgType::Video,
-            content: Content::Binary(video)
+            content: Content::Binary(video),
+            dimension: (_width,_height)
         }
     }
     //Convertimos el mensaje a bytes sea cual sea el mensaje
     pub fn serialize(&self) -> Result<Vec<u8>, MessageErrors> {
         let mut serialize = Vec::new();
         serialize.push(self.typemsg as u8);
+        serialize.extend_from_slice(&self.dimension.0.to_be_bytes());
+        serialize.extend_from_slice(&self.dimension.1.to_be_bytes());
         match &self.content {
             Content::Text(text) => {
                 let text_bytes = text.as_bytes();
@@ -70,11 +77,13 @@ impl Message {
             3 => MsgType::Signalling,
             _ => return None,
         };
-        let len = u32::from_be_bytes([data[1], data[2], data[3], data[4]]) as usize;
-        if data.len() < 5 + len {
+        let w = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+        let h = i32::from_be_bytes([data[5], data[6], data[7], data[8]]);
+        let len = u32::from_be_bytes([data[9], data[10], data[11], data[12]]) as usize;
+        if data.len() < 13 + len {
             return None;
         }
-        let content_bytes = &data[5..5 + len];
+        let content_bytes = &data[13..13 + len];
         let content = match msgtype {
             MsgType::Texto => Content::Text(String::from_utf8_lossy(content_bytes).to_string()),
             MsgType::Signalling => {
@@ -85,6 +94,7 @@ impl Message {
         Some(Self {
             content,
             typemsg: msgtype,
+            dimension:(w,h)
         })
     }
 }

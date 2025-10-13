@@ -68,7 +68,7 @@ impl Client {
         thread::spawn(move || {
             let mut buff: [u8; 102400] = [0; 102400];
             //Tenemos que ver si enviamos o hacemos trato para que el receptor sepa las dimensiones del video
-            let mut decoder = DecoderRtc::new_decoder(640, 480, 30, 30);
+            let mut decoder = DecoderRtc::new_decoder();
             loop {
                 if let Ok((n, _)) = socket_recev.recv_from(&mut buff)
                     && let Some(msg) = Message::deserializable(&buff[..n])
@@ -85,7 +85,7 @@ impl Client {
                         }
 
                         Content::Binary(video_encoded) => {
-                            let frame =  DecoderRtc::decoder(&mut decoder, &video_encoded, 640, 480);
+                            let frame =  DecoderRtc::decoder(&mut decoder, &video_encoded, msg.dimension.0, msg.dimension.1);
                             video_processing::display_frame(& frame).unwrap();
                             match highgui::wait_key(1) {
                             Ok(27) => break,

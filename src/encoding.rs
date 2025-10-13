@@ -49,10 +49,7 @@ pub struct DecoderRtc {
 
 impl DecoderRtc {
 
-    pub fn new_decoder(_width: i32, _height: i32, bit_rate: i32, fps: i32) -> Self {
-        if _width + _height + bit_rate + fps > 10{
-            
-        }
+    pub fn new_decoder() -> Self {
         Self {
             decoderh264: Decoder::new().unwrap(),
             //decoderb:false

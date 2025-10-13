@@ -5,7 +5,7 @@ use opencv::{highgui};
 use opencv::videoio::{self, VideoCapture, VideoCaptureTrait, VideoCaptureTraitConst};
 
 pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
-    let mut camara = match VideoCapture::new(0, videoio::CAP_ANY) {
+    let mut camara = match VideoCapture::new(0, videoio::CAP_V4L2) {
         Ok(camara) => camara,
         Err(e) => {
             println!("hubo error!!!!! {}", e);
@@ -23,12 +23,12 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
 pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProcessingErrors> {
     //Parameter 3 = CAP_PROP_FRAME_WIDTH
     capture
-        .set(videoio::CAP_PROP_FRAME_WIDTH , 640.0)
+        .set(videoio::CAP_PROP_FRAME_WIDTH , 1920.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
     //Parameter 4 = CAP_PROP_FRAME_HEIGHT
     capture
-        .set(videoio::CAP_PROP_FRAME_HEIGHT, 480.0)
+        .set(videoio::CAP_PROP_FRAME_HEIGHT, 1080.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
     capture   

@@ -96,8 +96,8 @@ impl Client {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
 
-            //let camara_width = video_processing::get_frame_width(&camara).unwrap();
-            //let camara_height = video_processing::get_frame_height(&camara).unwrap();
+            let camara_width = video_processing::get_frame_width(&camara).unwrap();
+            let camara_height = video_processing::get_frame_height(&camara).unwrap();
 
             loop {
                 let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
@@ -105,7 +105,7 @@ impl Client {
                 })?;
 
 
-                let mut encoder = EncoderRtc::new_encoding(640,480, 500, 30);
+                let mut encoder = EncoderRtc::new_encoding(camara_width,camara_height, 500, 30);
                 //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
 
                 let encoded_frame = EncoderRtc::encode(&frame, & mut encoder).unwrap();
@@ -116,7 +116,7 @@ impl Client {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::DisplayError)
                 })?;
                 */
-                let video_to_send = Message::new_msg_binary(encoded_frame);
+                let video_to_send = Message::new_msg_binary(encoded_frame, camara_width,camara_height);
                 let bytes_to_send = video_to_send.serialize().unwrap();
                 socket_send.send(&bytes_to_send).unwrap();
             }
