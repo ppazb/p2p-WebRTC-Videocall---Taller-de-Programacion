@@ -1,4 +1,4 @@
-use crate::room_rtc_errors::MessageErrors;
+use crate::mensaje_errors::MessageErrors;
 
 #[derive(Debug, Clone, Copy)]
 pub enum MsgType {

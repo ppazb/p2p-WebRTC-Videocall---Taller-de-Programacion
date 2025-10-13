@@ -3,12 +3,13 @@ use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::mensaje::MsgType;
 use room_rtc::encoding::{encoder_rtc,decoder_rtc};
-use room_rtc::room_rtc_errors::{ClientErrors, MessageErrors};
+use room_rtc::client_errors::ClientErrors;
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
 use std::io::Write;
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {

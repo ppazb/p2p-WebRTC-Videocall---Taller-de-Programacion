@@ -1,12 +1,7 @@
 extern crate opencv;
 extern crate openh264;
-use crate::room_rtc_errors::VideoProcessingErrors;
-use opencv::core::{MatTraitConst, MatTraitConstManual};
-use openh264::encoder::{Encoder, EncoderConfig};
-use openh264::decoder::Decoder;
-use openh264::formats::YUVSource;
-use openh264::{decoder,encoder};
-use opencv::{highgui, imgproc};
+use crate::video_processing_errors::VideoProcessingErrors;
+use opencv::{highgui};
 use opencv::videoio::{self, VideoCapture, VideoCaptureTrait};
 
 pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
@@ -20,13 +15,30 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
 pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProcessingErrors> {
     //Parameter 3 = CAP_PROP_FRAME_WIDTH
     capture
-        .set(3, 640.0)
+        .set(videoio::CAP_PROP_FRAME_WIDTH , 1920.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
     //Parameter 4 = CAP_PROP_FRAME_HEIGHT
     capture
-        .set(4, 480.0)
+        .set(videoio::CAP_PROP_FRAME_HEIGHT, 1080.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
+
+    capture   
+        .set(videoio::CAP_PROP_FPS, 60.0)
+        .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
+
+    capture   
+        .set(videoio::CAP_PROP_BRIGHTNESS, 100.0)
+        .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
+
+    capture   
+        .set(videoio::CAP_PROP_CONTRAST, 50.0)
+        .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
+
+    capture   
+        .set(videoio::CAP_PROP_SATURATION, 50.0)
+        .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
+
     Ok(())
 }
 

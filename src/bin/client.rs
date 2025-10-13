@@ -1,10 +1,8 @@
-use opencv::highgui;
-use room_rtc::encoding;
 use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::mensaje::MsgType;
-use room_rtc::room_rtc_errors::VideoProcessingErrors;
-use room_rtc::room_rtc_errors::{ClientErrors, MessageErrors};
+use room_rtc::video_processing_errors::VideoProcessingErrors;
+use room_rtc::client_errors::ClientErrors;
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
 use room_rtc::encoding::{encoder_rtc,decoder_rtc};

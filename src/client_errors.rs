@@ -1,5 +1,7 @@
 use core::fmt;
 use std::io;
+use crate::mensaje_errors::MessageErrors;
+use crate::video_processing_errors::VideoProcessingErrors;
 //use std::str::FromStr;
 //use std::str::SplitAsciiWhitespace;
 #[derive(Debug)]
@@ -37,39 +39,3 @@ impl fmt::Display for ClientErrors {
     }
 }
 
-//----------------------------------------------Message error------------------------------------
-#[derive(Debug)]
-pub enum MessageErrors {
-    CantCreate,
-    MsgTooLarge,
-}
-
-impl fmt::Display for MessageErrors {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::CantCreate => writeln!(f, "Error: \"No se pudo crear el mensaje\""),
-            Self::MsgTooLarge => writeln!(
-                f,
-                "Error: \"No se pudo enviar el mensaje, mesaje muy grande\""
-            ),
-        }
-    }
-}
-
-//----------------------------------------------Camara error------------------------------------
-#[derive(Debug)]
-pub enum VideoProcessingErrors {
-    AccessCamara,
-    CamaraSettup,
-    DisplayError,
-}
-
-impl fmt::Display for VideoProcessingErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::AccessCamara => writeln!(f, r#"Error: "No se pudo conectar a la cámara"#),
-            Self::CamaraSettup => writeln!(f, r#"Error: "No se pudo configurar a la cámara"#),
-            Self::DisplayError => writeln!(f, r#"Error: "No se pudo mostrar la cámara"#),
-        }
-    }
-}

@@ -1,6 +1,6 @@
 extern crate opencv;
 extern crate openh264;
-use crate::room_rtc_errors::VideoProcessingErrors;
+use crate::video_processing_errors::VideoProcessingErrors;
 use opencv::core::{MatTraitConst, MatTraitConstManual};
 use openh264::encoder::{Encoder, EncoderConfig};
 use openh264::decoder::Decoder;
