@@ -15,9 +15,8 @@ pub enum Content {
 
 pub struct Message {
     pub typemsg: MsgType,
-    pub dimension: (i32,i32),
+    pub dimension: (i32, i32),
     pub content: Content,
-
 }
 
 impl Message {
@@ -25,7 +24,7 @@ impl Message {
         Self {
             typemsg: MsgType::Texto,
             content: Content::Text(text.to_string()),
-            dimension: (0,0)
+            dimension: (0, 0),
         }
     }
 
@@ -33,15 +32,15 @@ impl Message {
         Self {
             typemsg: MsgType::Signalling,
             content: Content::Text(text.to_string()),
-            dimension: (0,0)
+            dimension: (0, 0),
         }
     }
 
-    pub fn new_msg_binary(video: Vec<u8>,_width: i32, _height: i32) -> Self {
+    pub fn new_msg_binary(video: Vec<u8>, _width: i32, _height: i32) -> Self {
         Self {
             typemsg: MsgType::Video,
             content: Content::Binary(video),
-            dimension: (_width,_height)
+            dimension: (_width, _height),
         }
     }
     //Convertimos el mensaje a bytes sea cual sea el mensaje
@@ -94,7 +93,7 @@ impl Message {
         Some(Self {
             content,
             typemsg: msgtype,
-            dimension:(w,h)
+            dimension: (w, h),
         })
     }
 }

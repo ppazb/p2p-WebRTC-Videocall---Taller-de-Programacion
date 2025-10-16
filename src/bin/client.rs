@@ -1,16 +1,15 @@
-
+use opencv::highgui;
+use room_rtc::client_errors::ClientErrors;
+use room_rtc::encoding::{DecoderRtc, EncoderRtc};
 use room_rtc::mensaje::Content;
 use room_rtc::mensaje::Message;
 use room_rtc::mensaje::MsgType;
-use room_rtc::video_processing_errors::VideoProcessingErrors;
-use room_rtc::client_errors::ClientErrors;
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
-use room_rtc::encoding::{EncoderRtc, DecoderRtc};
+use room_rtc::video_processing_errors::VideoProcessingErrors;
 use std::io::Write;
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
-use opencv::highgui;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
@@ -66,9 +65,9 @@ impl Client {
         let (tx, _rx) = mpsc::channel::<String>();
 
         //Thread reciver
-        thread::spawn(move || {
+        thread::spawn(move || -> Result<(), ClientErrors> {
             let mut buff: [u8; 102400] = [0; 102400];
-            let mut decoder = DecoderRtc::new_decoder();
+            let mut decoder = DecoderRtc::new_decoder()?;
             loop {
                 if let Ok((n, _)) = socket_recev.recv_from(&mut buff)
                     && let Some(msg) = Message::deserializable(&buff[..n])
@@ -85,14 +84,19 @@ impl Client {
                         }
 
                         Content::Binary(video_encoded) => {
-                            let frame =  DecoderRtc::decoder(&mut decoder, &video_encoded, msg.dimension.0, msg.dimension.1);
-                            video_processing::display_frame(& frame).unwrap();
+                            let frame = DecoderRtc::decoder(
+                                &mut decoder,
+                                &video_encoded,
+                                msg.dimension.0,
+                                msg.dimension.1,
+                            )?;
+                            video_processing::display_frame(&frame)?;
                             match highgui::wait_key(1) {
-                            Ok(27) => break,
-                            Ok(_) => continue,
-                            Err(_) => break,
+                                Ok(27) => break Ok(()),
+                                Ok(_) => continue,
+                                Err(_) => break Ok(()),
                             }
-                        },
+                        }
                     };
                 }
 
@@ -100,34 +104,36 @@ impl Client {
             }
         });
 
-            let mut camara = video_processing::initialize_camara().map_err(|_e| {
-                ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
+        let mut camara = video_processing::initialize_camara().map_err(|_e| {
+            ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
+        })?;
+
+        let camara_width = video_processing::get_frame_width(&camara)?;
+        let camara_height = video_processing::get_frame_height(&camara)?;
+        let mut encoder = EncoderRtc::new_encoding(camara_width, camara_height, 500, 30)?;
+        loop {
+            let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
+                ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
             })?;
 
-            let camara_width = video_processing::get_frame_width(&camara).unwrap();
-            let camara_height = video_processing::get_frame_height(&camara).unwrap();
-            let mut encoder = EncoderRtc::new_encoding(camara_width,camara_height, 500, 30);
-            loop {
-                let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
-                    ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
-                })?;
+            //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
 
+            let encoded_frame = EncoderRtc::encode(&frame, &mut encoder)?;
 
-                
-                //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
-
-                let encoded_frame = EncoderRtc::encode(&frame, & mut encoder).unwrap();
-
-                //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
-                /*
-                video_processing::display_frame(&decoded_frame).map_err(|_e| {
-                    ClientErrors::VideoProcessingError(VideoProcessingErrors::DisplayError)
-                })?;
-                */
-                let video_to_send = Message::new_msg_binary(encoded_frame, camara_width,camara_height);
-                let bytes_to_send = video_to_send.serialize().unwrap();
-                socket_send.send(&bytes_to_send).unwrap();
-            }
+            //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
+            /*
+            video_processing::display_frame(&decoded_frame).map_err(|_e| {
+                ClientErrors::VideoProcessingError(VideoProcessingErrors::DisplayError)
+            })?;
+            */
+            let video_to_send = Message::new_msg_binary(encoded_frame, camara_width, camara_height);
+            let bytes_to_send = video_to_send
+                .serialize()
+                .map_err(|_e| ClientErrors::SerializeBits)?;
+            socket_send
+                .send(&bytes_to_send)
+                .map_err(|_e| ClientErrors::SendBits)?;
+        }
         /*
         //Thread camara visualizer
         thread::spawn(move || -> Result<(), ClientErrors> {
@@ -144,7 +150,7 @@ impl Client {
                 })?;
 
 
-                
+
                 //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
 
                 let encoded_frame = EncoderRtc::encode(&frame, & mut encoder).unwrap();
@@ -161,8 +167,8 @@ impl Client {
             }
         });}
         */
-        
-/*
+
+        /*
         //thread sender
         let stdin = io::stdin();
         loop {

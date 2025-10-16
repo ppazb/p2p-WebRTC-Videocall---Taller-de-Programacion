@@ -1,7 +1,7 @@
 extern crate opencv;
 extern crate openh264;
 use crate::video_processing_errors::VideoProcessingErrors;
-use opencv::{highgui};
+use opencv::highgui;
 use opencv::videoio::{self, VideoCapture, VideoCaptureTrait, VideoCaptureTraitConst};
 
 pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
@@ -9,13 +9,13 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
         Ok(camara) => camara,
         Err(e) => {
             println!("hubo error!!!!! {}", e);
-            return  Err(VideoProcessingErrors::AccessCamara);
-        },
+            return Err(VideoProcessingErrors::AccessCamara);
+        }
     };
-    
+
     /*let mut camara: VideoCapture =
-        VideoCapture::new(0, videoio::CAP_ANY).map_err(|_| VideoProcessingErrors::AccessCamara)?;
-*/
+            VideoCapture::new(0, videoio::CAP_ANY).map_err(|_| VideoProcessingErrors::AccessCamara)?;
+    */
     camara_set_properties(&mut camara)?;
     Ok(camara)
 }
@@ -23,7 +23,7 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
 pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProcessingErrors> {
     //Parameter 3 = CAP_PROP_FRAME_WIDTH
     capture
-        .set(videoio::CAP_PROP_FRAME_WIDTH , 1920.0)
+        .set(videoio::CAP_PROP_FRAME_WIDTH, 1920.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
     //Parameter 4 = CAP_PROP_FRAME_HEIGHT
@@ -31,13 +31,14 @@ pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProc
         .set(videoio::CAP_PROP_FRAME_HEIGHT, 1080.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
-    capture   
+    capture
         .set(videoio::CAP_PROP_FPS, 30.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
-    let frame_w = get_frame_width(&capture).unwrap();
-    let frame_h = get_frame_height(&capture).unwrap();
-    println!("Estoy tomando: {}x{}",frame_w,frame_h);
+    //temporal
+    let frame_w = get_frame_width(capture).unwrap();
+    let frame_h = get_frame_height(capture).unwrap();
+    println!("Estoy tomando: {}x{}", frame_w, frame_h);
     Ok(())
 }
 
@@ -55,14 +56,14 @@ pub fn read_frame(camara: &mut VideoCapture) -> Result<opencv::core::Mat, VideoP
     Ok(frame)
 }
 
-pub fn get_frame_width(camara: & VideoCapture) -> Result<i32, VideoProcessingErrors> {
+pub fn get_frame_width(camara: &VideoCapture) -> Result<i32, VideoProcessingErrors> {
     let width = camara
         .get(videoio::CAP_PROP_FRAME_WIDTH)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)? as i32;
     Ok(width)
 }
 
-pub fn get_frame_height(camara: & VideoCapture) -> Result<i32, VideoProcessingErrors> {
+pub fn get_frame_height(camara: &VideoCapture) -> Result<i32, VideoProcessingErrors> {
     let height = camara
         .get(videoio::CAP_PROP_FRAME_HEIGHT)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)? as i32;
