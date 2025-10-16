@@ -13,13 +13,7 @@ pub struct EncoderRtc {
 }
 
 impl EncoderRtc {
-    pub fn new_encoding(
-        _width: i32,
-        _height: i32,
-        bit_rate: i32,
-        fps: i32,
-    ) -> Result<Self, EncodingErrors> {
-        if _width + _height + bit_rate + fps > 10 {}
+    pub fn new_encoding() -> Result<Self, EncodingErrors> {
         let config = EncoderConfig::new()
             .usage_type(openh264::encoder::UsageType::CameraVideoRealTime)
             .level(openh264::encoder::Level::Level_3_1)

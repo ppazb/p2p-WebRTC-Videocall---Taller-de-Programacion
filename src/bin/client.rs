@@ -110,7 +110,7 @@ impl Client {
 
         let camara_width = video_processing::get_frame_width(&camara)?;
         let camara_height = video_processing::get_frame_height(&camara)?;
-        let mut encoder = EncoderRtc::new_encoding(camara_width, camara_height, 500, 30)?;
+        let mut encoder = EncoderRtc::new_encoding()?;
         loop {
             let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
@@ -133,6 +133,7 @@ impl Client {
             socket_send
                 .send(&bytes_to_send)
                 .map_err(|_e| ClientErrors::SendBits)?;
+
         }
         /*
         //Thread camara visualizer
