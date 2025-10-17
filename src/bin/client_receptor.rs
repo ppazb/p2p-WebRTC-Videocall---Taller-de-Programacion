@@ -85,19 +85,17 @@ impl Client {
                         }
 
                         Content::Binary(video_encoded) => {
-                            let frame = DecoderRtc::decoder(
-                                &mut decoder,
+                                let frame = decoder.decode(
                                 &video_encoded,
                                 msg.dimension.0,
                                 msg.dimension.1,
-                            )?;
-
-                            video_processing::display_frame(&frame).unwrap();
-                            match highgui::wait_key(1) {
-                                Ok(27) => break Ok(()),
-                                Ok(_) => continue,
-                                Err(_) => break Ok(()),
-                            }
+                            ).unwrap();
+                                video_processing::display_frame(&frame)?;
+                                match highgui::wait_key(1) {
+                                    Ok(27) => break Ok(()),
+                                    Ok(_) => continue,
+                                    Err(_) => break Ok(()),
+                                }                                
                         }
                     };
                 }

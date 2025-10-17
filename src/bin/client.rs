@@ -84,18 +84,18 @@ impl Client {
                         }
 
                         Content::Binary(video_encoded) => {
-                            let frame = DecoderRtc::decoder(
-                                &mut decoder,
+                                                     
+                            let frame = decoder.decode(
                                 &video_encoded,
                                 msg.dimension.0,
                                 msg.dimension.1,
                             )?;
-                            video_processing::display_frame(&frame)?;
-                            match highgui::wait_key(1) {
-                                Ok(27) => break Ok(()),
-                                Ok(_) => continue,
-                                Err(_) => break Ok(()),
-                            }
+                                video_processing::display_frame(&frame)?;
+                                match highgui::wait_key(1) {
+                                    Ok(27) => break Ok(()),
+                                    Ok(_) => continue,
+                                    Err(_) => break Ok(()),
+                                }                                
                         }
                     };
                 }
@@ -111,29 +111,65 @@ impl Client {
         let camara_width = video_processing::get_frame_width(&camara)?;
         let camara_height = video_processing::get_frame_height(&camara)?;
         let mut encoder = EncoderRtc::new_encoding()?;
+        //let mut decoder = DecoderRtc::new_decoder()?;
         loop {
             let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
             })?;
 
-            //let mut decoder = DecoderRtc::new_decoder(640, 480, 500, 30);
+            let encoded_frame = encoder.encode(&frame)?;
+            if encoded_frame.is_empty() { println!("CONTINUE");
+                continue; }
+            else {
+                println!("enviando algo");
+            }
+                  /*/
+             let decoded_frame= decoder.decode(&encoded_frame, camara_width, camara_height)?;
+                video_processing::display_frame(&decoded_frame)?;
+                video_processing::display_frame(&frame)?;
+                match highgui::wait_key(1) {
+                    Ok(27) => break Ok(()),
+                    Ok(_) => (),
+                    Err(_) => break Ok(()),
+                }                       
+                */
+                let video_to_send = Message::new_msg_binary(encoded_frame, camara_width, camara_height);
+                let bytes_to_send = video_to_send
+                    .serialize()
+                    .map_err(|_e| ClientErrors::SerializeBits)?;
 
-            let encoded_frame = EncoderRtc::encode(&frame, &mut encoder)?;
+                socket_send
+                    .send(&bytes_to_send)
+                    .map_err(|_e| ClientErrors::SendBits)?;
+                /*
+                if let Some(msg) = Message::deserializable(&bytes_to_send)
+                {
+                    match msg.content {
+                        Content::Text(text) => {
+                            match msg.typemsg {
+                                MsgType::Signalling => {
+                                    
+                                }
+                                _ => (),
+                            };
+                        }
 
-            //let decoded_frame = video_processing::decoder(&mut decoder, &encoded_frame, 640, 480);
-            /*
-            video_processing::display_frame(&decoded_frame).map_err(|_e| {
-                ClientErrors::VideoProcessingError(VideoProcessingErrors::DisplayError)
-            })?;
+                        Content::Binary(video_encoded) => {
+                                let frame = decoder.decode(
+                                &video_encoded,
+                                msg.dimension.0,
+                                msg.dimension.1,
+                            ).unwrap();
+                                video_processing::display_frame(&frame)?;
+                                match highgui::wait_key(1) {
+                                    Ok(27) => break Ok(()),
+                                    Ok(_) => continue,
+                                    Err(_) => break Ok(()),
+                                }                                
+                        }
+                    };
+                }
             */
-            let video_to_send = Message::new_msg_binary(encoded_frame, camara_width, camara_height);
-            let bytes_to_send = video_to_send
-                .serialize()
-                .map_err(|_e| ClientErrors::SerializeBits)?;
-            socket_send
-                .send(&bytes_to_send)
-                .map_err(|_e| ClientErrors::SendBits)?;
-
         }
         /*
         //Thread camara visualizer
