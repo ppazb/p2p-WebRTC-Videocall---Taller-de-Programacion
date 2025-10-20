@@ -1,6 +1,0 @@
-v=0
-o=sobrevivir_taller 1000 1 IN IP4 127.0.0.1
-s=demo
-t=0 0
-m=video 5000 UDP/TLS/RTP 97
-

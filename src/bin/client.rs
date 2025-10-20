@@ -38,11 +38,10 @@ fn main() {
         Err(e) =>  eprintln!("{}", e),
     }
 
-    let peer_adder = client_offer_session_descrip.get_address(); 
-
-
-    
+    let peer_adder = client_offer_session_descrip.get_address();     
     let my_adder = offer.get_address(); 
+    println!("my: {}", my_adder);
+    println!("peer: {}",peer_adder);
 
     let client = match Client::new(&my_adder, &peer_adder) {
         Ok(client) => client,
@@ -108,8 +107,7 @@ impl Client {
                             };
                         }
 
-                        Content::Binary(video_encoded) => {
-                                                     
+                        Content::Binary(video_encoded) => {                                                     
                             let frame = decoder.decode(
                                 &video_encoded,
                                 msg.dimension.0,
@@ -143,10 +141,10 @@ impl Client {
             })?;
 
             let encoded_frame = encoder.encode(&frame)?;
-            if encoded_frame.is_empty() { println!("CONTINUE");
+            if encoded_frame.is_empty() { //println!("CONTINUE");
                 continue; }
             else {
-                println!("enviando algo");
+                //println!("enviando algo");
             }
                   /*/
              let decoded_frame= decoder.decode(&encoded_frame, camara_width, camara_height)?;
