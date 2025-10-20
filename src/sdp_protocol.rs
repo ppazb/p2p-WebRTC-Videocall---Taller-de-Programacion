@@ -84,7 +84,10 @@ impl SessionDescription {
                 port.to_string(),
                 "UDP/TLS/RTP".to_string(),
                 97,
-                vec![],
+                vec![Attribute::Value(
+                    "rtpmap".to_string(),
+                    "97 H264/90000".to_string(),
+                )],
             );
 
             Ok(Self::new(
@@ -122,6 +125,26 @@ impl SessionDescription {
         ))
     }
 
+    pub fn get_address(&self) -> String {
+        let ip = self.origin.unicast_address.to_string();
+        let port = self.media.port.to_string();
+        ip + ":" + &port
+    }
+
+    // Solamente recibimos un MediaDescription (podría escalar a más y ser vector de MediaDescription)
+    pub fn generate_compatible_session(
+        &self,
+        session_descrip_offer: &SessionDescription,
+    ) -> Option<&Self> {
+        if self
+            .media
+            .compare_media_descriptions(&session_descrip_offer.media)
+        {
+            return Some(self);
+        };
+        None
+    }
+
     pub fn parse(text_sdp_protocol: &str) -> Result<SessionDescription, SdpError> {
         let mut version: Option<usize> = None;
         let mut origin: Option<Origin> = None;
@@ -130,8 +153,10 @@ impl SessionDescription {
         let mut media: Option<MediaDescription> = None;
         let mut temp_vec_attrs = Vec::new();
 
+        // println!("[DEBUG] Media Description Len: {:?}", text_sdp_protocol.len());
         for line in text_sdp_protocol.lines() {
-            println!("{}", line);
+            // println!("{}", line);
+            // println!("[DEBUG] Media Description Parse: {:?}", line);
             if let Some((attr, value)) = line.split_once('=') {
                 match SdpFileLineType::parse_prefix(attr) {
                     SdpFileLineType::Version => version = Some(value.parse::<usize>()?),
@@ -205,10 +230,29 @@ impl MediaDescription {
         self.attributes.extend(new_attrs);
     }
 
+    pub fn compare_media_descriptions(&self, another_media_descrip: &MediaDescription) -> bool {
+        if (self.media == another_media_descrip.media)
+            && (self.transport_protocol == another_media_descrip.transport_protocol)
+        {
+            let rtpmap = match Attribute::get_rtpmap(&self.attributes) {
+                Some(v) => v,
+                None => return false,
+            };
+            let rtpmap_to_compare = match Attribute::get_rtpmap(&another_media_descrip.attributes) {
+                Some(v) => v,
+                None => return false,
+            };
+
+            return rtpmap == rtpmap_to_compare;
+        }
+        false
+    }
+
     pub fn parse(str_mediadescrip: &str) -> Result<Self, SdpError> {
+        // println!("[DEBUG] Media Parsing: {}", str_mediadescrip);
         let media_components: Vec<&str> = str_mediadescrip.split_whitespace().collect();
 
-        if media_components.len() != MEDIA_DESCRIPTION_COMPONENTS_NUMBER {
+        if media_components.len() < MEDIA_DESCRIPTION_COMPONENTS_NUMBER {
             return Err(SdpError::InvalidMediaFormat);
         }
 
@@ -236,6 +280,13 @@ impl fmt::Display for MediaDescription {
     }
 }
 
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct IceInformation {
+    ufrag: String,
+    pwd: String,
+    candidates: Vec<String>,
+}
+
 /// ATTRIBUTE
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum Attribute {
@@ -250,6 +301,45 @@ impl Attribute {
         } else {
             Ok(Attribute::Property(str_attribute.to_string()))
         }
+    }
+
+    pub fn get_rtpmap(vec_attributes: &Vec<Attribute>) -> Option<&str> {
+        for attr in vec_attributes {
+            if let Attribute::Value(k, v) = attr
+                && k.as_str() == "rtpmap"
+            {
+                return Some(v);
+            }
+        }
+
+        None
+    }
+
+    pub fn extract_ice_information(
+        vec_attributes: &Vec<Attribute>,
+    ) -> Result<IceInformation, SdpError> {
+        let mut ice_info = IceInformation {
+            ufrag: String::new(),
+            pwd: String::new(),
+            candidates: Vec::new(),
+        };
+
+        for attr in vec_attributes {
+            if let Attribute::Value(k, v) = attr {
+                match k.as_str() {
+                    "ice-ufrag" => ice_info.ufrag = String::from(v),
+                    "ice-pwd" => ice_info.pwd = String::from(v),
+                    "candidate" => ice_info.candidates.push(String::from(v)),
+                    _ => {}
+                }
+            }
+        }
+
+        if ice_info.ufrag.is_empty() || ice_info.pwd.is_empty() {
+            return Err(SdpError::MissingIceFields);
+        }
+
+        Ok(ice_info)
     }
 
     pub fn parse_vec_attributes(vec_attributes: Vec<&str>) -> Result<Vec<Attribute>, SdpError> {
@@ -394,6 +484,42 @@ pub fn create_sdp_offer(
     let _offer = generate_offer(&session_description, file_path)?;
 
     Ok(session_description)
+}
+
+// Provisoria para 2 clientes, después obtener los datos del .config
+pub fn generate_answer(
+    session_descrip_answer: &SessionDescription,
+    file_path: &str,
+) -> Result<File, SdpError> {
+    let mut sdp_answer = match File::create(file_path) {
+        Ok(f) => f,
+        Err(_) => return Err(SdpError::AnswerFileCreationError),
+    };
+
+    match write!(sdp_answer, "{}", session_descrip_answer) {
+        Ok(_) => {}
+        Err(_) => return Err(SdpError::OfferFileWriteError),
+    };
+
+    Ok(sdp_answer)
+}
+
+pub fn create_sdp_answer(
+    my_session_descripton: &SessionDescription,
+    offer: &SessionDescription,
+    file_path: &str,
+) -> Result<(), SdpError> {
+    let session_descrip_answer = match my_session_descripton.generate_compatible_session(offer) {
+        Some(answer) => answer,
+        None => return Err(SdpError::IncompatibleSession),
+    };
+
+    match generate_answer(session_descrip_answer, file_path) {
+        Ok(_) => {}
+        Err(e) => return Err(e),
+    };
+
+    Ok(())
 }
 
 #[test]

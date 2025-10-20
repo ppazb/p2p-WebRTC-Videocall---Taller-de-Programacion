@@ -7,23 +7,48 @@ use room_rtc::mensaje::MsgType;
 use room_rtc::sdp_protocol::*;
 use room_rtc::video_processing;
 use room_rtc::video_processing_errors::VideoProcessingErrors;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
 fn main() {
+
+    // cargo run --bin client IP:Puerto path_sdp path_answer
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
         return;
     }
-    let client = match Client::new(&args[1], &args[2]) {
+
+    let offer = match create_sdp_offer(&args[1], &args[2]) {
+        Ok(session_descrip_offer) => session_descrip_offer,
+        Err(e) => return eprint!("{}", e),
+    };
+
+
+    let mut stdin = io::stdin();
+    let mut offer_client = String::new();
+    let _ = stdin.read_to_string(&mut offer_client);
+
+    let client_offer_session_descrip = match SessionDescription::parse(&offer_client) {
+        Ok(md) => md,
+        Err(e) => return eprintln!("{}", e), 
+    }; 
+
+    match create_sdp_answer(&offer, &client_offer_session_descrip, &args[3]) {
+        Ok(_) =>  {},
+        Err(e) =>  eprintln!("{}", e),
+    }
+
+    let peer_adder = client_offer_session_descrip.get_address(); 
+
+
+    
+    let my_adder = offer.get_address(); 
+
+    let client = match Client::new(&my_adder, &peer_adder) {
         Ok(client) => client,
         Err(e) => return eprintln!("{}", e),
     };
 
-    let _offer = match create_sdp_offer(&args[1], &args[3]) {
-        Ok(session_descrip_offer) => session_descrip_offer,
-        Err(e) => return eprint!("{}", e),
-    };
 
     match client.initialize_call() {
         Ok(_) => (),

@@ -9,8 +9,11 @@ pub enum SdpError {
     InvalidMediaFormat,
     InvalidadAdder,
     MissingField(String),
+    MissingIceFields,
     OfferFileCreationError,
     OfferFileWriteError,
+    AnswerFileCreationError,
+    IncompatibleSession,
 }
 
 impl From<std::num::ParseIntError> for SdpError {
@@ -28,9 +31,12 @@ impl fmt::Display for SdpError {
             Self::InvalidTimeFormat => write!(f, "Error: \"Formato t (Time) inválido\""),
             Self::InvalidMediaFormat => write!(f, "Error: \"Formato m (Media) inválido\""),
             Self::MissingField(field) => write!(f, "Error: \"Campo {} no especificado\"", field),
-            Self::InvalidadAdder => write!(f, "Error: \"Invalid address\""),
-            Self::OfferFileCreationError => write!(f, "Error: \"Can not generate offer file\""),
-            Self::OfferFileWriteError => write!(f, "Error: \"Can not write in offer file\""),
+            Self::MissingIceFields => write!(f, "Error: \"Campo ICE no especificado\""),
+            Self::InvalidadAdder => write!(f, "Error: \"Direccion inválida\""),
+            Self::OfferFileCreationError => write!(f, "Error: \"No se pudo crear offer file\""),
+            Self::OfferFileWriteError => write!(f, "Error: \"No se pude escribir offer file\""),
+            Self::AnswerFileCreationError => write!(f, "Error: \"No se pude crear answer file\""),
+            Self::IncompatibleSession => write!(f, "Error: \"Sesión incompatible\""),
         }
     }
 }
