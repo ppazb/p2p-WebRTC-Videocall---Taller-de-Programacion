@@ -17,7 +17,8 @@ impl EncoderRtc {
     pub fn new_encoding() -> Result<Self, EncodingErrors> {
         let config = EncoderConfig::new()
             .usage_type(openh264::encoder::UsageType::CameraVideoRealTime)
-            .level(openh264::encoder::Level::Level_3_1);
+            .level(openh264::encoder::Level::Level_3_1)
+            .skip_frames(true);
 
         let encoderh264 = Encoder::with_api_config(openh264::OpenH264API::from_source(), config)
             .map_err(|_| EncodingErrors::EncoderInit)?;

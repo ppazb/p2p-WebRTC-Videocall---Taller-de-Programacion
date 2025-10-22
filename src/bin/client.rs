@@ -97,7 +97,7 @@ impl Client {
                 if let Ok(n) = socket_recev.recv(&mut buff)
                     && let Some(msg) = Message::deserializable(&buff[..n])  
                 {
-                    println!("Received {} bytes", n);
+                    println!("Received bytes: {}", n);
                     match msg.content {
                         Content::Text(text) => {
                             match msg.typemsg {
@@ -108,17 +108,20 @@ impl Client {
                                 _ => println!("\n{}: {}", user_peer, text),
                             };
                         }
-                        Content::Binary(video_encoded) => {                                                  
+                        Content::Binary(video_encoded) => { 
+                            println!("Video frame received");                                                 
                             let frame = decoder.decode(
                                 &video_encoded,
                                 msg.dimension.0,
                                 msg.dimension.1,
                             )?;
+                            println!("frame decoded");
                                 //video_processing::display_frame(&frame)?;
                                 highgui::imshow("Video", &frame).map_err(|_| VideoProcessingErrors::DisplayError)?;
                                 if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
                                     break Ok(());
-                                }                                
+                                }   
+                            println!("no me trave");                             
                         }
                     };
                 }
