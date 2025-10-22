@@ -65,7 +65,7 @@ pub struct Client {
 impl Client {
     pub fn new(my_addres: &str, peer: &str) -> Result<Self, ClientErrors> {
         let socket = UdpSocket::bind(my_addres).map_err(ClientErrors::CantBind)?;
-        socket.connect(peer).map_err(ClientErrors::CantConect)?;
+        socket.set_nonblocking(true).map_err(|e| ClientErrors::CantConect(e))?;
         Ok(Self {
             socket,
             peer: peer.to_string(),
@@ -95,33 +95,45 @@ impl Client {
             let mut decoder = DecoderRtc::new_decoder()?;
             loop {
                 println!("Esperando frame...");
-                if let Ok(n) = socket_recev.recv(&mut buff)
-                    && let Some(msg) = Message::deserializable(&buff[..n])
-                {
-                    match msg.content {
-                        Content::Text(text) => {
-                            match msg.typemsg {
-                                MsgType::Signalling => {
-                                    let _ = tx.send(text.to_string());
-                                    println!("\n{}: {}", user_peer, text);
+                match socket_recev.recv_from(&mut buff) {
+                    Ok((n, src_addr)) => {
+                        println!("Received data from: {}", src_addr);
+                        if let Some(msg) = Message::deserializable(&buff[..n]) {
+                            match msg.content {
+                                Content::Text(text) => {
+                                    match msg.typemsg {
+                                        MsgType::Signalling => {
+                                            let _ = tx.send(text.to_string());
+                                            println!("\n{}: {}", src_addr, text);
+                                        }
+                                        _ => println!("\n{}: {}", src_addr, text),
+                                    };
                                 }
-                                _ => println!("\n{}: {}", user_peer, text),
+
+                                Content::Binary(video_encoded) => {          
+                                    println!("DEBERIA MOSTRAR VIDEO MOSNTRO");                                           
+                                    let frame = decoder.decode(
+                                        &video_encoded,
+                                        msg.dimension.0,
+                                        msg.dimension.1,
+                                    )?;
+                                    video_processing::display_frame(&frame)?;
+                                    if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
+                                        break Ok(());
+                                    }                                
+                                }
                             };
                         }
-
-                        Content::Binary(video_encoded) => {          
-                            println!("DEBERIA MOSTRAR VIDEO MOSNTRO");                                           
-                            let frame = decoder.decode(
-                                &video_encoded,
-                                msg.dimension.0,
-                                msg.dimension.1,
-                            )?;
-                                video_processing::display_frame(&frame)?;
-                                if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
-                                    break Ok(());
-                                }                                
+                    }
+                    Err(e) => {
+                        if e.kind() != std::io::ErrorKind::WouldBlock {
+                            println!("Receive error: {}", e);
                         }
-                    };
+                        
+                        if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
+                            break Ok(());
+                        }
+                    }
                 }
 
                 //let _ = io::stdout().flush();
@@ -154,8 +166,8 @@ impl Client {
                         .map_err(|_e| ClientErrors::SerializeBits)?;
 
                     socket_send
-                        .send(&bytes_to_send)
-                        .map_err(|_e| ClientErrors::SendBits)?;
+                    .send_to(&bytes_to_send, &user_peer) 
+                    .map_err(|_e| ClientErrors::SendBits)?;
             }
 
         });
