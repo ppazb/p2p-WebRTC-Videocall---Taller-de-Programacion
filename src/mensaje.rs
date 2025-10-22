@@ -66,16 +66,19 @@ impl Message {
     }
     //Cuando recibimos un mensaje en bytes lo recuperamos para leer su contenido
     pub fn deserializable(data: &[u8]) -> Option<Self> {
-        if data.len() < 5 {
+        // header: 1 byte type + 4 bytes width + 4 bytes height + 4 bytes len = 13 bytes
+        if data.len() < 13 {
             return None;
         }
+
         let msgtype = match data[0] {
             0 => MsgType::Texto,
-            1 => MsgType::Video,
-            2 => MsgType::Audio,
+            1 => MsgType::Audio,
+            2 => MsgType::Video,
             3 => MsgType::Signalling,
             _ => return None,
         };
+
         let w = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
         let h = i32::from_be_bytes([data[5], data[6], data[7], data[8]]);
         let len = u32::from_be_bytes([data[9], data[10], data[11], data[12]]) as usize;

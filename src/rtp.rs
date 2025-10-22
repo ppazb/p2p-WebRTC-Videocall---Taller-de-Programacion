@@ -23,14 +23,15 @@ impl RtpPackage {
         output
     }
     pub fn from_bytes(data: &[u8]) -> Option<Self> {
-        if data.len() < 10 {
+        // need at least 4 bytes index + 8 bytes timestamp
+        if data.len() < 12 {
             return None;
         }
         let index: u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
         let time_stamp = u64::from_be_bytes([
             data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11],
         ]);
-        let payload = data[12..].to_vec();
+        let payload = if data.len() > 12 { data[12..].to_vec() } else { Vec::new() };
         Some(Self {
             index,
             time_stamp,

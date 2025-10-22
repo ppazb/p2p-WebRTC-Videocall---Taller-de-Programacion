@@ -82,8 +82,7 @@ impl Client {
     }
 
     pub fn initialize_call(&self) -> Result<(), ClientErrors> {
-        let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
-        socket_recev.set_nonblocking(true)?;
+    let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let user_peer = String::from(&self.peer);
 
@@ -94,42 +93,54 @@ impl Client {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
             loop {
-                if let Ok(n) = socket_recev.recv(&mut buff)
-                    && let Some(msg) = Message::deserializable(&buff[..n])  
-                {
-                    println!("Received bytes: {}", n);
-                    match msg.content {
-                        Content::Text(text) => {
-                            match msg.typemsg {
-                                MsgType::Signalling => {
-                                    let _ = tx.send(text.to_string());
-                                    println!("\n{}: {}", user_peer, text);
+                match socket_recev.recv(&mut buff) {
+                    Ok(n) => {
+                        if n == 0 {
+                            // nothing received
+                            continue;
+                        }
+                        if let Some(msg) = Message::deserializable(&buff[..n]) {
+                            println!("Received bytes: {}", n);
+                            match msg.content {
+                                Content::Text(text) => {
+                                    match msg.typemsg {
+                                        MsgType::Signalling => {
+                                            let _ = tx.send(text.to_string());
+                                            println!("\n{}: {}", user_peer, text);
+                                        }
+                                        _ => println!("\n{}: {}", user_peer, text),
+                                    };
                                 }
-                                _ => println!("\n{}: {}", user_peer, text),
-                            };
-                        }
-                        Content::Binary(video_encoded) => { 
-                            println!("Received bytes (udp recv): {}", n); // where n is from recv()
-                            println!("video_encoded.len() = {}", video_encoded.len());
-                            println!("video_encoded first 12 bytes (hex): {:02x?}", &video_encoded[..video_encoded.len().min(12)]);
-                                                 
-                            let frame = decoder.decode(
-                                &video_encoded,
-                                msg.dimension.0,
-                                msg.dimension.1,
-                            )?;
-                            println!("frame decoded");
-                                //video_processing::display_frame(&frame)?;
-                                highgui::imshow("Video", &frame).map_err(|_| VideoProcessingErrors::DisplayError)?;
-                                if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
-                                    break Ok(());
-                                }   
-                            println!("no me trave");                             
-                        }
-                    };
-                }
+                                Content::Binary(video_encoded) => { 
+                                    println!("Received bytes (udp recv): {}", n); // where n is from recv()
+                                    println!("video_encoded.len() = {}", video_encoded.len());
+                                    println!("video_encoded first 12 bytes (hex): {:02x?}", &video_encoded[..video_encoded.len().min(12)]);
 
-                //let _ = io::stdout().flush();
+                                    let frame = decoder.decode(
+                                        &video_encoded,
+                                        msg.dimension.0,
+                                        msg.dimension.1,
+                                    )?;
+                                    println!("frame decoded");
+                                    highgui::imshow("Video", &frame).map_err(|_| VideoProcessingErrors::DisplayError)?;
+                                    if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
+                                        break Ok(());
+                                    }
+                                    println!("no me trave");
+                                }
+                            };
+                        } else {
+                            eprintln!("Received invalid message or incomplete packet ({} bytes)", n);
+                        }
+                    }
+                    Err(e) => {
+                        // On UDP sockets, occasional errors can happen; print and continue
+                        eprintln!("Socket recv error: {}", e);
+                        // small sleep to avoid busy looping on continuous errors
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        continue;
+                    }
+                }
             }
         });
 
@@ -170,8 +181,13 @@ impl Client {
 
         });
 
-        loop{
-            
+        // Wait for threads (they run until error or user exits)
+        if let Err(e) = sender_thread.join() {
+            eprintln!("Sender thread terminated: {:?}", e);
+        }
+
+        if let Err(e) = reciver_thread.join() {
+            eprintln!("Receiver thread terminated: {:?}", e);
         }
 
         Ok(())
