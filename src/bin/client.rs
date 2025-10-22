@@ -109,7 +109,10 @@ impl Client {
                             };
                         }
                         Content::Binary(video_encoded) => { 
-                            println!("Video frame received");                                                 
+                            println!("Received bytes (udp recv): {}", n); // where n is from recv()
+                            println!("video_encoded.len() = {}", video_encoded.len());
+                            println!("video_encoded first 12 bytes (hex): {:02x?}", &video_encoded[..video_encoded.len().min(12)]);
+                                                 
                             let frame = decoder.decode(
                                 &video_encoded,
                                 msg.dimension.0,
@@ -145,6 +148,10 @@ impl Client {
                 })?;
 
                 let encoded_frame = encoder.encode(&frame)?;
+
+                println!("Encoded frame bytes (sender): {}", encoded_frame.len());
+                println!("Encoded first 8 bytes (hex): {:02x?}", &encoded_frame[..encoded_frame.len().min(8)]);
+
                 if encoded_frame.is_empty() { //println!("CONTINUE");
                     continue; }
                 else {
@@ -163,8 +170,9 @@ impl Client {
 
         });
 
-        let _ = reciver_thread.join().ok();
-        let _ = sender_thread.join().ok();
+        loop{
+            
+        }
 
         Ok(())
         
