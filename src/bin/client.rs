@@ -83,7 +83,7 @@ impl Client {
 
     pub fn initialize_call(&self) -> Result<(), ClientErrors> {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
-        socket_recev.set_nonblocking(true)?;
+        //socket_recev.set_nonblocking(true)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let user_peer = String::from(&self.peer);
 
@@ -91,7 +91,7 @@ impl Client {
 
         //Thread reciver
         let reciver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
-            let mut buff = vec![0u8; 512_000];
+            let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
             loop {
                 println!("Esperando frame...");
@@ -116,7 +116,8 @@ impl Client {
                                 msg.dimension.0,
                                 msg.dimension.1,
                             )?;
-                                video_processing::display_frame(&frame)?;
+                                //video_processing::display_frame(&frame)?;
+                                highgui::imshow("Video", &frame).map_err(|_| VideoProcessingErrors::DisplayError)?;
                                 if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
                                     break Ok(());
                                 }                                
