@@ -23,12 +23,12 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
 pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProcessingErrors> {
     //Parameter 3 = CAP_PROP_FRAME_WIDTH
     capture
-        .set(videoio::CAP_PROP_FRAME_WIDTH, 1920.0)
+        .set(videoio::CAP_PROP_FRAME_WIDTH, 1280.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
     //Parameter 4 = CAP_PROP_FRAME_HEIGHT
     capture
-        .set(videoio::CAP_PROP_FRAME_HEIGHT, 1080.0)
+        .set(videoio::CAP_PROP_FRAME_HEIGHT, 720.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
 
     capture
