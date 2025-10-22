@@ -90,7 +90,6 @@ impl DecoderRtc {
         Ok(bgr)
         }
         else {
-            eprintln!("LOCO NO DECODEO NADA!!!");
             Err(DecodingErrors::DecodeYuv)
         }    
     }

@@ -66,7 +66,6 @@ impl Message {
     }
     //Cuando recibimos un mensaje en bytes lo recuperamos para leer su contenido
     pub fn deserializable(data: &[u8]) -> Option<Self> {
-        // header: 1 byte type + 4 bytes width + 4 bytes height + 4 bytes len = 13 bytes
         if data.len() < 13 {
             return None;
         }

@@ -11,8 +11,6 @@ use std::io::{Read};
 use std::sync::mpsc;
 use std::{io, net::UdpSocket, thread};
 fn main() {
-
-    // cargo run --bin client IP:Puerto path_sdp path_answer
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
         return;
@@ -96,7 +94,6 @@ impl Client {
                 match socket_recev.recv(&mut buff) {
                     Ok(n) => {
                         if n == 0 {
-                            // nothing received
                             continue;
                         }
                         if let Some(msg) = Message::deserializable(&buff[..n]) {
@@ -112,7 +109,7 @@ impl Client {
                                     };
                                 }
                                 Content::Binary(video_encoded) => { 
-                                    println!("Received bytes (udp recv): {}", n); // where n is from recv()
+                                    println!("Received bytes (udp recv): {}", n);
                                     println!("video_encoded.len() = {}", video_encoded.len());
                                     println!("video_encoded first 12 bytes (hex): {:02x?}", &video_encoded[..video_encoded.len().min(12)]);
 
@@ -134,16 +131,13 @@ impl Client {
                         }
                     }
                     Err(e) => {
-                        // On UDP sockets, occasional errors can happen; print and continue
                         eprintln!("Socket recv error: {}", e);
-                        // small sleep to avoid busy looping on continuous errors
-                        std::thread::sleep(std::time::Duration::from_millis(5));
                         continue;
                     }
                 }
             }
         });
-
+        // Thread sender
         let sender_thread = thread::spawn(move || -> Result<(),ClientErrors> {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
@@ -152,7 +146,6 @@ impl Client {
             let camara_width = video_processing::get_frame_width(&camara)?;
             let camara_height = video_processing::get_frame_height(&camara)?;
             let mut encoder = EncoderRtc::new_encoding()?;
-            //let mut decoder = DecoderRtc::new_decoder()?;
             loop {
                 let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
@@ -165,9 +158,6 @@ impl Client {
 
                 if encoded_frame.is_empty() { //println!("CONTINUE");
                     continue; }
-                else {
-                    //println!("enviando algo");
-                }
                     let video_to_send = Message::new_msg_binary(encoded_frame, camara_width, camara_height);
                     let bytes_to_send = video_to_send
                         .serialize()
@@ -178,10 +168,10 @@ impl Client {
                     }
 
             }
-
+//IMPORTANTE: NO SACAR, eliminar el uso de JOIN para ""esperar"" lo thread provoca funcionamiento indeterminado
+// creemos que en principal el error de que solo un cliente pudiera estar reciviendo video venia principalmente de no estar
+// tratando los threads con un join.
         });
-
-        // Wait for threads (they run until error or user exits)
         if let Err(e) = sender_thread.join() {
             eprintln!("Sender thread terminated: {:?}", e);
         }
