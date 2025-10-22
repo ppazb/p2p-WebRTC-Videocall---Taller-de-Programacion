@@ -83,7 +83,7 @@ impl Client {
 
     pub fn initialize_call(&self) -> Result<(), ClientErrors> {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
-        //socket_recev.set_nonblocking(true)?;
+        socket_recev.set_nonblocking(true)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let user_peer = String::from(&self.peer);
 
@@ -94,10 +94,10 @@ impl Client {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
             loop {
-                println!("Esperando frame...");
                 if let Ok(n) = socket_recev.recv(&mut buff)
-                    && let Some(msg) = Message::deserializable(&buff[..n])
+                    && let Some(msg) = Message::deserializable(&buff[..n])  
                 {
+                    println!("Received {} bytes", n);
                     match msg.content {
                         Content::Text(text) => {
                             match msg.typemsg {
@@ -108,9 +108,7 @@ impl Client {
                                 _ => println!("\n{}: {}", user_peer, text),
                             };
                         }
-
-                        Content::Binary(video_encoded) => {          
-                            println!("DEBERIA MOSTRAR VIDEO MOSNTRO");                                           
+                        Content::Binary(video_encoded) => {                                                  
                             let frame = decoder.decode(
                                 &video_encoded,
                                 msg.dimension.0,
@@ -154,15 +152,16 @@ impl Client {
                         .serialize()
                         .map_err(|_e| ClientErrors::SerializeBits)?;
 
-                    socket_send
-                        .send(&bytes_to_send)
-                        .map_err(|_e| ClientErrors::SendBits)?;
+                    if let Err(e) = socket_send.send(&bytes_to_send) {
+                        eprintln!("Send failed: {}", e);
+                    }
+
             }
 
         });
 
-        let _ = reciver_thread.join();
-        let _ = sender_thread.join();
+        let _ = reciver_thread.join().ok();
+        let _ = sender_thread.join().ok();
 
         Ok(())
         
