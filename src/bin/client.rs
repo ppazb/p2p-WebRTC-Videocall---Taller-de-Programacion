@@ -160,9 +160,11 @@ impl Client {
             }
 
         });
-        loop {
-            
-        }
+        
+        let _ = reciver_thread.join();
+        let _ = sender_thread.join();
+
+        Ok(())
         
     }
 }
