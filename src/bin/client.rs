@@ -94,6 +94,7 @@ impl Client {
             let mut buff = vec![0u8; 512_000];
             let mut decoder = DecoderRtc::new_decoder()?;
             loop {
+                println!("Esperando frame...");
                 if let Ok(n) = socket_recev.recv(&mut buff)
                     && let Some(msg) = Message::deserializable(&buff[..n])
                 {
@@ -116,10 +117,8 @@ impl Client {
                                 msg.dimension.1,
                             )?;
                                 video_processing::display_frame(&frame)?;
-                                match highgui::wait_key(1) {
-                                    Ok(27) => break Ok(()),
-                                    Ok(_) => continue,
-                                    Err(_) => break Ok(()),
+                                if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
+                                    break Ok(());
                                 }                                
                         }
                     };
@@ -160,7 +159,7 @@ impl Client {
             }
 
         });
-        
+
         let _ = reciver_thread.join();
         let _ = sender_thread.join();
 
