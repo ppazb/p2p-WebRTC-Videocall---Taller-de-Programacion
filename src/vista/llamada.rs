@@ -1,29 +1,28 @@
-use std::sync::mpsc::Receiver;
+use std::sync::{atomic::{AtomicBool, Ordering}, mpsc::Receiver, Arc};
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, Vec2};
 use opencv::{imgproc, prelude::*};
 
-use crate::{camera::Camera, vista::cambio::CambioVista};
+use crate::vista::cambio::CambioVista;
 
 pub struct VistaLlamada {
-    // local_cam: Option<Camera>,
     cam_enable: bool,
-    // no_cam: Option<TextureHandle>,
     rx_local: Option<Receiver<Mat>>,
     rx_remoto: Option<Receiver<Mat>>,
     tex_local: Option<TextureHandle>,
-    tex_remoto: Option<TextureHandle>
+    tex_remoto: Option<TextureHandle>,
+    in_call: Arc<AtomicBool>
 }
 
 impl VistaLlamada {
-    pub fn new(rx_local: Option<Receiver<Mat>>, rx_remoto: Option<Receiver<Mat>>) -> Self {
+    pub fn new(rx_local: Option<Receiver<Mat>>, rx_remoto: Option<Receiver<Mat>>, in_call: Arc<AtomicBool>) -> Self {
         Self {
-            // local_cam: None,
             cam_enable: false,
             rx_local,
             rx_remoto,
             tex_local: None,
-            tex_remoto: None
+            tex_remoto: None,
+            in_call
         }
     }
 
@@ -34,12 +33,15 @@ impl VistaLlamada {
             // Controles llamada
             ui.horizontal(|ui| {
                 // Botón Salida
-                if ui.button("Salir").clicked() {
-                    self.liberar_camara();
-                    cambio = CambioVista::Login;
-                    return;
+                if self.in_call.load(Ordering::Relaxed) {
+                    if ui.button("Finalizar llamada").clicked() {
+                        self.liberar_camara();
+                        cambio = CambioVista::Login;
+                        self.in_call.store(false, Ordering::Relaxed);
+                        return;
+                    }
                 }
-
+                
                 // Toggle cámara
                 match self.cam_enable {
                     true => {
@@ -61,19 +63,21 @@ impl VistaLlamada {
             // Frame -> Imagen -> Textura -> Widget
             // Capturas video
             ui.horizontal_centered(|ui| {
-                // Video remoto
-                // === REMOTE FRAME ===
-                // let mut tx_remota = None;
-
+                // Frame remoto
                 if let Some(rx) = &self.rx_remoto {
                     if let Ok(mat) = rx.try_recv() {
                         if let Some(color_image) = Self::mat_to_color_image(&mat) {
-                            self.tex_remoto = Some(ctx.load_texture(
-                                "cam_remota",
-                                color_image,
-                                egui::TextureOptions::LINEAR,
-                            ));
-                        }
+                            // Crear o reemplazar textura
+                            if let Some(tex) = &mut self.tex_remoto {
+                                tex.set(color_image, egui::TextureOptions::LINEAR);
+                            } else {
+                                self.tex_remoto = Some(ctx.load_texture(
+                                    "cam_remota",
+                                    color_image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
+                            }
+                        }  
                     }
                 }
 
@@ -85,30 +89,26 @@ impl VistaLlamada {
 
                 ui.add_space(20.0);
                 
-                // Video local
+                // Frame local
                 match self.cam_enable {
                     true => {
-                        // === LOCAL FRAME ===
-                        //let mut tx_local = None;
-
                         if let Some(rx) = &self.rx_local {
                             if let Ok(mat) = rx.try_recv() {
                                 if let Some(color_image) = Self::mat_to_color_image(&mat) {
                                     // Crear o reemplazar textura
-                                    self.tex_local = Some(ctx.load_texture(
+                                    if let Some(tex) = &mut self.tex_local {
+                                        tex.set(color_image, egui::TextureOptions::LINEAR);
+                                    } else {
+                                        self.tex_local = Some(ctx.load_texture(
                                         "cam_local",
                                         color_image,
                                         egui::TextureOptions::LINEAR,
                                     ));
+                                    }
+                                    
                                 }
                             }
                         }
-
-                        // Leo estado de cámara, cargo datos en frame
-                        // if let Some(rx) = self.rx_local {
-                        //     let frame = rx.recv().unwrap();
-                        // }
-                        // let textura = self.generar_textura(ctx, frame);
 
                         if let Some(tex) = &self.tex_local {
                             ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
@@ -124,7 +124,6 @@ impl VistaLlamada {
                 }
             });
             
-
             ctx.request_repaint();
         });
 
@@ -141,16 +140,7 @@ impl VistaLlamada {
         // self.local_cam = Some(Camera::new().unwrap());
     }
 
-    // fn cargar_frame(&mut self) -> Mat {
-    //     let mut frame = opencv::core::Mat::default();
-        
-    //     if let Some(cam) = &mut self.local_cam {
-    //         frame = cam.leer_frame();
-    //     }
-    //     return frame;
-    // }
-
-    fn generar_textura(&mut self, ctx: &egui::Context, frame: Mat) -> Option<TextureHandle> {
+    fn _generar_textura(&mut self, ctx: &egui::Context, frame: Mat) -> Option<TextureHandle> {
         // Convierto Mat a imagen
         let size = frame.size().unwrap();
         let data = frame.data_bytes().unwrap();
@@ -164,7 +154,7 @@ impl VistaLlamada {
         return Some(ctx.load_texture("webcam", image, egui::TextureOptions::LINEAR_MIRRORED_REPEAT));
     }
 
-    fn no_camera_texture(ctx: &egui::Context) -> Option<TextureHandle> {
+    fn _no_camera_texture(ctx: &egui::Context) -> Option<TextureHandle> {
         // Recuadro gris 320x240
         // Genero única vez durante la creación de la vista
         let gray = Color32::from_gray(60);

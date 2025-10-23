@@ -1,16 +1,18 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
-use std::thread;
+use std::sync::Arc;
 
 use eframe::egui;
 use opencv::core::Mat;
 use crate::vista::{cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin, Vista};
-use crate::client::{self, Client};
+use crate::client::Client;
 
 pub struct AppUI {
     vista_actual: Vista,
     cliente: Option<Client>,
     rx_local: Option<Receiver<Mat>>,
-    rx_remoto: Option<Receiver<Mat>>
+    rx_remoto: Option<Receiver<Mat>>,
+    in_call: Arc<AtomicBool>
 }
 
 impl AppUI {
@@ -19,7 +21,8 @@ impl AppUI {
             vista_actual: Vista::VistaLogin(VistaLogin::new()),
             cliente: None,
             rx_local: None,
-            rx_remoto: None
+            rx_remoto: None,
+            in_call: Arc::new(AtomicBool::new(false))
         }
     }
 
@@ -36,7 +39,7 @@ impl AppUI {
         let my_address = "127.0.0.1:4000".into();
         let peer = "127.0.0.1:4000".into();
         
-        if let Ok(c) = Client::new(my_address, peer, tx_local, tx_remoto) {
+        if let Ok(c) = Client::new(my_address, peer, tx_local, tx_remoto, Arc::clone(&self.in_call)) {
             self.cliente = Some(c);
         }
     }
@@ -52,26 +55,24 @@ impl eframe::App for AppUI {
         let cambio = self.vista_actual.ui(ctx);
         
         match cambio {
-            CambioVista::Login => self.vista_actual = Vista::VistaLogin(VistaLogin::new()),
+            CambioVista::Login => {
+                self.cliente = None;
+                self.vista_actual = Vista::VistaLogin(VistaLogin::new())
+            },
             CambioVista::None => {},
             CambioVista::Llamada => {
                 // A partir del cambio a la vista llamada, tiene sentido tener un cliente
                 self.crear_cliente();
 
-                // thread::spawn({
-                //     let cliente = self.cliente.clone();
-                //     move || {
-                //         if let Err(e) = cliente.initialize_call() {
-                //             eprintln!("Error initializing call: {:?}", e);
-                //         }
-                //     }
-                // });
+
                 if let Some(c) = &self.cliente {
                     let _ = c.initialize_call();
-                } 
+                }
+
+                self.in_call.store(true, Ordering::Relaxed);
 
                 // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
-                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(self.rx_local.take(), self.rx_remoto.take()))
+                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(self.rx_local.take(), self.rx_remoto.take(), Arc::clone(&self.in_call)))
             },
         }
     }

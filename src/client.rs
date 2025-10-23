@@ -1,5 +1,4 @@
 use opencv::core::Mat;
-use opencv::highgui;
 use crate::client_errors::ClientErrors;
 use crate::encoding::{DecoderRtc, EncoderRtc};
 use crate::mensaje::Content;
@@ -9,12 +8,13 @@ use crate::sdp_protocol::*;
 use crate::video_processing;
 use crate::video_processing_errors::VideoProcessingErrors;
 
-use std::io::{Read};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::{io, net::UdpSocket, thread};
+use std::sync::Arc;
+use std::{net::UdpSocket, thread};
 
+/*
 fn main() {
-    /*
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
         return;
@@ -55,30 +55,8 @@ fn main() {
         Ok(_) => (),
         Err(e) => eprintln!("{}", e),
     };
-
-    */
-
-    /*
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        return;
-    }
-    let client = match Client::new(&args[1], &args[2]) {
-        Ok(client) => client,
-        Err(e) => return eprintln!("{}", e),
-    };
-
-    let _offer = match create_sdp_offer(&args[1], &args[3]) {
-        Ok(session_descrip_offer) => session_descrip_offer,
-        Err(e) => return eprint!("{}", e),
-    };
-
-    match client.initialize_call() {
-        Ok(_) => (),
-        Err(e) => eprintln!("{}", e),
-    };
-    */
 }
+*/
 
 #[derive(Debug)]
 pub struct Client {
@@ -86,11 +64,12 @@ pub struct Client {
     peer: String,
     //sessions: Session,
     tx_local: Sender<Mat>,
-    tx_remoto: Sender<Mat>
+    tx_remoto: Sender<Mat>,
+    in_call: Arc<AtomicBool>
 }
 
 impl Client {
-    pub fn new(my_addres: &str, peer: &str, tx_local: Sender<Mat>, tx_remoto: Sender<Mat>) -> Result<Self, ClientErrors> {
+    pub fn new(my_addres: &str, peer: &str, tx_local: Sender<Mat>, tx_remoto: Sender<Mat>, in_call: Arc<AtomicBool>) -> Result<Self, ClientErrors> {
         let socket = UdpSocket::bind(my_addres).map_err(ClientErrors::CantBind)?;
         socket.connect(peer).map_err(ClientErrors::CantConect)?;
 
@@ -98,7 +77,8 @@ impl Client {
             socket,
             peer: peer.to_string(),
             tx_local,
-            tx_remoto
+            tx_remoto,
+            in_call
         })
     }
 
@@ -121,7 +101,9 @@ impl Client {
         // Thread receiver
         let tx_remoto = self.tx_remoto.clone();
 
-        let reciver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+        let in_call = Arc::clone(&self.in_call);
+
+        let _reciver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
             loop {
@@ -176,13 +158,20 @@ impl Client {
                         continue;
                     }
                 }
+
+                if !in_call.load(Ordering::Relaxed) {
+                    println!("RECEIVER OVER");
+                    return Ok(());
+                }
             }
         });
 
         // Thread sender
         let tx_local = self.tx_local.clone();
 
-        let sender_thread = thread::spawn(move || -> Result<(),ClientErrors> {
+        let in_call = Arc::clone(&self.in_call);
+
+        let _sender_thread = thread::spawn(move || -> Result<(),ClientErrors> {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
@@ -218,6 +207,11 @@ impl Client {
                     eprintln!("Send failed: {}", e);
                 }
 
+
+                if !in_call.load(Ordering::Relaxed) {
+                    println!("SENDER OVER");
+                    return Ok(());
+                }
             }
         //IMPORTANTE: NO SACAR, eliminar el uso de JOIN para ""esperar"" lo thread provoca funcionamiento indeterminado
         // creemos que en principal el error de que solo un cliente pudiera estar reciviendo video venia principalmente de no estar

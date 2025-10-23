@@ -12,4 +12,3 @@ pub mod video_processing_errors;
 pub mod client;
 pub mod vista;
 pub mod app;
-pub mod camera;
