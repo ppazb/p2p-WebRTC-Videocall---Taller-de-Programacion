@@ -17,7 +17,7 @@ pub struct VistaLlamada {
 impl VistaLlamada {
     pub fn new(rx_local: Option<Receiver<Mat>>, rx_remoto: Option<Receiver<Mat>>, in_call: Arc<AtomicBool>) -> Self {
         Self {
-            cam_enable: false,
+            cam_enable: true,
             rx_local,
             rx_remoto,
             tex_local: None,
@@ -37,6 +37,9 @@ impl VistaLlamada {
                     if ui.button("Finalizar llamada").clicked() {
                         self.liberar_camara();
                         cambio = CambioVista::Login;
+
+                        // Cambio el estado del flag, notificando a los threads del cliente
+                        // TODO: el cambio debe ser enviado a AMBOS clientes
                         self.in_call.store(false, Ordering::Relaxed);
                         return;
                     }
@@ -60,13 +63,12 @@ impl VistaLlamada {
             
             ui.separator();
 
-            // Frame -> Imagen -> Textura -> Widget
-            // Capturas video
+            // Widgets video
             ui.horizontal_centered(|ui| {
-                // Frame remoto
+                // Actualizo frame remoto
                 if let Some(rx) = &self.rx_remoto {
                     if let Ok(mat) = rx.try_recv() {
-                        if let Some(color_image) = Self::mat_to_color_image(&mat) {
+                        if let Some(color_image) = Self::generar_imagen(&mat) {
                             // Crear o reemplazar textura
                             if let Some(tex) = &mut self.tex_remoto {
                                 tex.set(color_image, egui::TextureOptions::LINEAR);
@@ -81,20 +83,22 @@ impl VistaLlamada {
                     }
                 }
 
+                // Muestro la textura actualizada
                 if let Some(tex) = &self.tex_remoto {
-                    ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
+                    //ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
+                    ui.image((tex.id(), Self::redimensionar_textura(tex)));
                 } else {
-                    ui.heading("No Camera");
+                    ui.heading("No Camera (Remoto)");
                 }
 
                 ui.add_space(20.0);
                 
-                // Frame local
+                // Actualizo frame local
                 match self.cam_enable {
                     true => {
                         if let Some(rx) = &self.rx_local {
                             if let Ok(mat) = rx.try_recv() {
-                                if let Some(color_image) = Self::mat_to_color_image(&mat) {
+                                if let Some(color_image) = Self::generar_imagen(&mat) {
                                     // Crear o reemplazar textura
                                     if let Some(tex) = &mut self.tex_local {
                                         tex.set(color_image, egui::TextureOptions::LINEAR);
@@ -110,14 +114,16 @@ impl VistaLlamada {
                             }
                         }
 
+                        // Muestro la textura actualizada
                         if let Some(tex) = &self.tex_local {
-                            ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
+                            ui.image((tex.id(), Self::redimensionar_textura(tex)));
+                            //ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
                         } else {
-                            ui.heading("No Camera");
+                            ui.heading("No Camera (Local)");
                         }
                     },
                     false => {
-                        ui.heading("No Camera");
+                        ui.heading("No Camera (Local)");
 
                         // Cargar la textura no_camera y posicionar acá
                     }
@@ -140,20 +146,6 @@ impl VistaLlamada {
         // self.local_cam = Some(Camera::new().unwrap());
     }
 
-    fn _generar_textura(&mut self, ctx: &egui::Context, frame: Mat) -> Option<TextureHandle> {
-        // Convierto Mat a imagen
-        let size = frame.size().unwrap();
-        let data = frame.data_bytes().unwrap();
-
-        let image = egui::ColorImage::from_rgb(
-            [size.width as usize, size.height as usize],
-            data,
-        );
-
-        // Genero textura en egui
-        return Some(ctx.load_texture("webcam", image, egui::TextureOptions::LINEAR_MIRRORED_REPEAT));
-    }
-
     fn _no_camera_texture(ctx: &egui::Context) -> Option<TextureHandle> {
         // Recuadro gris 320x240
         // Genero única vez durante la creación de la vista
@@ -166,8 +158,8 @@ impl VistaLlamada {
         Some(ctx.load_texture("no_camera", image, egui::TextureOptions::LINEAR))
     }
 
-    fn mat_to_color_image(mat: &Mat) -> Option<ColorImage> {
-        // Aseguramos formato RGB
+    fn generar_imagen(mat: &Mat) -> Option<ColorImage> {
+        // Convierto de BGR a RGB
         let mut rgb = Mat::default();
         if mat.channels() == 3 {
             imgproc::cvt_color(mat, &mut rgb, imgproc::COLOR_BGR2RGB, 0).ok()?;
@@ -175,14 +167,25 @@ impl VistaLlamada {
             return None;
         }
 
-        // Tamaño
+        // Defino dimensiones
         let size = rgb.size().ok()?;
         let width = size.width as usize;
         let height = size.height as usize;
 
-        // Extraer bytes
+        // Genero imagen a partir de bytes
         let data = rgb.data_bytes().ok()?;
         Some(ColorImage::from_rgb([width, height], data))
+    }
+
+    fn redimensionar_textura(tex: &TextureHandle) -> Vec2 {
+        // Ajusto el tamaño manteniendo la relación 4:3
+        let tex_size = tex.size_vec2();
+        let max_size = egui::vec2(400.0, 300.0);
+
+        let scale = (max_size.x / tex_size.x).min(max_size.y / tex_size.y);
+        let scaled_size = tex_size * scale;
+
+        scaled_size
     }
     
 }

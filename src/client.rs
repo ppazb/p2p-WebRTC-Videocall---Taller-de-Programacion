@@ -159,6 +159,7 @@ impl Client {
                     }
                 }
 
+                // Controlo el flag in_call para salir del thread
                 if !in_call.load(Ordering::Relaxed) {
                     println!("RECEIVER OVER");
                     return Ok(());
@@ -186,7 +187,7 @@ impl Client {
 
                 let encoded_frame = encoder.encode(&frame)?;
 
-                // Cargo frame al emisor local, la UI va a leerlo cuando la cámara esté habilitada
+                // Cargo frame al emisor local, la UI va a leerlos cuando la cámara esté habilitada
                 if tx_local.send(frame).is_err() {
                     println!("PROBLEMA");
                 }
@@ -207,7 +208,7 @@ impl Client {
                     eprintln!("Send failed: {}", e);
                 }
 
-
+                // Controlo el flag in_call para salir del thread
                 if !in_call.load(Ordering::Relaxed) {
                     println!("SENDER OVER");
                     return Ok(());

@@ -27,7 +27,7 @@ impl VistaLogin {
             ui.text_edit_singleline(&mut self.password);
 
             if ui.button("Login").clicked() {
-                if self.username == "admin" && self.password == "1234" {
+                if self.username == "" && self.password == "" {
                     cambio = CambioVista::Llamada;
                 } else {
                     self.password = String::new();

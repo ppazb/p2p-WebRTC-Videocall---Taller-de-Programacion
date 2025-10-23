@@ -12,17 +12,24 @@ pub struct AppUI {
     cliente: Option<Client>,
     rx_local: Option<Receiver<Mat>>,
     rx_remoto: Option<Receiver<Mat>>,
-    in_call: Arc<AtomicBool>
+    in_call: Arc<AtomicBool>,
+
+    // DEBUG: puertos para cliente
+    local_adr: String,
+    remote_adr: String
 }
 
 impl AppUI {
-    pub fn new() -> Self {
+    pub fn new(local_adr: String, remote_adr: String) -> Self {
         Self {
             vista_actual: Vista::VistaLogin(VistaLogin::new()),
             cliente: None,
             rx_local: None,
             rx_remoto: None,
-            in_call: Arc::new(AtomicBool::new(false))
+            in_call: Arc::new(AtomicBool::new(false)),
+
+            local_adr,
+            remote_adr
         }
     }
 
@@ -36,8 +43,8 @@ impl AppUI {
         self.rx_remoto = Some(rx_remoto);
 
         // Defino puertos e instancio el cliente
-        let my_address = "127.0.0.1:4000".into();
-        let peer = "127.0.0.1:4000".into();
+        let my_address = self.local_adr.as_str();
+        let peer = self.remote_adr.as_str();
         
         if let Ok(c) = Client::new(my_address, peer, tx_local, tx_remoto, Arc::clone(&self.in_call)) {
             self.cliente = Some(c);
@@ -47,7 +54,7 @@ impl AppUI {
 
 impl eframe::App for AppUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.set_visuals(egui::Visuals::light()); // o Visuals::light()
+        // ctx.set_visuals(egui::Visuals::light());
 
         // cada frame, la vista actual muestra su ui
         // algunas acciones provocan cambios de vista
@@ -56,7 +63,11 @@ impl eframe::App for AppUI {
         
         match cambio {
             CambioVista::Login => {
+                // Reinicio atributos de conexión
                 self.cliente = None;
+                self.rx_local = None;
+                self.rx_remoto = None;
+
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new())
             },
             CambioVista::None => {},
@@ -64,11 +75,12 @@ impl eframe::App for AppUI {
                 // A partir del cambio a la vista llamada, tiene sentido tener un cliente
                 self.crear_cliente();
 
-
+                // Inicializo threads de captura+envío y recepción de frames
                 if let Some(c) = &self.cliente {
                     let _ = c.initialize_call();
                 }
 
+                // Actualizo flag para controlar vida de threads
                 self.in_call.store(true, Ordering::Relaxed);
 
                 // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
