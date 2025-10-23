@@ -1,10 +1,6 @@
 use eframe::egui;
 
-use crate::app::AppUI;
-
-pub mod vista;
-mod app;
-pub mod camera;
+use room_rtc::app::AppUI;
 
 fn main() -> eframe::Result<()> {
     // con native_options se configuran distintos aspectos de la ventana

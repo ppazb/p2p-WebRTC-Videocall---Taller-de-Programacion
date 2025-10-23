@@ -8,3 +8,8 @@ pub mod sdp_errors;
 pub mod sdp_protocol;
 pub mod video_processing;
 pub mod video_processing_errors;
+
+pub mod client;
+pub mod vista;
+pub mod app;
+pub mod camera;
