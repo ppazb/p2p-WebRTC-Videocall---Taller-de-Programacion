@@ -29,10 +29,6 @@ pub fn camara_set_properties(capture: &mut VideoCapture) -> Result<(), VideoProc
     capture
         .set(videoio::CAP_PROP_FPS, 30.0)
         .map_err(|_| VideoProcessingErrors::CamaraSettup)?;
-
-    //temporal
-    let frame_w = get_frame_width(capture).unwrap();
-    let frame_h = get_frame_height(capture).unwrap();
     Ok(())
 }
 

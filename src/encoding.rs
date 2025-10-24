@@ -4,7 +4,7 @@ use crate::encoding_errors::{DecodingErrors, EncodingErrors};
 use opencv::core::{MatTraitConst, MatTraitConstManual};
 use opencv::imgproc;
 use openh264::decoder::Decoder;
-use openh264::encoder::{BitRate, Encoder, EncoderConfig};
+use openh264::encoder::{Encoder, EncoderConfig};
 use openh264::formats::YUVSource;
 
 pub struct EncoderRtc {
@@ -17,7 +17,7 @@ impl EncoderRtc {
         let config = EncoderConfig::new()
             .usage_type(openh264::encoder::UsageType::CameraVideoRealTime)
             .level(openh264::encoder::Level::Level_3_1)
-            .skip_frames(true).bitrate(BitRate::from_bps(3000));
+            .skip_frames(true);
 
         let encoderh264 = Encoder::with_api_config(openh264::OpenH264API::from_source(), config)
             .map_err(|_| EncodingErrors::EncoderInit)?;

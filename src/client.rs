@@ -134,22 +134,17 @@ impl Client {
                                         msg.dimension.0,
                                         msg.dimension.1,
                                     ) {
-                                        Ok(frame) => frame,
+                                        Ok(frame) => {
+                                        // Cargo frame al emisor, la UI va a leerlo durante la llamada
+                                        if tx_remoto.send(frame).is_err() {
+                                            println!("PROBLEMA");
+                                        }
+                                        },
                                         Err(_) => continue
                                     };
 
                                     println!("frame decoded");
 
-                                    // Cargo frame al emisor, la UI va a leerlo durante la llamada
-                                    if tx_remoto.send(frame).is_err() {
-                                        println!("PROBLEMA");
-                                    }
-
-                                    // highgui::imshow("Video", &frame).map_err(|_| VideoProcessingErrors::DisplayError)?;
-                                    // if highgui::wait_key(1).map(|k| k == 27).unwrap_or(false) {
-                                    //     break Ok(());
-                                    // }
-                                    println!("no me trave");
                                 }
                             };
                         } else {
