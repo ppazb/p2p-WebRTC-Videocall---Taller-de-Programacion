@@ -129,11 +129,14 @@ impl Client {
                                     println!("video_encoded.len() = {}", video_encoded.len());
                                     println!("video_encoded first 12 bytes (hex): {:02x?}", &video_encoded[..video_encoded.len().min(12)]);
 
-                                    let frame = decoder.decode(
+                                    let frame = match decoder.decode(
                                         &video_encoded,
                                         msg.dimension.0,
                                         msg.dimension.1,
-                                    )?;
+                                    ) {
+                                        Ok(frame) => frame,
+                                        Err(_) => continue
+                                    };
 
                                     println!("frame decoded");
 
