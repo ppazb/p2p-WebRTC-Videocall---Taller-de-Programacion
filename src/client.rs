@@ -4,10 +4,12 @@ use crate::encoding::{DecoderRtc, EncoderRtc};
 use crate::mensaje::Content;
 use crate::mensaje::Message;
 use crate::mensaje::MsgType;
+use crate::rtp::RtpPackage;
 use crate::sdp_protocol::*;
 use crate::video_processing;
 use crate::video_processing_errors::VideoProcessingErrors;
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
@@ -95,7 +97,7 @@ impl Client {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let user_peer = String::from(&self.peer);
-
+        let chunk_size:usize = 1200;
         let (tx, _rx) = mpsc::channel::<String>();
 
         // Thread receiver
@@ -106,6 +108,9 @@ impl Client {
         let _reciver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
+
+            let mut chunks_hash:HashMap<u64,Vec<(u32, Vec<u8>)> > = HashMap::new();
+
             loop {
                 match socket_recev.recv(&mut buff) {
                     Ok(n) => {
@@ -124,32 +129,54 @@ impl Client {
                                         _ => println!("\n{}: {}", user_peer, text),
                                     };
                                 }
-                                Content::Binary(video_encoded) => { 
-                                    println!("Received bytes (udp recv): {}", n);
-                                    println!("video_encoded.len() = {}", video_encoded.len());
-                                    println!("video_encoded first 12 bytes (hex): {:02x?}", &video_encoded[..video_encoded.len().min(12)]);
+                                Content::Binary(video_chunk) => { 
 
-                                    let frame = match decoder.decode(
-                                        &video_encoded,
-                                        msg.dimension.0,
-                                        msg.dimension.1,
-                                    ) {
-                                        Ok(frame) => {
-                                        // Cargo frame al emisor, la UI va a leerlo durante la llamada
-                                        if tx_remoto.send(frame).is_err() {
-                                            println!("PROBLEMA");
+                                    if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
+                                        let time_stamp = rtp.time_stamp;
+                                        let entry = chunks_hash.entry(time_stamp).or_insert_with(Vec::new);
+                                        entry.push((rtp.index, rtp.payload));
+
+                                        if entry.last().map(|(_, p)| p.len()).unwrap_or(0) < chunk_size {
+                                            // reassemble
+                                            entry.sort_by_key(|(i, _)| *i);
+                                            let mut full: Vec<u8> = Vec::new();
+                                            for (_, p) in entry.drain(..) {
+                                                full.extend(p);
+                                            }
+                                            chunks_hash.remove(&time_stamp);
+
+                                            match decoder.decode(&full, msg.dimension.0, msg.dimension.1) {
+                                                Ok(frame) => {
+                                                    println!("frame decoded");
+                                                    if tx_remoto.send(frame).is_err() {
+                                                        println!("PROBLEMA");
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Decode error (reassembled): {:?}", e);
+                                                }
+                                            }
                                         }
-                                        },
-                                        Err(_) => continue
-                                    };
-
-                                    println!("frame decoded");
+                                    }
+                                    else {
+                                        // not an RTP fragment, treat as full frame
+                                        println!("Assuming full-frame payload, decoding directly");
+                                        match decoder.decode(&video_chunk, msg.dimension.0, msg.dimension.1) {
+                                            Ok(frame) => {
+                                                println!("frame decoded");
+                                                if tx_remoto.send(frame).is_err() {
+                                                    println!("PROBLEMA");
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!("Decode error (full-frame): {:?}", e);
+                                            }
+                                        }
+                                    }
+                                }
 
                                 }
                             };
-                        } else {
-                            eprintln!("Received invalid message or incomplete packet ({} bytes)", n);
-                        }
                     }
                     Err(e) => {
                         eprintln!("Socket recv error: {}", e);
@@ -196,16 +223,20 @@ impl Client {
                 if encoded_frame.is_empty() { //println!("CONTINUE");
                     continue; 
                 }
-
-                let video_to_send = Message::new_msg_binary(encoded_frame, camara_width, camara_height);
-                let bytes_to_send = video_to_send
-                    .serialize()
-                    .map_err(|_e| ClientErrors::SerializeBits)?;
-
-                if let Err(e) = socket_send.send(&bytes_to_send) {
-                    eprintln!("Send failed: {}", e);
+                //tenemos un frame completamente econdeado
+                let mut index_chunk: u32 = 0;
+                for chunk in encoded_frame.chunks(chunk_size) {
+                    let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
+                    let rtp_bytes = rtp_package.to_bytes();
+                    let video_to_send = Message::new_msg_binary(rtp_bytes, camara_width, camara_height);
+                    let bytes_to_send = video_to_send
+                        .serialize()
+                        .map_err(|_e| ClientErrors::SerializeBits)?;
+                    if let Err(e) = socket_send.send(&bytes_to_send) {
+                        eprintln!("Send failed: {}", e);
+                    }
+                    index_chunk = index_chunk.wrapping_add(1);
                 }
-
                 // Controlo el flag in_call para salir del thread
                 if !in_call.load(Ordering::Relaxed) {
                     println!("SENDER OVER");

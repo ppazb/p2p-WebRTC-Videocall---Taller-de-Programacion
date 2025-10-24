@@ -7,7 +7,7 @@ use opencv::videoio::{self, VideoCapture, VideoCaptureTrait, VideoCaptureTraitCo
 pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
     let mut camara = match VideoCapture::new(0, videoio::CAP_V4L2) {
         Ok(camara) => camara,
-        Err(e) => {
+        Err(_) => {
             return Err(VideoProcessingErrors::AccessCamara);
         }
     };
