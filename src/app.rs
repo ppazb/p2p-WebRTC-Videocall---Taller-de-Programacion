@@ -57,8 +57,8 @@ impl AppUI {
             Ok(info) => info,
         };
 
-        //VALID CODEC?
-        let codec = match elegir_codec(&ice_info.2) {
+        //VALID CODEC? -> if doesnt raise error then ok
+        let _codec = match elegir_codec(&ice_info.2) {
             Err(e) => {
                 eprintln!("{}", e);
                 return;
