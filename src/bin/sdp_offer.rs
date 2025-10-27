@@ -9,15 +9,15 @@ fn main() {
     }
 
     // Se levanta cargo run --bin sdp_offer MI_IP:MI_PUERTO IP_PEER:PUERTO_PEER
-    // en otro terminal se levanta cargo run --bin sdp_answer IP_PEER:PUERTO_PEER MI_IP:MI_PUERTO 
-    
-    // Los ICE candidates están hardocodeados recordar cambiarlos de acuerdo a su IP local 
+    // en otro terminal se levanta cargo run --bin sdp_answer IP_PEER:PUERTO_PEER MI_IP:MI_PUERTO
+
+    // Los ICE candidates están hardocodeados recordar cambiarlos de acuerdo a su IP local
     // Cambiar IP:PUERTO en líneas 90-93 de sdp_protocol.rs
 
-        // Ejemplo: Attribute::Value("candidate".to_string(), "192.168.0.109 8000".to_string()),
-        // Solamente cambiar "192.168.0.109 8000" el resto no. 
+    // Ejemplo: Attribute::Value("candidate".to_string(), "192.168.0.109 8000".to_string()),
+    // Solamente cambiar "192.168.0.109 8000" el resto no.
 
-    // RECORDAR: Si lo corren en dos compus cada compu cambia lo suyo 
+    // RECORDAR: Si lo corren en dos compus cada compu cambia lo suyo
     let ice_info = match sdp_handshake(&args[1], &args[2]) {
         Err(e) => {
             eprintln!("SDP Handshake error: {}", e);
@@ -37,6 +37,4 @@ fn main() {
     // [DEBUG] ICE info local: ["192.168.0.109:8000", "192.168.0.109:8001", "192.168.0.109:8002", "192.168.0.109:8080"]
     // [DEBUG] ICE info peer: ["192.168.0.109:8000"]
     // [DEBUG] Codecs: ["H264"]
-
-
 }

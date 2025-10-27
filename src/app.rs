@@ -1,11 +1,13 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::Arc;
 
+use crate::client::Client;
+use crate::ice::{crear_conexion_ice, elegir_codec};
+use crate::sdp_protocol::sdp_handshake;
+use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
 use eframe::egui;
 use opencv::core::Mat;
-use crate::vista::{cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin, Vista};
-use crate::client::Client;
 
 pub struct AppUI {
     vista_actual: Vista,
@@ -16,7 +18,7 @@ pub struct AppUI {
 
     // DEBUG: puertos para cliente
     local_adr: String,
-    remote_adr: String
+    remote_adr: String,
 }
 
 impl AppUI {
@@ -29,7 +31,7 @@ impl AppUI {
             in_call: Arc::new(AtomicBool::new(false)),
 
             local_adr,
-            remote_adr
+            remote_adr,
         }
     }
 
@@ -45,8 +47,40 @@ impl AppUI {
         // Defino puertos e instancio el cliente
         let my_address = self.local_adr.as_str();
         let peer = self.remote_adr.as_str();
-        
-        if let Ok(c) = Client::new(my_address, peer, tx_local, tx_remoto, Arc::clone(&self.in_call)) {
+
+        //SDP
+        let ice_info = match sdp_handshake(my_address, peer) {
+            Err(e) => {
+                eprintln!("SDP Handshake error: {}", e);
+                return;
+            }
+            Ok(info) => info,
+        };
+
+        //VALID CODEC?
+        let codec = match elegir_codec(&ice_info.2) {
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+            Ok(c) => c,
+        };
+
+        //ICE
+        let socket_connection = match crear_conexion_ice(&ice_info.0, &ice_info.1) {
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+            Ok(socket) => socket,
+        };
+
+        if let Ok(c) = Client::new(
+            socket_connection,
+            tx_local,
+            tx_remoto,
+            Arc::clone(&self.in_call),
+        ) {
             self.cliente = Some(c);
         }
     }
@@ -60,7 +94,7 @@ impl eframe::App for AppUI {
         // algunas acciones provocan cambios de vista
         // se debería preservar información y cargarla durante la transicion
         let cambio = self.vista_actual.ui(ctx);
-        
+
         match cambio {
             CambioVista::Login => {
                 // Reinicio atributos de conexión
@@ -69,8 +103,8 @@ impl eframe::App for AppUI {
                 self.rx_remoto = None;
 
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new())
-            },
-            CambioVista::None => {},
+            }
+            CambioVista::None => {}
             CambioVista::Llamada => {
                 // A partir del cambio a la vista llamada, tiene sentido tener un cliente
                 self.crear_cliente();
@@ -84,8 +118,12 @@ impl eframe::App for AppUI {
                 self.in_call.store(true, Ordering::Relaxed);
 
                 // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
-                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(self.rx_local.take(), self.rx_remoto.take(), Arc::clone(&self.in_call)))
-            },
+                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
+                    self.rx_local.take(),
+                    self.rx_remoto.take(),
+                    Arc::clone(&self.in_call),
+                ))
+            }
         }
     }
 }

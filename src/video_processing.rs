@@ -61,9 +61,7 @@ pub fn get_frame_height(camara: &VideoCapture) -> Result<i32, VideoProcessingErr
     Ok(height)
 }
 
-
-
-//Tests 
+//Tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,7 +71,6 @@ mod tests {
         let camara = initialize_camara();
         assert!(camara.is_ok());
     }
-
 
     //No se agregan tests de las funcionalidades restantes, ya que no se mantienen constantes
     //entre equipo y equipo. A su vez, las funciones son wrappers de librerias externas que asumimos

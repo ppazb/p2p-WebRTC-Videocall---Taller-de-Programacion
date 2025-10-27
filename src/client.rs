@@ -1,4 +1,3 @@
-use opencv::core::Mat;
 use crate::client_errors::ClientErrors;
 use crate::encoding::{DecoderRtc, EncoderRtc};
 use crate::mensaje::Content;
@@ -8,11 +7,12 @@ use crate::rtp::RtpPackage;
 use crate::sdp_protocol::*;
 use crate::video_processing;
 use crate::video_processing_errors::VideoProcessingErrors;
+use opencv::core::Mat;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::Arc;
 use std::{net::UdpSocket, thread};
 
 /*
@@ -34,16 +34,16 @@ fn main() {
 
     let client_offer_session_descrip = match SessionDescription::parse(&offer_client) {
         Ok(md) => md,
-        Err(e) => return eprintln!("{}", e), 
-    }; 
+        Err(e) => return eprintln!("{}", e),
+    };
 
     match create_sdp_answer(&offer, &client_offer_session_descrip, &args[3]) {
         Ok(_) =>  {},
         Err(e) =>  eprintln!("{}", e),
     }
 
-    let peer_adder = client_offer_session_descrip.get_address();     
-    let my_adder = offer.get_address(); 
+    let peer_adder = client_offer_session_descrip.get_address();
+    let my_adder = offer.get_address();
     println!("my: {}", my_adder);
     println!("peer: {}",peer_adder);
 
@@ -63,24 +63,24 @@ fn main() {
 #[derive(Debug)]
 pub struct Client {
     socket: UdpSocket,
-    peer: String,
     //sessions: Session,
     tx_local: Sender<Mat>,
     tx_remoto: Sender<Mat>,
-    in_call: Arc<AtomicBool>
+    in_call: Arc<AtomicBool>,
 }
 
 impl Client {
-    pub fn new(my_addres: &str, peer: &str, tx_local: Sender<Mat>, tx_remoto: Sender<Mat>, in_call: Arc<AtomicBool>) -> Result<Self, ClientErrors> {
-        let socket = UdpSocket::bind(my_addres).map_err(ClientErrors::CantBind)?;
-        socket.connect(peer).map_err(ClientErrors::CantConect)?;
-
+    pub fn new(
+        socket: UdpSocket,
+        tx_local: Sender<Mat>,
+        tx_remoto: Sender<Mat>,
+        in_call: Arc<AtomicBool>,
+    ) -> Result<Self, ClientErrors> {
         Ok(Self {
             socket,
-            peer: peer.to_string(),
             tx_local,
             tx_remoto,
-            in_call
+            in_call,
         })
     }
 
@@ -96,8 +96,7 @@ impl Client {
     pub fn initialize_call(&self) -> Result<(), ClientErrors> {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
-        let user_peer = String::from(&self.peer);
-        let chunk_size:usize = 1200;
+        let chunk_size: usize = 1200;
         let (tx, _rx) = mpsc::channel::<String>();
 
         // Thread receiver
@@ -109,7 +108,7 @@ impl Client {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
 
-            let mut chunks_hash:HashMap<u64,Vec<(u32, Vec<u8>)> > = HashMap::new();
+            let mut chunks_hash: HashMap<u64, Vec<(u32, Vec<u8>)>> = HashMap::new();
 
             loop {
                 match socket_recev.recv(&mut buff) {
@@ -124,19 +123,21 @@ impl Client {
                                     match msg.typemsg {
                                         MsgType::Signalling => {
                                             let _ = tx.send(text.to_string());
-                                            println!("\n{}: {}", user_peer, text);
+                                            println!("\n{}", text);
                                         }
-                                        _ => println!("\n{}: {}", user_peer, text),
+                                        _ => println!("\n {}", text),
                                     };
                                 }
-                                Content::Binary(video_chunk) => { 
-
+                                Content::Binary(video_chunk) => {
                                     if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
                                         let time_stamp = rtp.time_stamp;
-                                        let entry = chunks_hash.entry(time_stamp).or_insert_with(Vec::new);
+                                        let entry =
+                                            chunks_hash.entry(time_stamp).or_insert_with(Vec::new);
                                         entry.push((rtp.index, rtp.payload));
 
-                                        if entry.last().map(|(_, p)| p.len()).unwrap_or(0) < chunk_size {
+                                        if entry.last().map(|(_, p)| p.len()).unwrap_or(0)
+                                            < chunk_size
+                                        {
                                             // reassemble
                                             entry.sort_by_key(|(i, _)| *i);
                                             let mut full: Vec<u8> = Vec::new();
@@ -145,7 +146,11 @@ impl Client {
                                             }
                                             chunks_hash.remove(&time_stamp);
 
-                                            match decoder.decode(&full, msg.dimension.0, msg.dimension.1) {
+                                            match decoder.decode(
+                                                &full,
+                                                msg.dimension.0,
+                                                msg.dimension.1,
+                                            ) {
                                                 Ok(frame) => {
                                                     println!("frame decoded");
                                                     if tx_remoto.send(frame).is_err() {
@@ -153,15 +158,21 @@ impl Client {
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    eprintln!("Decode error (reassembled): {:?}", e);
+                                                    eprintln!(
+                                                        "Decode error (reassembled): {:?}",
+                                                        e
+                                                    );
                                                 }
                                             }
                                         }
-                                    }
-                                    else {
+                                    } else {
                                         // not an RTP fragment, treat as full frame
                                         println!("Assuming full-frame payload, decoding directly");
-                                        match decoder.decode(&video_chunk, msg.dimension.0, msg.dimension.1) {
+                                        match decoder.decode(
+                                            &video_chunk,
+                                            msg.dimension.0,
+                                            msg.dimension.1,
+                                        ) {
                                             Ok(frame) => {
                                                 println!("frame decoded");
                                                 if tx_remoto.send(frame).is_err() {
@@ -174,9 +185,8 @@ impl Client {
                                         }
                                     }
                                 }
-
-                                }
-                            };
+                            }
+                        };
                     }
                     Err(e) => {
                         eprintln!("Socket recv error: {}", e);
@@ -197,7 +207,7 @@ impl Client {
 
         let in_call = Arc::clone(&self.in_call);
 
-        let _sender_thread = thread::spawn(move || -> Result<(),ClientErrors> {
+        let _sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
@@ -218,17 +228,22 @@ impl Client {
                 }
 
                 println!("Encoded frame bytes (sender): {}", encoded_frame.len());
-                println!("Encoded first 8 bytes (hex): {:02x?}", &encoded_frame[..encoded_frame.len().min(8)]);
+                println!(
+                    "Encoded first 8 bytes (hex): {:02x?}",
+                    &encoded_frame[..encoded_frame.len().min(8)]
+                );
 
-                if encoded_frame.is_empty() { //println!("CONTINUE");
-                    continue; 
+                if encoded_frame.is_empty() {
+                    //println!("CONTINUE");
+                    continue;
                 }
                 //tenemos un frame completamente econdeado
                 let mut index_chunk: u32 = 0;
                 for chunk in encoded_frame.chunks(chunk_size) {
                     let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
                     let rtp_bytes = rtp_package.to_bytes();
-                    let video_to_send = Message::new_msg_binary(rtp_bytes, camara_width, camara_height);
+                    let video_to_send =
+                        Message::new_msg_binary(rtp_bytes, camara_width, camara_height);
                     let bytes_to_send = video_to_send
                         .serialize()
                         .map_err(|_e| ClientErrors::SerializeBits)?;
@@ -243,9 +258,9 @@ impl Client {
                     return Ok(());
                 }
             }
-        //IMPORTANTE: NO SACAR, eliminar el uso de JOIN para ""esperar"" lo thread provoca funcionamiento indeterminado
-        // creemos que en principal el error de que solo un cliente pudiera estar reciviendo video venia principalmente de no estar
-        // tratando los threads con un join.
+            //IMPORTANTE: NO SACAR, eliminar el uso de JOIN para ""esperar"" lo thread provoca funcionamiento indeterminado
+            // creemos que en principal el error de que solo un cliente pudiera estar reciviendo video venia principalmente de no estar
+            // tratando los threads con un join.
         });
         // if let Err(e) = sender_thread.join() {
         //     eprintln!("Sender thread terminated: {:?}", e);
@@ -256,6 +271,5 @@ impl Client {
         // }
 
         Ok(())
-        
     }
 }

@@ -31,7 +31,11 @@ impl RtpPackage {
         let time_stamp = u64::from_be_bytes([
             data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11],
         ]);
-        let payload = if data.len() > 12 { data[12..].to_vec() } else { Vec::new() };
+        let payload = if data.len() > 12 {
+            data[12..].to_vec()
+        } else {
+            Vec::new()
+        };
         Some(Self {
             index,
             time_stamp,

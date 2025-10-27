@@ -17,7 +17,7 @@ impl VistaLogin {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista{
+    pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::CentralPanel::default().show(ctx, |ui| {

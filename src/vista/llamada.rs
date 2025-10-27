@@ -1,4 +1,8 @@
-use std::sync::{atomic::{AtomicBool, Ordering}, mpsc::Receiver, Arc};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc::Receiver,
+};
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, Vec2};
 use opencv::{imgproc, prelude::*};
@@ -11,22 +15,26 @@ pub struct VistaLlamada {
     rx_remoto: Option<Receiver<Mat>>,
     tex_local: Option<TextureHandle>,
     tex_remoto: Option<TextureHandle>,
-    in_call: Arc<AtomicBool>
+    in_call: Arc<AtomicBool>,
 }
 
 impl VistaLlamada {
-    pub fn new(rx_local: Option<Receiver<Mat>>, rx_remoto: Option<Receiver<Mat>>, in_call: Arc<AtomicBool>) -> Self {
+    pub fn new(
+        rx_local: Option<Receiver<Mat>>,
+        rx_remoto: Option<Receiver<Mat>>,
+        in_call: Arc<AtomicBool>,
+    ) -> Self {
         Self {
             cam_enable: true,
             rx_local,
             rx_remoto,
             tex_local: None,
             tex_remoto: None,
-            in_call
+            in_call,
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista{
+    pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -44,7 +52,7 @@ impl VistaLlamada {
                         return;
                     }
                 }
-                
+
                 // Toggle cámara
                 match self.cam_enable {
                     true => {
@@ -52,7 +60,7 @@ impl VistaLlamada {
                             self.liberar_camara();
                             return;
                         }
-                    },
+                    }
                     false => {
                         if ui.button("Encender cámara").clicked() {
                             self.cargar_camara();
@@ -60,7 +68,7 @@ impl VistaLlamada {
                     }
                 }
             });
-            
+
             ui.separator();
 
             // Widgets video
@@ -79,7 +87,7 @@ impl VistaLlamada {
                                     egui::TextureOptions::LINEAR,
                                 ));
                             }
-                        }  
+                        }
                     }
                 }
 
@@ -92,7 +100,7 @@ impl VistaLlamada {
                 }
 
                 ui.add_space(20.0);
-                
+
                 // Actualizo frame local
                 match self.cam_enable {
                     true => {
@@ -104,12 +112,11 @@ impl VistaLlamada {
                                         tex.set(color_image, egui::TextureOptions::LINEAR);
                                     } else {
                                         self.tex_local = Some(ctx.load_texture(
-                                        "cam_local",
-                                        color_image,
-                                        egui::TextureOptions::LINEAR,
-                                    ));
+                                            "cam_local",
+                                            color_image,
+                                            egui::TextureOptions::LINEAR,
+                                        ));
                                     }
-                                    
                                 }
                             }
                         }
@@ -121,7 +128,7 @@ impl VistaLlamada {
                         } else {
                             ui.heading("No Camera (Local)");
                         }
-                    },
+                    }
                     false => {
                         ui.heading("No Camera (Local)");
 
@@ -129,7 +136,7 @@ impl VistaLlamada {
                     }
                 }
             });
-            
+
             ctx.request_repaint();
         });
 
@@ -187,5 +194,4 @@ impl VistaLlamada {
 
         scaled_size
     }
-    
 }

@@ -23,17 +23,11 @@ impl EncoderRtc {
             .map_err(|_| EncodingErrors::EncoderInit)?;
 
         Ok(Self {
-            encoderh264
-            // encoderb: false,
+            encoderh264, // encoderb: false,
         })
     }
 
-    
-
-    pub fn encode(
-        &mut self,
-        frame: &opencv::core::Mat
-    ) -> Result<Vec<u8>, EncodingErrors> {
+    pub fn encode(&mut self, frame: &opencv::core::Mat) -> Result<Vec<u8>, EncodingErrors> {
         let mut yuv = opencv::core::Mat::default();
         imgproc::cvt_color(frame, &mut yuv, imgproc::COLOR_BGR2YUV_I420, 0)
             .map_err(|_| EncodingErrors::SetColorSpace)?;
@@ -69,29 +63,31 @@ impl DecoderRtc {
         h264_data: &[u8],
         widht: i32,
         height: i32,
-    ) -> Result< opencv::core::Mat, DecodingErrors> {
-        if let Some(yuv_decoded) = self.decoderh264.decode(h264_data).map_err(|_| DecodingErrors::DecodeYuv)? {
-        let mut yuv_buffer = Vec::with_capacity((widht * height * 3 / 2) as usize);
-        yuv_buffer.extend_from_slice(yuv_decoded.y());
-        yuv_buffer.extend_from_slice(yuv_decoded.u());
-        yuv_buffer.extend_from_slice(yuv_decoded.v());
+    ) -> Result<opencv::core::Mat, DecodingErrors> {
+        if let Some(yuv_decoded) = self
+            .decoderh264
+            .decode(h264_data)
+            .map_err(|_| DecodingErrors::DecodeYuv)?
+        {
+            let mut yuv_buffer = Vec::with_capacity((widht * height * 3 / 2) as usize);
+            yuv_buffer.extend_from_slice(yuv_decoded.y());
+            yuv_buffer.extend_from_slice(yuv_decoded.u());
+            yuv_buffer.extend_from_slice(yuv_decoded.v());
 
-        let yuv_frame = opencv::core::Mat::from_slice(&yuv_buffer)
-            .map_err(|_| DecodingErrors::YuvFrameSettup)?;
-        let yuv_frame = yuv_frame
-            .reshape(1, height * 3 / 2)
-            .map_err(|_| DecodingErrors::YuvFrameSettup)?;
+            let yuv_frame = opencv::core::Mat::from_slice(&yuv_buffer)
+                .map_err(|_| DecodingErrors::YuvFrameSettup)?;
+            let yuv_frame = yuv_frame
+                .reshape(1, height * 3 / 2)
+                .map_err(|_| DecodingErrors::YuvFrameSettup)?;
 
-        let mut bgr = opencv::core::Mat::default();
+            let mut bgr = opencv::core::Mat::default();
 
-        imgproc::cvt_color(&yuv_frame, &mut bgr, imgproc::COLOR_YUV2BGR_I420, 0)
-            .map_err(|_| DecodingErrors::SetColorSpace)?;
+            imgproc::cvt_color(&yuv_frame, &mut bgr, imgproc::COLOR_YUV2BGR_I420, 0)
+                .map_err(|_| DecodingErrors::SetColorSpace)?;
 
-        Ok(bgr)
-        }
-        else {
+            Ok(bgr)
+        } else {
             Err(DecodingErrors::DecodeYuv)
-        }    
+        }
     }
-
 }
