@@ -41,14 +41,13 @@ impl VistaLlamada {
             // Controles llamada
             ui.horizontal(|ui| {
                 // Botón Salida
-                if self.in_call.load(Ordering::Relaxed) {
+                if self.in_call.load(Ordering::SeqCst) {
                     if ui.button("Finalizar llamada").clicked() {
                         self.liberar_camara();
                         cambio = CambioVista::Login;
 
                         // Cambio el estado del flag, notificando a los threads del cliente
-                        // TODO: el cambio debe ser enviado a AMBOS clientes
-                        self.in_call.store(false, Ordering::Relaxed);
+                        self.in_call.store(false, Ordering::SeqCst);
                         return;
                     }
                 }

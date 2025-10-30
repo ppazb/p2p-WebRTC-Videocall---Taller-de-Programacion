@@ -104,7 +104,20 @@ impl eframe::App for AppUI {
 
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new())
             }
-            CambioVista::None => {}
+            CambioVista::None => {
+                match self.vista_actual {
+                    Vista::VistaLlamada(_) => {
+                        if !self.in_call.load(Ordering::SeqCst) {
+                            self.cliente = None;
+                            self.rx_local = None;
+                            self.rx_remoto = None;
+                            
+                            self.vista_actual = Vista::VistaLogin(VistaLogin::new())
+                        }
+                    },
+                    _ => {}
+                }
+            }
             CambioVista::Llamada => {
                 // A partir del cambio a la vista llamada, tiene sentido tener un cliente
                 self.crear_cliente();
@@ -115,7 +128,7 @@ impl eframe::App for AppUI {
                 }
 
                 // Actualizo flag para controlar vida de threads
-                self.in_call.store(true, Ordering::Relaxed);
+                self.in_call.store(true, Ordering::SeqCst);
 
                 // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
                 self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
