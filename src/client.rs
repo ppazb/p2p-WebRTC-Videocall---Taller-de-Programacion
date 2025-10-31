@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
+use std::thread::JoinHandle;
 use std::{net::UdpSocket, thread};
 
 #[derive(Debug)]
@@ -48,7 +49,7 @@ impl Client {
         println!("[Session Description] {}", peer_session_description);
     }
 
-    pub fn initialize_call(&self) -> Result<(), ClientErrors> {
+    pub fn initialize_call(&self) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let chunk_size: usize = 1200;
@@ -58,7 +59,7 @@ impl Client {
         let tx_remoto = self.tx_remoto.clone();
         let in_call = Arc::clone(&self.in_call);
 
-        let _receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+        let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
 
@@ -80,7 +81,7 @@ impl Client {
                             continue;
                         }
                         if let Some(msg) = Message::deserializable(&buff[..n]) {
-                            //println!("Received bytes: {}", n);
+                            eprintln!("Estoy recibiendo un mensaje");
                             match msg.content {
                                 Content::Signal(signal) => {
                                     match signal {
@@ -173,7 +174,7 @@ impl Client {
         let tx_local = self.tx_local.clone();
         let in_call = Arc::clone(&self.in_call);
 
-        let _sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+        let sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
@@ -216,6 +217,7 @@ impl Client {
                     }
                 };
 
+                println!("Estoy enviando un frame");
                 if tx_local.send(frame).is_err() {
                     println!("PROBLEMA");
                 }
@@ -258,7 +260,7 @@ impl Client {
         // if let Err(e) = reciver_thread.join() {
         //     eprintln!("Receiver thread terminated: {:?}", e);
         // }
-
-        Ok(())
+        let handles = vec![receiver_thread, sender_thread];
+        Ok(handles)
     }
 }

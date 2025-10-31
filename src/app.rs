@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
+use std::thread::JoinHandle;
 
 use crate::client::Client;
 use crate::client_errors::ClientErrors;
@@ -25,6 +26,20 @@ pub struct AppUI {
     // DEBUG: puertos para cliente
     local_adr: String,
     remote_adr: String,
+
+    // Threads pendientes
+    pub thread_handles: Option<Vec<JoinHandle<Result<(), ClientErrors>>>>,
+}
+
+impl Drop for AppUI {
+    fn drop(&mut self) {
+        // Para el Join de los threads
+        if let Some(handles) = self.thread_handles.take() {
+            for handle in handles {
+                let _ = handle.join();
+            }
+        }
+    }
 }
 
 impl AppUI {
@@ -37,13 +52,14 @@ impl AppUI {
             in_call: Arc::new(AtomicBool::new(false)),
 
             pedido_cliente: None,
+            thread_handles: None,
 
             local_adr,
             remote_adr,
         }
     }
 
-    pub fn crear_cliente(&mut self) {
+    pub fn crear_cliente(&mut self) -> JoinHandle<Result<(), ClientErrors>> {
         // Creo channels para la transmisión y recepción de frames, de ambas cámaras
         let (tx_local, rx_local) = std::sync::mpsc::channel();
         let (tx_remoto, rx_remoto) = std::sync::mpsc::channel();
@@ -60,13 +76,13 @@ impl AppUI {
         // Canal para devolver el resultado del cliente
         let (tx_result, rx_result) = std::sync::mpsc::channel();
 
-        std::thread::spawn(move || {
+        let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
             //SDP
             let ice_info = match sdp_handshake(my_address.as_str(), peer.as_str()) {
                 Err(e) => {
                     eprintln!("SDP Handshake error: {}", e);
-                    let _ = tx_result.send(Err(e));
-                    return;
+                    let _ = tx_result.send(Err(e.clone()));
+                    return Err(ClientErrors::SdpError(e));
                 }
                 Ok(info) => info,
             };
@@ -76,7 +92,7 @@ impl AppUI {
                 Err(e) => {
                     eprintln!("{}", e);
                     //let _ = tx_result.send(Err(e));
-                    return;
+                    return Err(ClientErrors::IceError(e));
                 }
                 Ok(c) => c,
             };
@@ -86,7 +102,7 @@ impl AppUI {
                 Err(e) => {
                     eprintln!("{}", e);
                     //let _ = tx_result.send(Err(e));
-                    return;
+                    return Err(ClientErrors::IceError(e));
                 }
                 Ok(socket) => socket,
             };
@@ -99,9 +115,10 @@ impl AppUI {
                 Err(e) => {
                     eprintln!("Error creando cliente: {:?}", e);
                     //let _ = tx_result.send(Err(e));
-                    return;
+                    return Err(e);
                 }
             }
+            Ok(())
         });
 
         //SDP
@@ -142,6 +159,7 @@ impl AppUI {
 
         // Cargo el potencial cliente y espero que termine el proceso
         self.pedido_cliente = Some(rx_result);
+        handshake_handle
     }
 }
 
@@ -153,6 +171,7 @@ impl eframe::App for AppUI {
         // algunas acciones provocan cambios de vista
         // se debería preservar información y cargarla durante la transicion
         let cambio = self.vista_actual.ui(ctx);
+        let mut handles: Vec<JoinHandle<Result<(), ClientErrors>>> = Vec::new();
 
         match cambio {
             CambioVista::Login => {
@@ -167,7 +186,9 @@ impl eframe::App for AppUI {
                 // Voy a pantalla de carga, inicializo el cliente
                 self.vista_actual = Vista::VistaLobby(VistaLobby::new());
 
-                self.crear_cliente();
+                let handshake_handle = self.crear_cliente();
+                handles.push(handshake_handle);
+                //handshake_handle.join().unwrap()
             }
             CambioVista::None => {
                 match self.vista_actual {
@@ -194,7 +215,10 @@ impl eframe::App for AppUI {
 
                                         // Inicializo threads de captura+envío y recepción de frames
                                         if let Some(c) = &self.cliente {
-                                            let _ = c.initialize_call();
+                                            let handle_call = c.initialize_call();
+                                            if let Ok(h) = handle_call {
+                                                handles.extend(h);
+                                            }
                                         }
 
                                         // Actualizo flag para controlar vida de threads
@@ -224,7 +248,10 @@ impl eframe::App for AppUI {
 
                 // Inicializo threads de captura+envío y recepción de frames
                 if let Some(c) = &self.cliente {
-                    let _ = c.initialize_call();
+                    let handle_call = c.initialize_call();
+                    if let Ok(h) = handle_call {
+                        handles.extend(h);
+                    }
                 }
 
                 // Actualizo flag para controlar vida de threads
@@ -238,5 +265,6 @@ impl eframe::App for AppUI {
                 ))
             }
         }
+        self.thread_handles = Some(handles);
     }
 }
