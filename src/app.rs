@@ -266,5 +266,7 @@ impl eframe::App for AppUI {
             }
         }
         self.thread_handles = Some(handles);
+
+        ctx.request_repaint();
     }
 }

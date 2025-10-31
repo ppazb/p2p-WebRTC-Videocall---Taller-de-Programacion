@@ -135,8 +135,6 @@ impl VistaLlamada {
                     }
                 }
             });
-
-            ctx.request_repaint();
         });
 
         return cambio;
