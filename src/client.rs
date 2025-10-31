@@ -53,7 +53,7 @@ impl Client {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let chunk_size: usize = 1200;
-        let (tx, _rx) = mpsc::channel::<String>();
+        // let (tx, _rx) = mpsc::channel::<String>();
 
         // Thread receiver
         let tx_remoto = self.tx_remoto.clone();
@@ -95,7 +95,7 @@ impl Client {
                                 Content::Text(text) => {
                                     match msg.typemsg {
                                         MsgType::Signalling => {
-                                            let _ = tx.send(text.to_string());
+                                            //let _ = tx.send(text.to_string());
                                             println!("\n{}", text);
                                         }
                                         _ => println!("\n {}", text),
