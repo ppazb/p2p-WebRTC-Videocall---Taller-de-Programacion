@@ -11,6 +11,12 @@ pub enum MsgType {
 pub enum Content {
     Text(String),
     Binary(Vec<u8>),
+    Signal(Signal)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Signal {
+    EndCall = 0,
 }
 
 pub struct Message {
@@ -28,10 +34,10 @@ impl Message {
         }
     }
 
-    pub fn new_msg_signalling(text: &str) -> Self {
+    pub fn new_msg_signalling(signal: Signal) -> Self {
         Self {
             typemsg: MsgType::Signalling,
-            content: Content::Text(text.to_string()),
+            content: Content::Signal(signal),
             dimension: (0, 0),
         }
     }
@@ -43,6 +49,7 @@ impl Message {
             dimension: (_width, _height),
         }
     }
+
     //Convertimos el mensaje a bytes sea cual sea el mensaje
     pub fn serialize(&self) -> Result<Vec<u8>, MessageErrors> {
         let mut serialize = Vec::new();
@@ -55,15 +62,22 @@ impl Message {
                 let len_text = (text_bytes.len() as u32).to_be_bytes();
                 serialize.extend_from_slice(&len_text);
                 serialize.extend_from_slice(text_bytes);
-            }
+            },
             Content::Binary(data) => {
                 let len_data = (data.len() as u32).to_be_bytes();
                 serialize.extend_from_slice(&len_data);
                 serialize.extend_from_slice(data);
+            },
+            Content::Signal(signal) => {
+                // Serializo la variante enum como un único byte
+                let signal_byte = *signal as u8;
+                serialize.extend_from_slice(&(1u32.to_be_bytes()));
+                serialize.push(signal_byte);
             }
         }
         Ok(serialize)
     }
+
     //Cuando recibimos un mensaje en bytes lo recuperamos para leer su contenido
     pub fn deserializable(data: &[u8]) -> Option<Self> {
         if data.len() < 13 {
@@ -84,14 +98,25 @@ impl Message {
         if data.len() < 13 + len {
             return None;
         }
+
         let content_bytes = &data[13..13 + len];
         let content = match msgtype {
             MsgType::Texto => Content::Text(String::from_utf8_lossy(content_bytes).to_string()),
             MsgType::Signalling => {
-                Content::Text(String::from_utf8_lossy(content_bytes).to_string())
+                // Identifico el byte de la señal recibida
+                if len == 1 {
+                    let signal = match content_bytes[0] {
+                        0 => Signal::EndCall,
+                        _ => return None,
+                    };
+                    Content::Signal(signal)
+                } else {
+                    Content::Text(String::from_utf8_lossy(content_bytes).to_string())
+                }
             }
             _ => Content::Binary(content_bytes.to_vec()),
         };
+
         Some(Self {
             content,
             typemsg: msgtype,

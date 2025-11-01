@@ -28,7 +28,7 @@ impl VistaLogin {
 
             if ui.button("Login").clicked() {
                 if self.username == "" && self.password == "" {
-                    cambio = CambioVista::Llamada;
+                    cambio = CambioVista::Lobby;
                 } else {
                     self.password = String::new();
                     self.error_msg = Some("Usuario o contraseña inválidos.".into());

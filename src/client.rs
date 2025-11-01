@@ -1,6 +1,6 @@
 use crate::client_errors::ClientErrors;
 use crate::encoding::{DecoderRtc, EncoderRtc};
-use crate::mensaje::Content;
+use crate::mensaje::{Content, Signal};
 use crate::mensaje::Message;
 use crate::mensaje::MsgType;
 use crate::rtp::RtpPackage;
@@ -13,52 +13,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
+use std::thread::JoinHandle;
 use std::{net::UdpSocket, thread};
-
-/*
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        return;
-    }
-
-    let offer = match create_sdp_offer(&args[1], &args[2]) {
-        Ok(session_descrip_offer) => session_descrip_offer,
-        Err(e) => return eprint!("{}", e),
-    };
-
-
-    let mut stdin = io::stdin();
-    let mut offer_client = String::new();
-    let _ = stdin.read_to_string(&mut offer_client);
-
-    let client_offer_session_descrip = match SessionDescription::parse(&offer_client) {
-        Ok(md) => md,
-        Err(e) => return eprintln!("{}", e),
-    };
-
-    match create_sdp_answer(&offer, &client_offer_session_descrip, &args[3]) {
-        Ok(_) =>  {},
-        Err(e) =>  eprintln!("{}", e),
-    }
-
-    let peer_adder = client_offer_session_descrip.get_address();
-    let my_adder = offer.get_address();
-    println!("my: {}", my_adder);
-    println!("peer: {}",peer_adder);
-
-    let client = match Client::new(&my_adder, &peer_adder) {
-        Ok(client) => client,
-        Err(e) => return eprintln!("{}", e),
-    };
-
-
-    match client.initialize_call() {
-        Ok(_) => (),
-        Err(e) => eprintln!("{}", e),
-    };
-}
-*/
 
 #[derive(Debug)]
 pub struct Client {
@@ -93,41 +49,58 @@ impl Client {
         println!("[Session Description] {}", peer_session_description);
     }
 
-    pub fn initialize_call(&self) -> Result<(), ClientErrors> {
+    pub fn initialize_call(&self) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let chunk_size: usize = 1200;
-        let (tx, _rx) = mpsc::channel::<String>();
+        // let (tx, _rx) = mpsc::channel::<String>();
 
         // Thread receiver
         let tx_remoto = self.tx_remoto.clone();
-
         let in_call = Arc::clone(&self.in_call);
 
-        let _reciver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+        let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
 
             let mut chunks_hash: HashMap<u64, Vec<(u32, Vec<u8>)>> = HashMap::new();
 
+            // Seteo timeout de recepción
+            socket_recev.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
+
             loop {
+                // Controlo el flag in_call para salir del thread
+                if !in_call.load(Ordering::SeqCst) {
+                    println!("RECEIVER OVER");
+                    return Ok(());
+                }
+
                 match socket_recev.recv(&mut buff) {
                     Ok(n) => {
                         if n == 0 {
                             continue;
                         }
                         if let Some(msg) = Message::deserializable(&buff[..n]) {
-                            println!("Received bytes: {}", n);
+                            eprintln!("Estoy recibiendo un mensaje");
                             match msg.content {
+                                Content::Signal(signal) => {
+                                    match signal {
+                                        Signal::EndCall => {
+                                            // El otro cliente genera la señal, se deben terminar los threads de la llamada
+                                            in_call.store(false, Ordering::SeqCst);
+                                            continue;
+                                        }
+                                    }
+                                },
                                 Content::Text(text) => {
                                     match msg.typemsg {
                                         MsgType::Signalling => {
-                                            let _ = tx.send(text.to_string());
+                                            //let _ = tx.send(text.to_string());
                                             println!("\n{}", text);
                                         }
                                         _ => println!("\n {}", text),
                                     };
-                                }
+                                },
                                 Content::Binary(video_chunk) => {
                                     if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
                                         let time_stamp = rtp.time_stamp;
@@ -152,7 +125,7 @@ impl Client {
                                                 msg.dimension.1,
                                             ) {
                                                 Ok(frame) => {
-                                                    println!("frame decoded");
+                                                    // println!("frame decoded");
                                                     if tx_remoto.send(frame).is_err() {
                                                         println!("PROBLEMA");
                                                     }
@@ -174,7 +147,7 @@ impl Client {
                                             msg.dimension.1,
                                         ) {
                                             Ok(frame) => {
-                                                println!("frame decoded");
+                                                //println!("frame decoded");
                                                 if tx_remoto.send(frame).is_err() {
                                                     println!("PROBLEMA");
                                                 }
@@ -189,25 +162,19 @@ impl Client {
                         };
                     }
                     Err(e) => {
-                        eprintln!("Socket recv error: {}", e);
+                        //eprintln!("Socket recv error: {}", e);
                         continue;
                     }
                 }
 
-                // Controlo el flag in_call para salir del thread
-                if !in_call.load(Ordering::Relaxed) {
-                    println!("RECEIVER OVER");
-                    return Ok(());
-                }
             }
         });
 
         // Thread sender
         let tx_local = self.tx_local.clone();
-
         let in_call = Arc::clone(&self.in_call);
 
-        let _sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+        let sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let mut camara = video_processing::initialize_camara().map_err(|_e| {
                 ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
             })?;
@@ -215,29 +182,58 @@ impl Client {
             let camara_width = video_processing::get_frame_width(&camara)?;
             let camara_height = video_processing::get_frame_height(&camara)?;
             let mut encoder = EncoderRtc::new_encoding()?;
+
             loop {
+                // Corte de llamada y notificación remota
+                if !in_call.load(Ordering::SeqCst) {
+                    // Genero el mensaje y lo envío repetidas veces para asegurarlo
+                    let msg = Message::new_msg_signalling(Signal::EndCall);
+
+                    for _ in 0..3 {
+                        if let Ok(bytes) = msg.serialize() {
+                            if let Err(_) = socket_send.send(&bytes) {
+                                eprintln!("Error enviando señal EndCall");
+                            } else {
+                                println!("Señal EndCall enviada");
+                            }
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+
+                    println!("SENDER OVER");
+                    return Ok(());
+                }
+
+                // Leo frame y lo cargo al emisor local, la UI va a leerlos cuando la cámara esté habilitada
                 let frame = video_processing::read_frame(&mut camara).map_err(|_e| {
                     ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
                 })?;
 
-                let encoded_frame = encoder.encode(&frame)?;
+                let encoded_frame = match encoder.encode(&frame) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        //eprintln!("{}", e);
+                        Vec::new()
+                    }
+                };
 
-                // Cargo frame al emisor local, la UI va a leerlos cuando la cámara esté habilitada
+                println!("Estoy enviando un frame");
                 if tx_local.send(frame).is_err() {
                     println!("PROBLEMA");
                 }
 
-                println!("Encoded frame bytes (sender): {}", encoded_frame.len());
-                println!(
-                    "Encoded first 8 bytes (hex): {:02x?}",
-                    &encoded_frame[..encoded_frame.len().min(8)]
-                );
+                // println!("Encoded frame bytes (sender): {}", encoded_frame.len());
+                // println!(
+                //     "Encoded first 8 bytes (hex): {:02x?}",
+                //     &encoded_frame[..encoded_frame.len().min(8)]
+                // );
 
                 if encoded_frame.is_empty() {
                     //println!("CONTINUE");
                     continue;
                 }
-                //tenemos un frame completamente econdeado
+
+                // Serializo el frame encodeado
                 let mut index_chunk: u32 = 0;
                 for chunk in encoded_frame.chunks(chunk_size) {
                     let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
@@ -252,11 +248,6 @@ impl Client {
                     }
                     index_chunk = index_chunk.wrapping_add(1);
                 }
-                // Controlo el flag in_call para salir del thread
-                if !in_call.load(Ordering::Relaxed) {
-                    println!("SENDER OVER");
-                    return Ok(());
-                }
             }
             //IMPORTANTE: NO SACAR, eliminar el uso de JOIN para ""esperar"" lo thread provoca funcionamiento indeterminado
             // creemos que en principal el error de que solo un cliente pudiera estar reciviendo video venia principalmente de no estar
@@ -269,7 +260,7 @@ impl Client {
         // if let Err(e) = reciver_thread.join() {
         //     eprintln!("Receiver thread terminated: {:?}", e);
         // }
-
-        Ok(())
+        let handles = vec![receiver_thread, sender_thread];
+        Ok(handles)
     }
 }
