@@ -81,6 +81,7 @@ impl SessionDescription {
                 ip.to_string(),
             );
             let time_struct = Time::new(0, 0);
+            let candidate_str = format!("{} {}", ip, port);
             let media_description = MediaDescription::new(
                 "video".to_string(),
                 port.to_string(),
@@ -88,9 +89,7 @@ impl SessionDescription {
                 97,
                 vec![
                     Attribute::Value("rtpmap".to_string(), "97 H264/90000".to_string()),
-                    Attribute::Value("candidate".to_string(), "192.168.0.109 8000".to_string()),
-                    Attribute::Value("candidate".to_string(), "192.168.0.109 8001".to_string()),
-                    Attribute::Value("candidate".to_string(), "192.168.0.109 8002".to_string()),
+                    Attribute::Value("candidate".to_string(), candidate_str),
                 ],
             );
 
@@ -247,7 +246,6 @@ impl MediaDescription {
         another_media_descrip: &MediaDescription,
     ) -> Option<MediaDescription> {
         if (self.media != another_media_descrip.media)
-            || (self.transport_protocol != self.transport_protocol)
         {
             return None;
         }
