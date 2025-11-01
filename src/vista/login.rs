@@ -8,6 +8,12 @@ pub struct VistaLogin {
     pub error_msg: Option<String>,
 }
 
+impl Default for VistaLogin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VistaLogin {
     pub fn new() -> Self {
         Self {
@@ -27,7 +33,7 @@ impl VistaLogin {
             ui.text_edit_singleline(&mut self.password);
 
             if ui.button("Login").clicked() {
-                if self.username == "" && self.password == "" {
+                if self.username.is_empty() && self.password.is_empty() {
                     cambio = CambioVista::Lobby;
                 } else {
                     self.password = String::new();
@@ -40,6 +46,6 @@ impl VistaLogin {
             }
         });
 
-        return cambio;
+        cambio
     }
 }

@@ -1,11 +1,13 @@
 use eframe::egui;
 
-use crate::vista::{cambio::CambioVista, llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin};
+use crate::vista::{
+    cambio::CambioVista, llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin,
+};
 
 pub mod cambio;
 pub mod llamada;
-pub mod login;
 pub mod lobby;
+pub mod login;
 
 pub enum Vista {
     VistaLogin(VistaLogin),

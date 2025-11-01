@@ -143,17 +143,15 @@ impl SessionDescription {
             .media
             .compare_media_descriptions(&session_descrip_offer.media)
         {
-            Some(compatible_media) => {
-                return Some(Self::new(
-                    self.version,
-                    self.origin.clone(),
-                    self.session_name.clone(),
-                    self.session_time.clone(),
-                    compatible_media,
-                ));
-            }
-            None => return None,
-        };
+            Some(compatible_media) => Some(Self::new(
+                self.version,
+                self.origin.clone(),
+                self.session_name.clone(),
+                self.session_time.clone(),
+                compatible_media,
+            )),
+            None => None,
+        }
     }
 
     pub fn parse(text_sdp_protocol: &str) -> Result<SessionDescription, SdpError> {
@@ -245,8 +243,7 @@ impl MediaDescription {
         &self,
         another_media_descrip: &MediaDescription,
     ) -> Option<MediaDescription> {
-        if (self.media != another_media_descrip.media)
-        {
+        if self.media != another_media_descrip.media {
             return None;
         }
 
@@ -336,10 +333,10 @@ impl Attribute {
     }
 
     pub fn parse_rtpmap(rtpmap: &str) -> Option<(&str, &str)> {
-        if let Some((_, codec_clock)) = rtpmap.split_once(' ') {
-            if let Some((codec, clock)) = codec_clock.split_once('/') {
-                return Some((codec, clock));
-            }
+        if let Some((_, codec_clock)) = rtpmap.split_once(' ')
+            && let Some((codec, clock)) = codec_clock.split_once('/')
+        {
+            return Some((codec, clock));
         }
         None
     }
@@ -360,7 +357,7 @@ impl Attribute {
                     "ice-pwd" => ice_info.pwd = String::from(v),
                     "candidate" => {
                         let v = v.replace(" ", ":");
-                        ice_info.candidates.push(String::from(v))
+                        ice_info.candidates.push(v)
                     }
                     _ => {}
                 }
@@ -652,11 +649,11 @@ pub fn sdp_handshake(
         ice_candidates_peer.push(peer_adder.to_string());
         my_ice_candidates.push(local_adder.to_string());
 
-        return Ok((
+        Ok((
             my_ice_candidates,
             ice_candidates_peer,
             vec![codec.to_string()],
-        ));
+        ))
     } else {
         // Soy quien recibo el Offer y creo el Answer
 
@@ -667,7 +664,7 @@ pub fn sdp_handshake(
         let signal_str = String::from_utf8_lossy(&buffer);
 
         // SessionDescription del Offer recibido
-        let mut sdp_offer: SessionDescription = SessionDescription::default();
+        let sdp_offer: SessionDescription = SessionDescription::default();
         // SessionDescription de mi Answer a generar
         let mut answer_peer_session: SessionDescription = SessionDescription::default();
 
@@ -709,11 +706,11 @@ pub fn sdp_handshake(
         ice_candidates_peer.push(peer_adder.to_string());
         my_ice_candidates.push(local_adder.to_string());
 
-        return Ok((
+        Ok((
             my_ice_candidates,
             ice_candidates_peer,
             vec![codec.to_string()],
-        ));
+        ))
     }
 }
 

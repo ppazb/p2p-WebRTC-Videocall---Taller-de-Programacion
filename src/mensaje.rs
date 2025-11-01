@@ -11,7 +11,7 @@ pub enum MsgType {
 pub enum Content {
     Text(String),
     Binary(Vec<u8>),
-    Signal(Signal)
+    Signal(Signal),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -62,12 +62,12 @@ impl Message {
                 let len_text = (text_bytes.len() as u32).to_be_bytes();
                 serialize.extend_from_slice(&len_text);
                 serialize.extend_from_slice(text_bytes);
-            },
+            }
             Content::Binary(data) => {
                 let len_data = (data.len() as u32).to_be_bytes();
                 serialize.extend_from_slice(&len_data);
                 serialize.extend_from_slice(data);
-            },
+            }
             Content::Signal(signal) => {
                 // Serializo la variante enum como un único byte
                 let signal_byte = *signal as u8;

@@ -1,8 +1,8 @@
 use crate::client_errors::ClientErrors;
 use crate::encoding::{DecoderRtc, EncoderRtc};
-use crate::mensaje::{Content, Signal};
 use crate::mensaje::Message;
 use crate::mensaje::MsgType;
+use crate::mensaje::{Content, Signal};
 use crate::rtp::RtpPackage;
 use crate::sdp_protocol::*;
 use crate::video_processing;
@@ -12,7 +12,7 @@ use opencv::core::Mat;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use std::{net::UdpSocket, thread};
 
@@ -49,7 +49,9 @@ impl Client {
         println!("[Session Description] {}", peer_session_description);
     }
 
-    pub fn initialize_call(&self) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
+    pub fn initialize_call(
+        &self,
+    ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
         let chunk_size: usize = 1200;
@@ -91,7 +93,7 @@ impl Client {
                                             continue;
                                         }
                                     }
-                                },
+                                }
                                 Content::Text(text) => {
                                     match msg.typemsg {
                                         MsgType::Signalling => {
@@ -100,12 +102,11 @@ impl Client {
                                         }
                                         _ => println!("\n {}", text),
                                     };
-                                },
+                                }
                                 Content::Binary(video_chunk) => {
                                     if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
                                         let time_stamp = rtp.time_stamp;
-                                        let entry =
-                                            chunks_hash.entry(time_stamp).or_insert_with(Vec::new);
+                                        let entry = chunks_hash.entry(time_stamp).or_default();
                                         entry.push((rtp.index, rtp.payload));
 
                                         if entry.last().map(|(_, p)| p.len()).unwrap_or(0)
@@ -161,12 +162,11 @@ impl Client {
                             }
                         };
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         //eprintln!("Socket recv error: {}", e);
                         continue;
                     }
                 }
-
             }
         });
 
@@ -191,7 +191,7 @@ impl Client {
 
                     for _ in 0..3 {
                         if let Ok(bytes) = msg.serialize() {
-                            if let Err(_) = socket_send.send(&bytes) {
+                            if socket_send.send(&bytes).is_err() {
                                 eprintln!("Error enviando señal EndCall");
                             } else {
                                 println!("Señal EndCall enviada");
@@ -211,7 +211,7 @@ impl Client {
 
                 let encoded_frame = match encoder.encode(&frame) {
                     Ok(f) => f,
-                    Err(e) => {
+                    Err(_e) => {
                         //eprintln!("{}", e);
                         Vec::new()
                     }

@@ -181,7 +181,7 @@ impl eframe::App for AppUI {
                 self.rx_remoto = None;
 
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new())
-            },
+            }
             CambioVista::Lobby => {
                 // Voy a pantalla de carga, inicializo el cliente
                 self.vista_actual = Vista::VistaLobby(VistaLobby::new());
@@ -198,47 +198,47 @@ impl eframe::App for AppUI {
                             self.cliente = None;
                             self.rx_local = None;
                             self.rx_remoto = None;
-                            
+
                             self.vista_actual = Vista::VistaLogin(VistaLogin::new())
                         }
-                    },
+                    }
                     // Espero la creación del cliente, cuando se cree paso a la llamada
                     Vista::VistaLobby(_) => {
-                        if let Some(rx_result) = &self.pedido_cliente {
-                            if let Ok(result) = rx_result.try_recv() {
-                                match result {
-                                    Ok(cliente) => {
-                                        // Se carga el nuevo cliente, debería haber un join para limpiar el thread terminado?
-                                        self.cliente = Some(cliente);
-                                        self.pedido_cliente = None;
-                                        println!("Nuevo cliente creado");
+                        if let Some(rx_result) = &self.pedido_cliente
+                            && let Ok(result) = rx_result.try_recv()
+                        {
+                            match result {
+                                Ok(cliente) => {
+                                    // Se carga el nuevo cliente, debería haber un join para limpiar el thread terminado?
+                                    self.cliente = Some(cliente);
+                                    self.pedido_cliente = None;
+                                    println!("Nuevo cliente creado");
 
-                                        // Inicializo threads de captura+envío y recepción de frames
-                                        if let Some(c) = &self.cliente {
-                                            let handle_call = c.initialize_call();
-                                            if let Ok(h) = handle_call {
-                                                handles.extend(h);
-                                            }
+                                    // Inicializo threads de captura+envío y recepción de frames
+                                    if let Some(c) = &self.cliente {
+                                        let handle_call = c.initialize_call();
+                                        if let Ok(h) = handle_call {
+                                            handles.extend(h);
                                         }
-
-                                        // Actualizo flag para controlar vida de threads
-                                        self.in_call.store(true, Ordering::SeqCst);
-
-                                        // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
-                                        self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
-                                            self.rx_local.take(),
-                                            self.rx_remoto.take(),
-                                            Arc::clone(&self.in_call),
-                                        ))
                                     }
-                                    Err(e) => {
-                                        eprintln!("Error en handshake: {:?}", e);
-                                        self.pedido_cliente = None;
-                                    }
+
+                                    // Actualizo flag para controlar vida de threads
+                                    self.in_call.store(true, Ordering::SeqCst);
+
+                                    // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
+                                    self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
+                                        self.rx_local.take(),
+                                        self.rx_remoto.take(),
+                                        Arc::clone(&self.in_call),
+                                    ))
+                                }
+                                Err(e) => {
+                                    eprintln!("Error en handshake: {:?}", e);
+                                    self.pedido_cliente = None;
                                 }
                             }
                         }
-                    },
+                    }
                     _ => {}
                 }
             }
