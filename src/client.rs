@@ -3,6 +3,7 @@ use crate::encoding::{DecoderRtc, EncoderRtc};
 use crate::mensaje::Message;
 use crate::mensaje::MsgType;
 use crate::mensaje::{Content, Signal};
+use crate::mensaje_errors::MessageErrors;
 use crate::rtp::RtpPackage;
 use crate::sdp_protocol::*;
 use crate::video_processing;
@@ -14,11 +15,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
+use std::time::Duration;
+use std::vec;
 use std::{net::UdpSocket, thread};
 
 #[derive(Debug)]
 pub struct Client {
-    socket: UdpSocket,
+    socket_send: UdpSocket,
+    socket_recev:UdpSocket,
     //sessions: Session,
     tx_local: Sender<Mat>,
     tx_remoto: Sender<Mat>,
@@ -32,8 +36,11 @@ impl Client {
         tx_remoto: Sender<Mat>,
         in_call: Arc<AtomicBool>,
     ) -> Result<Self, ClientErrors> {
+        socket.set_read_timeout(Some(Duration::from_millis(100)))?;
+
         Ok(Self {
-            socket,
+            socket_recev: socket.try_clone().map_err(ClientErrors::CantClone)?,
+            socket_send:socket,
             tx_local,
             tx_remoto,
             in_call,
@@ -52,8 +59,8 @@ impl Client {
     pub fn initialize_call(
         &self,
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
-        let socket_recev = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
-        let socket_send = self.socket.try_clone().map_err(ClientErrors::CantClone)?;
+        let socket_recev = self.socket_recev.try_clone().map_err(ClientErrors::CantClone)?;
+        let socket_send = self.socket_send.try_clone().map_err(ClientErrors::CantClone)?;
         let chunk_size: usize = 1200;
         // let (tx, _rx) = mpsc::channel::<String>();
 
@@ -62,13 +69,10 @@ impl Client {
         let in_call = Arc::clone(&self.in_call);
 
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
-            let mut buff = vec![0u8; 60000];
+            //let mut buff = vec![0u8; 60000];
             let mut decoder = DecoderRtc::new_decoder()?;
 
             let mut chunks_hash: HashMap<u64, Vec<(u32, Vec<u8>)>> = HashMap::new();
-
-            // Seteo timeout de recepción
-            socket_recev.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
 
             loop {
                 // Controlo el flag in_call para salir del thread
@@ -76,96 +80,11 @@ impl Client {
                     println!("RECEIVER OVER");
                     return Ok(());
                 }
-
-                match socket_recev.recv(&mut buff) {
-                    Ok(n) => {
-                        if n == 0 {
-                            continue;
-                        }
-                        if let Some(msg) = Message::deserializable(&buff[..n]) {
-                            eprintln!("Estoy recibiendo un mensaje");
-                            match msg.content {
-                                Content::Signal(signal) => {
-                                    match signal {
-                                        Signal::EndCall => {
-                                            // El otro cliente genera la señal, se deben terminar los threads de la llamada
-                                            in_call.store(false, Ordering::SeqCst);
-                                            continue;
-                                        }
-                                    }
-                                }
-                                Content::Text(text) => {
-                                    match msg.typemsg {
-                                        MsgType::Signalling => {
-                                            //let _ = tx.send(text.to_string());
-                                            println!("\n{}", text);
-                                        }
-                                        _ => println!("\n {}", text),
-                                    };
-                                }
-                                Content::Binary(video_chunk) => {
-                                    if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
-                                        let time_stamp = rtp.time_stamp;
-                                        let entry = chunks_hash.entry(time_stamp).or_default();
-                                        entry.push((rtp.index, rtp.payload));
-
-                                        if entry.last().map(|(_, p)| p.len()).unwrap_or(0)
-                                            < chunk_size
-                                        {
-                                            // reassemble
-                                            entry.sort_by_key(|(i, _)| *i);
-                                            let mut full: Vec<u8> = Vec::new();
-                                            for (_, p) in entry.drain(..) {
-                                                full.extend(p);
-                                            }
-                                            chunks_hash.remove(&time_stamp);
-
-                                            match decoder.decode(
-                                                &full,
-                                                msg.dimension.0,
-                                                msg.dimension.1,
-                                            ) {
-                                                Ok(frame) => {
-                                                    // println!("frame decoded");
-                                                    if tx_remoto.send(frame).is_err() {
-                                                        println!("PROBLEMA");
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    eprintln!(
-                                                        "Decode error (reassembled): {:?}",
-                                                        e
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        // not an RTP fragment, treat as full frame
-                                        println!("Assuming full-frame payload, decoding directly");
-                                        match decoder.decode(
-                                            &video_chunk,
-                                            msg.dimension.0,
-                                            msg.dimension.1,
-                                        ) {
-                                            Ok(frame) => {
-                                                //println!("frame decoded");
-                                                if tx_remoto.send(frame).is_err() {
-                                                    println!("PROBLEMA");
-                                                }
-                                            }
-                                            Err(e) => {
-                                                eprintln!("Decode error (full-frame): {:?}", e);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        };
-                    }
-                    Err(_e) => {
-                        //eprintln!("Socket recv error: {}", e);
-                        continue;
-                    }
+                if let Some(msg) = Self::recieve_message(& socket_recev) {
+                    Self::process_content(msg,&mut decoder,&mut chunks_hash,& tx_remoto);
+                }
+                else {
+                    continue;
                 }
             }
         });
@@ -249,18 +168,86 @@ impl Client {
                     index_chunk = index_chunk.wrapping_add(1);
                 }
             }
-            //IMPORTANTE: NO SACAR, eliminar el uso de JOIN para ""esperar"" lo thread provoca funcionamiento indeterminado
-            // creemos que en principal el error de que solo un cliente pudiera estar reciviendo video venia principalmente de no estar
-            // tratando los threads con un join.
         });
-        // if let Err(e) = sender_thread.join() {
-        //     eprintln!("Sender thread terminated: {:?}", e);
-        // }
-
-        // if let Err(e) = reciver_thread.join() {
-        //     eprintln!("Receiver thread terminated: {:?}", e);
-        // }
         let handles = vec![receiver_thread, sender_thread];
         Ok(handles)
     }
+
+    fn recieve_message(socket_recev: & UdpSocket) -> Option<Message> {
+        let mut buff = vec![0u8; 60000];
+        match socket_recev.recv(&mut buff) {
+            Ok(0) => None,
+            Ok(n) => { 
+                match Message::deserializable(&buff[..n]) {
+                    Some(msg) => Some(msg),
+                    None => None
+                } 
+            },
+            Err(_) => None
+        }
+    }
+    fn process_content(msg:Message, decoder:&mut DecoderRtc, chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,tx_remoto: & Sender<Mat>) {
+        match msg.content {
+            Content::Signal(signal) => return,
+            Content::Text(text) => return,
+            Content::Binary(media) => Self::video_handle(media,decoder,chunks_hash, msg.dimension.0,msg.dimension.1,tx_remoto),
+        }
+    }
+    fn video_handle(video_chunk:Vec<u8>, decoder:&mut DecoderRtc,chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,width:i32,height:i32,tx_remoto: & Sender<Mat>) {
+        let chunk_size = 1200;
+        if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
+            let time_stamp = rtp.time_stamp;
+            let entry = chunks_hash.entry(time_stamp).or_default();
+            entry.push((rtp.index, rtp.payload));
+
+            if entry.last().map(|(_, p)| p.len()).unwrap_or(0)
+                < chunk_size
+            {
+                // reassemble
+                entry.sort_by_key(|(i, _)| *i);
+                let mut full: Vec<u8> = Vec::new();
+                for (_, p) in entry.drain(..) {
+                    full.extend(p);
+                }
+                chunks_hash.remove(&time_stamp);
+
+                match decoder.decode(
+                    &full,
+                    width,
+                    height,
+                ) {
+                    Ok(frame) => {
+                        // println!("frame decoded");
+                        if tx_remoto.send(frame).is_err() {
+                            println!("PROBLEMA");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Decode error (reassembled): {:?}",
+                            e
+                        );
+                    }
+                }
+            }
+        } else {
+            // not an RTP fragment, treat as full frame
+            match decoder.decode(
+                &video_chunk,
+                width,
+                height,
+            ) {
+                Ok(frame) => {
+                    //println!("frame decoded");
+                    if tx_remoto.send(frame).is_err() {
+                        println!("PROBLEMA");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Decode error (full-frame): {:?}", e);
+                }
+
+        }
+        }
+}
 }
