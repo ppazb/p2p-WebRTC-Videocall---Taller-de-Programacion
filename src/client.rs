@@ -136,7 +136,7 @@ impl Client {
                     }
                 };
 
-                println!("Estoy enviando un frame");
+               //  println!("Estoy enviando un frame");
                 if tx_local.send(frame).is_err() {
                     println!("PROBLEMA");
                 }
