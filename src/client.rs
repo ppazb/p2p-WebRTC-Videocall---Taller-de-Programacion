@@ -81,7 +81,12 @@ impl Client {
                     return Ok(());
                 }
                 if let Some(msg) = Self::recieve_message(& socket_recev) {
-                    Self::process_content(msg,&mut decoder,&mut chunks_hash,& tx_remoto);
+                    //Self::process_content(msg,&mut decoder,&mut chunks_hash,& tx_remoto);
+                    match msg.content {
+                        Content::Signal(signal) => Self::signal_handle(signal,& in_call),
+                        Content::Text(text) => continue,
+                        Content::Binary(media) => Self::video_handle(media,&mut decoder,&mut chunks_hash, msg.dimension.0,msg.dimension.1,& tx_remoto),
+                    }    
                 }
                 else {
                     continue;
@@ -186,13 +191,16 @@ impl Client {
             Err(_) => None
         }
     }
-    fn process_content(msg:Message, decoder:&mut DecoderRtc, chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,tx_remoto: & Sender<Mat>) {
-        match msg.content {
-            Content::Signal(signal) => return,
-            Content::Text(text) => return,
-            Content::Binary(media) => Self::video_handle(media,decoder,chunks_hash, msg.dimension.0,msg.dimension.1,tx_remoto),
-        }
+
+    fn signal_handle(signal:Signal, in_call: & Arc<AtomicBool>){
+        match signal {
+            Signal::EndCall => {
+                // El otro cliente genera la señal, se deben terminar los threads de la llamada
+                in_call.store(false, Ordering::SeqCst);
+            }
     }
+    }
+
     fn video_handle(video_chunk:Vec<u8>, decoder:&mut DecoderRtc,chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,width:i32,height:i32,tx_remoto: & Sender<Mat>) {
         let chunk_size = 1200;
         if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
@@ -249,5 +257,5 @@ impl Client {
 
         }
         }
-}
+    }
 }
