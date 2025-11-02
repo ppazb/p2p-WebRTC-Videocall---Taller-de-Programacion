@@ -1,21 +1,45 @@
-# Taller de Programacion {Grupo}
+# Taller de Programacion - Grupo Sobrevivir Taller
+
+En este presente trabajo desarrollamos una versión del Stack WebRTC en el lenguaje Rust, de manera tal que sea posible la realización de videoconferencia entre dos usuarios en distintos dispositivos. 
+
+Los componentes para esta instancia son: 
+
+- SDP (Session Description Protocol)
+- ICE (Interactive Connectivity Establishment)
+- Transmisión de Video (Encodeo y Desencodeo)
+- Interfaz UI de la Aplicación
 
 ## Integrantes
 
+- Rivero, Tobías 106302
+- Vargas, Alejandro 104121
+- Paz Blanco, Pilar 105600
+- Chen, Michelle Melisa 105506
+
+
 ## Como usar 
 
-A continuacion se detallan los pasos para compilar y ejecutar el programa.
+A continuacion se detallan los pasos para compilar y ejecutar el programa. 
 
-### Compilacion
+En la terminal de cada dispositivo: 
 
-### Como correr
-Abrir 2 terminales, luego en la primera ejecutar:
-export OPENCV_VIDEOIO_PRIORITY_MSMF=0
-export OPENCV_VIDEOIO_PRIORITY_GSTREAMER=0
-export OPENCV_VIDEOIO_PRIORITY_V4L2=100
-cargo run --release --bin client 127.0.0.1:4000 127.0.0.1:5000 src/offer2.sd
+```
+cargo run --bin room_rtc  <IP:Puerto local> <IP:Puerto peer>
 
-Luego en la segunda terminar:
-cargo run --release --bin client_receptor 127.0.0.1:5000 127.0.0.1:4000 src/offer.sdp
+Dispotivo 1: 
+cargo run --bin room_rtc 127.0.0.1:4000 127.0.0.2:5000
 
-## Como testear
+Dispositivo 2: 
+cargo run --bin room_rtc 127.0.0.2:5000 127.0.0.1:4000
+```
+En caso de probar en un mismo dispositivo abriendo dos terminales: 
+
+```
+cargo run --bin room_rtc  <IP:Puerto local> <IP:Otro Puerto local>
+
+Terminal 1: 
+cargo run --bin room_rtc 127.0.0.1:4000 127.0.0.1:5000
+
+Terminal 2: 
+cargo run --bin room_rtc 127.0.0.1:5000 127.0.0.1:4000
+```
