@@ -7,6 +7,8 @@ pub struct RtpPackage {
 }
 
 impl RtpPackage {
+    ///contructor de un paquete RTP minimo, genera un indice y saca un timestamp al momento de creacion
+    /// para futura identificacion, agrega el conetido util al payload
     pub fn new(index: u32, payload: Vec<u8>) -> Self {
         Self {
             index,
@@ -14,7 +16,8 @@ impl RtpPackage {
             payload,
         }
     }
-
+    /// convierte el paquete RTP a bytes asegurando un orden de header para su futura reconstruccion
+    /// devuelve el vector de bytes
     pub fn to_bytes(self) -> Vec<u8> {
         let mut output = Vec::new();
         output.extend_from_slice(&self.index.to_be_bytes());
@@ -22,8 +25,10 @@ impl RtpPackage {
         output.extend_from_slice(&self.payload);
         output
     }
+    /// recive una tira de bytes y trata de reconstruir el paquete RTP
+    /// siguiendo la construccion definida la estructura primero el indice, luego el timestamp
+    /// finalmente el payload devuelve un paquete RTP en caso de funcionar sino None
     pub fn from_bytes(data: &[u8]) -> Option<Self> {
-        // need at least 4 bytes index + 8 bytes timestamp
         if data.len() < 12 {
             return None;
         }

@@ -5,8 +5,7 @@ use crate::sdp_errors::SdpError;
 use crate::video_processing_errors::VideoProcessingErrors;
 use core::fmt;
 use std::io;
-//use std::str::FromStr;
-//use std::str::SplitAsciiWhitespace;
+///Se generar todos los errores para cliente y se adjuntan las conversiones de errores de otros crates
 #[derive(Debug)]
 pub enum ClientErrors {
     CantBind(io::Error),
