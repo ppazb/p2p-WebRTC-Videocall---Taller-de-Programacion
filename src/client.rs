@@ -83,7 +83,7 @@ impl Client {
                             continue;
                         }
                         if let Some(msg) = Message::deserializable(&buff[..n]) {
-                            eprintln!("Estoy recibiendo un mensaje");
+                            // eprintln!("Estoy recibiendo un mensaje");
                             match msg.content {
                                 Content::Signal(signal) => {
                                     match signal {
@@ -217,7 +217,7 @@ impl Client {
                     }
                 };
 
-                println!("Estoy enviando un frame");
+               //  println!("Estoy enviando un frame");
                 if tx_local.send(frame).is_err() {
                     println!("PROBLEMA");
                 }
