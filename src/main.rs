@@ -11,18 +11,30 @@ fn main() -> eframe::Result<()> {
         return Ok(());
     }
 
+    let screen_size = eframe::egui::Vec2::new(
+        1366.0, // ancho
+        768.0, // alto
+    );
+
     // con native_options se configuran distintos aspectos de la ventana
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([800.0, 600.0])
-            //.with_min_inner_size([850.0, 600.0]),
-            .with_min_inner_size([400.0, 300.0]),
+            .with_inner_size(screen_size / 1.5)
+            .with_min_inner_size(screen_size / 2.0),
         ..Default::default()
     };
 
+    // let native_options = eframe::NativeOptions {
+    //     viewport: egui::ViewportBuilder::default()
+    //         .with_inner_size([800.0, 600.0])
+    //         //.with_min_inner_size([850.0, 600.0]),
+    //         .with_min_inner_size([, 300.0]),
+    //     ..Default::default()
+    // };
+
     // genero la ventana de la aplicacion
     eframe::run_native(
-        "Prueba eGUI",
+        "RoomRTC - Sobrevivir Taller",
         native_options,
         Box::new(|_cc| {
             Ok(Box::new(AppUI::new(

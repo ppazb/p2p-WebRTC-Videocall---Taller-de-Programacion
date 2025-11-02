@@ -1,6 +1,11 @@
+#[derive(PartialEq)]
 pub enum CambioVista {
     None,
-    Login,
-    Lobby,
-    Llamada,
+    ToLogin,
+    ToLobby,
+    ToCallStart,
+    ToCall,
+    ToCallEnd,
+    CamEnable,
+    CamDisable,
 }

@@ -44,7 +44,7 @@ impl VistaLlamada {
                 if self.in_call.load(Ordering::SeqCst) {
                     if ui.button("Finalizar llamada").clicked() {
                         self.liberar_camara();
-                        cambio = CambioVista::Login;
+                        cambio = CambioVista::ToCallEnd;
 
                         // Cambio el estado del flag, notificando a los threads del cliente
                         self.in_call.store(false, Ordering::SeqCst);

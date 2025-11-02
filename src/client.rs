@@ -31,13 +31,13 @@ impl Client {
         tx_local: Sender<Mat>,
         tx_remoto: Sender<Mat>,
         in_call: Arc<AtomicBool>,
-    ) -> Result<Self, ClientErrors> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             socket,
             tx_local,
             tx_remoto,
             in_call,
-        })
+        }
     }
 
     pub fn handle_signalling(&self, text: String) {

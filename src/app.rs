@@ -1,13 +1,17 @@
+use std::net::UdpSocket;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 
+use crate::camera::Camera;
 use crate::client::Client;
 use crate::client_errors::ClientErrors;
 use crate::ice::{crear_conexion_ice, elegir_codec};
 use crate::sdp_errors::SdpError;
 use crate::sdp_protocol::sdp_handshake;
+use crate::vista::call_end::VistaCallEnd;
+use crate::vista::call_start::VistaCallStart;
 use crate::vista::lobby::VistaLobby;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
 use eframe::egui;
@@ -21,26 +25,27 @@ pub struct AppUI {
     in_call: Arc<AtomicBool>,
 
     // Se necesita un objeto global de error?
-    pedido_cliente: Option<Receiver<Result<Client, SdpError>>>,
+    pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
+    handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
 
     // DEBUG: puertos para cliente
     local_adr: String,
     remote_adr: String,
 
-    // Threads pendientes
-    pub thread_handles: Option<Vec<JoinHandle<Result<(), ClientErrors>>>>,
+    camara: Option<Camera>,
+    client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
 }
 
-impl Drop for AppUI {
-    fn drop(&mut self) {
-        // Para el Join de los threads
-        if let Some(handles) = self.thread_handles.take() {
-            for handle in handles {
-                let _ = handle.join();
-            }
-        }
-    }
-}
+// impl Drop for AppUI {
+//     fn drop(&mut self) {
+//         // Para el Join de los threads
+//         if let Some(handles) = self.thread_handles.take() {
+//             for handle in handles {
+//                 let _ = handle.join();
+//             }
+//         }
+//     }
+// }
 
 impl AppUI {
     pub fn new(local_adr: String, remote_adr: String) -> Self {
@@ -51,29 +56,110 @@ impl AppUI {
             rx_remoto: None,
             in_call: Arc::new(AtomicBool::new(false)),
 
-            pedido_cliente: None,
-            thread_handles: None,
+            pedido_socket: None,
+            handshake_handle: None,
+            client_handles: Ok(Vec::new()),
 
             local_adr,
             remote_adr,
+
+            camara: None,
         }
     }
 
-    pub fn crear_cliente(&mut self) -> JoinHandle<Result<(), ClientErrors>> {
-        // Creo channels para la transmisión y recepción de frames, de ambas cámaras
-        let (tx_local, rx_local) = std::sync::mpsc::channel();
-        let (tx_remoto, rx_remoto) = std::sync::mpsc::channel();
+    fn cambiar_vista(&mut self, cambio: CambioVista) {
+        match cambio {
+            CambioVista::None => {
+                self.observar_cambios();
+            },
+            CambioVista::ToLogin => {
+                // Desde Lobby
+                self.liberar_recursos();
+                self.vista_actual = Vista::VistaLogin(VistaLogin::new());
+            },
+            CambioVista::ToLobby => {
+                // Desde Login/CallStart/Call
+                self.crear_camara();
+                self.vista_actual = Vista::VistaLobby(VistaLobby::new());
+            },
+            CambioVista::ToCallStart => {
+                // Desde Lobby
+                self.crear_camara();
+                self.iniciar_pedido_cliente();
+                self.vista_actual = Vista::VistaCallStart(VistaCallStart::new());
+            },
+            CambioVista::ToCall => {
+                // Desde CallStart
+                // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
+                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
+                    self.rx_local.take(),
+                    self.rx_remoto.take(),
+                    Arc::clone(&self.in_call),
+                ))
+            },
+            CambioVista::ToCallEnd => {
+                // Desde Call
+                //self.crear_camara();
+                self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
+            },
+            CambioVista::CamEnable => {
+                self.iniciar_camara();
+            },
+            CambioVista::CamDisable => {
+                self.detener_camara();
+            }
+        }
+    }
 
-        // Los receptores son atributos de la app, para poder usarlo en distintas vistas
-        self.rx_local = Some(rx_local);
-        self.rx_remoto = Some(rx_remoto);
+    fn liberar_recursos(&mut self) {
+        self.cliente = None;
+        self.rx_local = None;
+        self.rx_remoto = None;
+        self.in_call = Arc::new(AtomicBool::new(false));
+
+        self.pedido_socket = None;
+
+        // LIBERAR LOS HANDLES DE LLAMADA!!
+        self.liberar_camara();
+    }
+
+    fn crear_camara(&mut self) {
+        if let Some(_) = &mut self.camara {
+            return;
+        }
+        
+        let mut camara = Camera::new();
+        camara.enable_camera();
+
+        self.camara = Some(camara);
+    }
+
+    fn iniciar_camara(&mut self) {
+        if let Some(cam) = &mut self.camara {
+            cam.enable_camera();
+        }
+    }
+
+    fn detener_camara(&mut self) {
+        if let Some(cam) = &mut self.camara {
+            cam.disable_camera();
+        }
+    }
+
+    fn liberar_camara(&mut self) {
+        self.camara = None;
+    }
+
+    fn iniciar_pedido_cliente(&mut self) {
+        // Actualizo flag para controlar vida de threads de conexión
+        self.in_call.store(true, Ordering::SeqCst);
 
         // Copias necesarias para mover al thread
         let my_address = self.local_adr.clone();
         let peer = self.remote_adr.clone();
-        let in_call = Arc::clone(&self.in_call);
+        let in_call = Arc::clone(&self.in_call); // USAR IN_CALL PARA CANCELAR LA SOLICITUD!!
 
-        // Canal para devolver el resultado del cliente
+        // Canal para devolver el nuevo socket
         let (tx_result, rx_result) = std::sync::mpsc::channel();
 
         let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
@@ -107,59 +193,70 @@ impl AppUI {
                 Ok(socket) => socket,
             };
 
-            // Crear cliente
-            match Client::new(socket_connection, tx_local, tx_remoto, in_call) {
-                Ok(c) => {
-                    let _ = tx_result.send(Ok(c));
-                }
-                Err(e) => {
-                    eprintln!("Error creando cliente: {:?}", e);
-                    //let _ = tx_result.send(Err(e));
-                    return Err(e);
-                }
-            }
+            let _ = tx_result.send(Ok(socket_connection));
             Ok(())
         });
 
-        //SDP
-        // let ice_info = match sdp_handshake(my_address, peer) {
-        //     Err(e) => {
-        //         eprintln!("SDP Handshake error: {}", e);
-        //         return;
-        //     }
-        //     Ok(info) => info,
-        // };
+        // Cargo el potencial socket y espero que termine el proceso
+        self.pedido_socket = Some(rx_result);
+        self.handshake_handle = Some(handshake_handle);
+    }
 
-        // //VALID CODEC? -> if doesnt raise error then ok
-        // let _codec = match elegir_codec(&ice_info.2) {
-        //     Err(e) => {
-        //         eprintln!("{}", e);
-        //         return;
-        //     }
-        //     Ok(c) => c,
-        // };
+    pub fn crear_cliente(&mut self, socket: UdpSocket) {
+        // Creo channels para la transmisión y recepción de frames, de ambas cámaras
+        let (tx_local, rx_local) = std::sync::mpsc::channel();
+        let (tx_remoto, rx_remoto) = std::sync::mpsc::channel();
 
-        // //ICE
-        // let socket_connection = match crear_conexion_ice(&ice_info.0, &ice_info.1) {
-        //     Err(e) => {
-        //         eprintln!("{}", e);
-        //         return;
-        //     }
-        //     Ok(socket) => socket,
-        // };
+        // Los receptores son atributos de la app, usados durante la llamada
+        self.rx_local = Some(rx_local);
+        self.rx_remoto = Some(rx_remoto);
 
-        // if let Ok(c) = Client::new(
-        //     socket_connection,
-        //     tx_local,
-        //     tx_remoto,
-        //     Arc::clone(&self.in_call),
-        // ) {
-        //     self.cliente = Some(c);
-        // }
+        // Cargo e inicializo los threads de envío y recepción de frames
+        let cliente = Client::new(socket, tx_local, tx_remoto, Arc::clone(&self.in_call));
+        self.client_handles = cliente.initialize_call();
+        self.cliente = Some(cliente);
+    }
 
-        // Cargo el potencial cliente y espero que termine el proceso
-        self.pedido_cliente = Some(rx_result);
-        handshake_handle
+    fn observar_cambios(&mut self) {
+        match self.vista_actual {
+            Vista::VistaCallStart(_) => {
+                // Observo el channel para ver si se generó un socket
+                if let Some(rx_result) = &self.pedido_socket {
+                    if let Ok(result) = rx_result.try_recv() {
+                        // Cierro el thread de handshake ya finalizado
+                        if let Some(h) = self.handshake_handle.take() {
+                            let _ = h.join();
+                        } 
+
+                        // Creo el nuevo cliente
+                        match result {
+                            Ok(s) => {
+                                self.liberar_camara(); // Cierro la cámara para usarla en el thread de envío
+                                self.pedido_socket = None;
+
+                                self.crear_cliente(s);
+                                self.cambiar_vista(CambioVista::ToCall);
+                            },
+                            Err(e) => {
+                                // DEBERIA IR A UNA PANTALLA DE ERROR?
+                                eprintln!("Error en handshake: {:?}", e);
+                            }
+                        }
+                        
+                    }
+                }
+            },
+            Vista::VistaLlamada(_) => {
+                if !self.in_call.load(Ordering::SeqCst) {
+                    self.cliente = None;
+                    self.rx_local = None;
+                    self.rx_remoto = None;
+                    
+                    self.cambiar_vista(CambioVista::ToCallEnd);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -170,103 +267,8 @@ impl eframe::App for AppUI {
         // cada frame, la vista actual muestra su ui
         // algunas acciones provocan cambios de vista
         // se debería preservar información y cargarla durante la transicion
-        let cambio = self.vista_actual.ui(ctx);
-        let mut handles: Vec<JoinHandle<Result<(), ClientErrors>>> = Vec::new();
-
-        match cambio {
-            CambioVista::Login => {
-                // Reinicio atributos de conexión
-                self.cliente = None;
-                self.rx_local = None;
-                self.rx_remoto = None;
-
-                self.vista_actual = Vista::VistaLogin(VistaLogin::new())
-            },
-            CambioVista::Lobby => {
-                // Voy a pantalla de carga, inicializo el cliente
-                self.vista_actual = Vista::VistaLobby(VistaLobby::new());
-
-                let handshake_handle = self.crear_cliente();
-                handles.push(handshake_handle);
-                //handshake_handle.join().unwrap()
-            }
-            CambioVista::None => {
-                match self.vista_actual {
-                    // Finalización de llamada, iniciado por el otro cliente
-                    Vista::VistaLlamada(_) => {
-                        if !self.in_call.load(Ordering::SeqCst) {
-                            self.cliente = None;
-                            self.rx_local = None;
-                            self.rx_remoto = None;
-                            
-                            self.vista_actual = Vista::VistaLogin(VistaLogin::new())
-                        }
-                    },
-                    // Espero la creación del cliente, cuando se cree paso a la llamada
-                    Vista::VistaLobby(_) => {
-                        if let Some(rx_result) = &self.pedido_cliente {
-                            if let Ok(result) = rx_result.try_recv() {
-                                match result {
-                                    Ok(cliente) => {
-                                        // Se carga el nuevo cliente, debería haber un join para limpiar el thread terminado?
-                                        self.cliente = Some(cliente);
-                                        self.pedido_cliente = None;
-                                        println!("Nuevo cliente creado");
-
-                                        // Inicializo threads de captura+envío y recepción de frames
-                                        if let Some(c) = &self.cliente {
-                                            let handle_call = c.initialize_call();
-                                            if let Ok(h) = handle_call {
-                                                handles.extend(h);
-                                            }
-                                        }
-
-                                        // Actualizo flag para controlar vida de threads
-                                        self.in_call.store(true, Ordering::SeqCst);
-
-                                        // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
-                                        self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
-                                            self.rx_local.take(),
-                                            self.rx_remoto.take(),
-                                            Arc::clone(&self.in_call),
-                                        ))
-                                    }
-                                    Err(e) => {
-                                        eprintln!("Error en handshake: {:?}", e);
-                                        self.pedido_cliente = None;
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            }
-            CambioVista::Llamada => {
-                // A partir del cambio a la vista llamada, tiene sentido tener un cliente
-                // self.crear_cliente();
-
-                // Inicializo threads de captura+envío y recepción de frames
-                if let Some(c) = &self.cliente {
-                    let handle_call = c.initialize_call();
-                    if let Ok(h) = handle_call {
-                        handles.extend(h);
-                    }
-                }
-
-                // Actualizo flag para controlar vida de threads
-                self.in_call.store(true, Ordering::SeqCst);
-
-                // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
-                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
-                    self.rx_local.take(),
-                    self.rx_remoto.take(),
-                    Arc::clone(&self.in_call),
-                ))
-            }
-        }
-        self.thread_handles = Some(handles);
-
+        let cambio = self.vista_actual.ui(ctx, &self.camara);
+        self.cambiar_vista(cambio);
         ctx.request_repaint();
     }
 }
