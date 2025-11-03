@@ -7,7 +7,7 @@ pub enum EncodingErrors {
     GetYuvBytes,
     EncodeYuv,
 }
-
+///Todas las conversiones y manejo de error para encodeo y decodeo
 impl fmt::Display for EncodingErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

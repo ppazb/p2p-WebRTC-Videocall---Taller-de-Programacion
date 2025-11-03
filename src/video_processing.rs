@@ -22,7 +22,7 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
             if !is_open {
                 camara = self::initialize_placeholder()?
             }
-        },
+        }
         Err(_) => {
             return Err(VideoProcessingErrors::AccessCamara);
         }
@@ -33,7 +33,8 @@ pub fn initialize_camara() -> Result<VideoCapture, VideoProcessingErrors> {
 }
 
 fn initialize_placeholder() -> Result<VideoCapture, VideoProcessingErrors> {
-    VideoCapture::from_file("assets/test.mp4", videoio::CAP_ANY).map_err(|_| VideoProcessingErrors::AccessCamara)
+    VideoCapture::from_file("assets/test.mp4", videoio::CAP_ANY)
+        .map_err(|_| VideoProcessingErrors::AccessCamara)
 }
 
 //Settea las propiedades de la camara, toma las constantes. Estos valores actuan como limite superior

@@ -213,8 +213,12 @@ impl AppUI {
 
         // Cargo e inicializo los threads de envío y recepción de frames
         let cliente = Client::new(socket, tx_local, tx_remoto, Arc::clone(&self.in_call));
-        self.client_handles = cliente.initialize_call();
-        self.cliente = Some(cliente);
+        if let Ok(c) = cliente {
+            self.client_handles = c.initialize_call();
+            self.cliente = Some(c);
+        }
+        
+        //self.cliente = Some(cliente);
     }
 
     fn observar_cambios(&mut self) {

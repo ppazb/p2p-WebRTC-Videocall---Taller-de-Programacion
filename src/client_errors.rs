@@ -5,8 +5,7 @@ use crate::sdp_errors::SdpError;
 use crate::video_processing_errors::VideoProcessingErrors;
 use core::fmt;
 use std::io;
-//use std::str::FromStr;
-//use std::str::SplitAsciiWhitespace;
+///Se generar todos los errores para cliente y se adjuntan las conversiones de errores de otros crates
 #[derive(Debug)]
 pub enum ClientErrors {
     CantBind(io::Error),
@@ -19,8 +18,8 @@ pub enum ClientErrors {
     DecodingError(DecodingErrors),
     SerializeBits,
     SendBits,
-    SdpError(SdpError), 
-    IceError(IceErrors), 
+    SdpError(SdpError),
+    IceError(IceErrors),
 }
 
 impl From<io::Error> for ClientErrors {
@@ -67,7 +66,7 @@ impl fmt::Display for ClientErrors {
             Self::SerializeBits => writeln!(f, "Error: \"No se pudo serializar los bits\""),
             Self::SendBits => writeln!(f, "Error: \"No se pudieron enviar los bits\""),
             Self::SdpError(sdp_error) => writeln!(f, "{}", sdp_error),
-            Self::IceError(ice_error) => writeln!(f, "{}", ice_error)
+            Self::IceError(ice_error) => writeln!(f, "{}", ice_error),
         }
     }
 }

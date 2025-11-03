@@ -47,6 +47,6 @@ impl VistaLobby {
             });
         });
 
-        return cambio;
+        cambio
     }
 }
