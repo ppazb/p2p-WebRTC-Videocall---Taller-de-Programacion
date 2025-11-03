@@ -4,8 +4,8 @@ use std::sync::{
     mpsc::Receiver,
 };
 
-use eframe::egui::{self, Color32, ColorImage, TextureHandle, Vec2};
-use opencv::{imgproc, prelude::*};
+use eframe::egui::{self, Frame, Margin, TextureHandle, Vec2};
+use opencv::prelude::*;
 
 use crate::vista::cambio::CambioVista;
 
@@ -37,96 +37,67 @@ impl VistaLlamada {
     pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista {
         let mut cambio = CambioVista::None;
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // Controles llamada
-            ui.horizontal(|ui| {
-                // Botón Salida
-                if self.in_call.load(Ordering::SeqCst) && ui.button("Finalizar llamada").clicked() {
-                    self.liberar_camara();
+        egui::SidePanel::right("preview").resizable(false).show_separator_line(false).default_width(340.0).frame(
+            Frame::default()
+            .inner_margin(Margin::same(0)) // elimina márgenes internos
+            .outer_margin(Margin::same(0)), // elimina espacio externo
+        ).show(ctx, |ui| {
+            // Dibuja una línea vertical al borde izquierdo del panel
+            let rect = ui.max_rect();
+            let stroke_color = ui.visuals().widgets.noninteractive.bg_stroke.color;
+            ui.painter().line_segment(
+                [
+                    egui::pos2(rect.left(), rect.top()),
+                    egui::pos2(rect.left(), rect.bottom()),
+                ],
+                egui::Stroke { width: 1.0, color: stroke_color },
+            );
+            
+            // Vista previa de cámara + controles
+            ui.vertical_centered(|ui| {
+                ui.set_width(ui.available_width());
+
+                let top_space = (ui.available_height() - 240.0 - 10.0 + 50.0).max(0.0) / 2.0;
+                ui.add_space(top_space);
+
+                self.actualizar_frame_local(ctx);
+
+                // Muestro la textura actualizada
+                if let Some(tex) = &self.tex_local {
+                    ui.image((tex.id(), egui::vec2(320.0, 240.0)));
+                } else {
+                    // Placeholder para cámara apagada
+                    if let Some(img) = crate::vista::Vista::no_camera_texture() {
+                        let tex = ctx.load_texture("cam_local", img, egui::TextureOptions::LINEAR);
+                        ui.image((tex.id(), egui::vec2(320.0, 240.0)));
+                    }
+                }
+
+                ui.add_space(10.0);
+
+                if ui.button("Finalizar Llamada").clicked() {
                     cambio = CambioVista::ToCallEnd;
 
                     // Cambio el estado del flag, notificando a los threads del cliente
                     self.in_call.store(false, Ordering::SeqCst);
                     return;
                 }
-
-                // Toggle cámara
-                match self.cam_enable {
-                    true => {
-                        if ui.button("Apagar cámara").clicked() {
-                            self.liberar_camara();
-                        }
-                    }
-                    false => {
-                        if ui.button("Encender cámara").clicked() {
-                            self.cargar_camara();
-                        }
-                    }
-                }
             });
+        });
 
-            ui.separator();
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.actualizar_frame_remoto(ctx);
 
-            // Widgets video
-            ui.horizontal_centered(|ui| {
-                // Actualizo frame remoto
-                if let Some(rx) = &self.rx_remoto
-                    && let Ok(mat) = rx.try_recv()
-                    && let Some(color_image) = crate::vista::Vista::generar_imagen(&mat)
-                {
-                    // Crear o reemplazar textura
-                    if let Some(tex) = &mut self.tex_remoto {
-                        tex.set(color_image, egui::TextureOptions::LINEAR);
-                    } else {
-                        self.tex_remoto = Some(ctx.load_texture(
-                            "cam_remota",
-                            color_image,
-                            egui::TextureOptions::LINEAR,
-                        ));
-                    }
-                }
-
+            ui.centered_and_justified(|ui| {
                 // Muestro la textura actualizada
                 if let Some(tex) = &self.tex_remoto {
                     //ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
-                    ui.image((tex.id(), Self::redimensionar_textura(tex)));
+                    ui.image((tex.id(), Self::redimensionar_textura(tex, &ui)));
                 } else {
-                    ui.heading("No Camera (Remoto)");
-                }
-
-                ui.add_space(20.0);
-
-                // Actualizo frame local
-                match self.cam_enable {
-                    true => {
-                        if let Some(rx) = &self.rx_local
-                            && let Ok(mat) = rx.try_recv()
-                            && let Some(color_image) = crate::vista::Vista::generar_imagen(&mat)
-                        {
-                            // Crear o reemplazar textura
-                            if let Some(tex) = &mut self.tex_local {
-                                tex.set(color_image, egui::TextureOptions::LINEAR);
-                            } else {
-                                self.tex_local = Some(ctx.load_texture(
-                                    "cam_local",
-                                    color_image,
-                                    egui::TextureOptions::LINEAR,
-                                ));
-                            }
-                        }
-
-                        // Muestro la textura actualizada
-                        if let Some(tex) = &self.tex_local {
-                            ui.image((tex.id(), Self::redimensionar_textura(tex)));
-                            //ui.image((tex.id(), egui::vec2(ui.available_width() * 0.4, ui.available_height() * 0.5)));
-                        } else {
-                            ui.heading("No Camera (Local)");
-                        }
-                    }
-                    false => {
-                        ui.heading("No Camera (Local)");
-
-                        // Cargar la textura no_camera y posicionar acá
+                    // Placeholder para cámara apagada
+                    if let Some(img) = crate::vista::Vista::no_camera_texture() {
+                        let tex = ctx.load_texture("cam_remota", img, egui::TextureOptions::LINEAR);
+                        ui.image((tex.id(), Self::redimensionar_textura(&tex, &ui)));
                     }
                 }
             });
@@ -135,20 +106,46 @@ impl VistaLlamada {
         cambio
     }
 
-    fn liberar_camara(&mut self) {
-        self.cam_enable = false;
-        // self.local_cam = None;
+    fn actualizar_frame_local(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = &self.rx_local
+            && let Ok(mat) = rx.try_recv()
+            && let Some(color_image) = crate::vista::Vista::generar_imagen(&mat)
+        {
+            // Crear o reemplazar textura
+            if let Some(tex) = &mut self.tex_local {
+                tex.set(color_image, egui::TextureOptions::LINEAR);
+            } else {
+                self.tex_local = Some(ctx.load_texture(
+                    "cam_local",
+                    color_image,
+                    egui::TextureOptions::LINEAR,
+                ));
+            }
+        }
     }
 
-    fn cargar_camara(&mut self) {
-        self.cam_enable = true;
-        // self.local_cam = Some(Camera::new().unwrap());
+    fn actualizar_frame_remoto(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = &self.rx_remoto
+            && let Ok(mat) = rx.try_recv()
+            && let Some(color_image) = crate::vista::Vista::generar_imagen(&mat)
+        {
+            // Crear o reemplazar textura
+            if let Some(tex) = &mut self.tex_remoto {
+                tex.set(color_image, egui::TextureOptions::LINEAR);
+            } else {
+                self.tex_remoto = Some(ctx.load_texture(
+                    "cam_remota",
+                    color_image,
+                    egui::TextureOptions::LINEAR,
+                ));
+            }
+        }
     }
 
-    fn redimensionar_textura(tex: &TextureHandle) -> Vec2 {
+    fn redimensionar_textura(tex: &TextureHandle, ui: &egui::Ui) -> Vec2 {
         // Ajusto el tamaño manteniendo la relación 4:3
         let tex_size = tex.size_vec2();
-        let max_size = egui::vec2(400.0, 300.0);
+        let max_size = egui::vec2(ui.available_width(), ui.available_height());
 
         let scale = (max_size.x / tex_size.x).min(max_size.y / tex_size.y);
 
