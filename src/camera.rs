@@ -1,5 +1,12 @@
-use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}, thread::{self, JoinHandle}, time::Duration};
 use opencv::core::Mat;
+use std::{
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
+};
 
 use crate::{video_processing, video_processing_errors::VideoProcessingErrors};
 
@@ -7,6 +14,12 @@ pub struct Camera {
     is_active: Arc<AtomicBool>,
     last_frame: Arc<Mutex<Option<Mat>>>,
     handle: Option<JoinHandle<Result<(), VideoProcessingErrors>>>,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Camera {
@@ -29,7 +42,7 @@ impl Camera {
         let is_active = Arc::clone(&self.is_active);
         let last_frame = Arc::clone(&self.last_frame);
 
-        let handle = thread::spawn(move || -> Result<(), VideoProcessingErrors>{
+        let handle = thread::spawn(move || -> Result<(), VideoProcessingErrors> {
             let mut cam = match video_processing::initialize_camara() {
                 Ok(c) => c,
                 Err(e) => {

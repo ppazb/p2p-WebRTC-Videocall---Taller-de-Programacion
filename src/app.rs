@@ -68,12 +68,12 @@ impl AppUI {
         match cambio {
             CambioVista::None => {
                 self.observar_cambios();
-            },
+            }
             CambioVista::ToLogin => {
                 // Desde Lobby
                 self.liberar_recursos();
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new());
-            },
+            }
             CambioVista::ToLobby => {
                 // Desde Login/CallStart/Call
 
@@ -83,13 +83,13 @@ impl AppUI {
 
                 self.crear_camara();
                 self.vista_actual = Vista::VistaLobby(VistaLobby::new());
-            },
+            }
             CambioVista::ToCallStart => {
                 // Desde Lobby
                 self.crear_camara();
                 self.iniciar_pedido_cliente();
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new());
-            },
+            }
             CambioVista::ToCall => {
                 // Desde CallStart
                 // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
@@ -98,17 +98,17 @@ impl AppUI {
                     self.rx_remoto.take(),
                     Arc::clone(&self.in_call),
                 ))
-            },
+            }
             CambioVista::ToCallEnd => {
                 // Desde Call
                 self.liberar_recursos();
 
                 self.crear_camara();
                 self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
-            },
+            }
             CambioVista::CamEnable => {
                 self.iniciar_camara();
-            },
+            }
             CambioVista::CamDisable => {
                 self.detener_camara();
             }
@@ -129,10 +129,10 @@ impl AppUI {
     }
 
     fn crear_camara(&mut self) {
-        if let Some(_) = &mut self.camara {
+        if self.camara.is_some() {
             return;
         }
-        
+
         let mut camara = Camera::new();
         camara.enable_camera();
 
@@ -228,38 +228,30 @@ impl AppUI {
         match self.vista_actual {
             Vista::VistaCallStart(_) => {
                 // Observo el channel para ver si se generó un socket
-                if let Some(rx_result) = &self.pedido_socket {
-                    if let Ok(result) = rx_result.try_recv() {
-                        // Cierro el thread de handshake ya finalizado
-                        if let Some(h) = self.handshake_handle.take() {
-                            let _ = h.join();
-                        } 
+                if let Some(rx_result) = &self.pedido_socket
+                    && let Ok(result) = rx_result.try_recv()
+                {
+                    // Cierro el thread de handshake ya finalizado
+                    if let Some(h) = self.handshake_handle.take() {
+                        let _ = h.join();
+                    }
 
-                        // Creo el nuevo cliente
-                        match result {
-                            Ok(s) => {
-                                self.liberar_camara(); // Cierro la cámara para usarla en el thread de envío
-                                self.pedido_socket = None;
+                    // Creo el nuevo cliente
+                    match result {
+                        Ok(s) => {
+                            self.liberar_camara(); // Cierro la cámara para usarla en el thread de envío
+                            self.pedido_socket = None;
 
-                                self.crear_cliente(s);
-                                self.cambiar_vista(CambioVista::ToCall);
-                            },
-                            Err(e) => {
-                                eprintln!("Error en handshake: {:?}", e);
-                                self.cambiar_vista(CambioVista::ToLobby);
-                            }
+                            self.crear_cliente(s);
+                            self.cambiar_vista(CambioVista::ToCall);
                         }
-                    } 
-                    // else {
-                    //     eprintln!("Handshake cancelado");
-                    //     if let Some(h) = self.handshake_handle.take() {
-                    //         let _ = h.join();
-                    //     }
-                    //     self.pedido_socket = None;
-                    //     self.cambiar_vista(CambioVista::ToLobby);
-                    // }
+                        Err(e) => {
+                            eprintln!("Error en handshake: {:?}", e);
+                            self.cambiar_vista(CambioVista::ToLobby);
+                        }
+                    }
                 }
-            },
+            }
             Vista::VistaLlamada(_) => {
                 if !self.in_call.load(Ordering::SeqCst) {
                     self.cambiar_vista(CambioVista::ToCallEnd);
@@ -279,7 +271,7 @@ impl AppUI {
         }
     }
 
-    fn liberar_handshake_handle(&mut self) -> Option<UdpSocket>{
+    fn liberar_handshake_handle(&mut self) -> Option<UdpSocket> {
         // Reviso si el channel contiene el socket generado
         if let Some(rx_result) = &self.pedido_socket {
             // Cierro el thread de handshake ya finalizado
@@ -288,15 +280,12 @@ impl AppUI {
             }
 
             // Extraigo y devuelvo el socket
-            if let Ok(result) = rx_result.try_recv() {
-                if let Ok(r) = result {
-                    return Some(r);
-                }
+            if let Ok(Ok(r)) = rx_result.try_recv() {
+                return Some(r);
             }
         }
-        return None;
+        None
     }
-
 }
 
 impl eframe::App for AppUI {

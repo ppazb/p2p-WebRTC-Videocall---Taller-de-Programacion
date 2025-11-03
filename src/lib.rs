@@ -19,5 +19,5 @@ pub mod client;
 pub mod client_errors;
 
 pub mod app;
-pub mod vista;
 pub mod camera;
+pub mod vista;
