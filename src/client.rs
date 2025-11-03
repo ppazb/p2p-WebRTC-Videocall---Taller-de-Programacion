@@ -250,11 +250,10 @@ impl Client {
                 }
                 chunks_hash.remove(&time_stamp);
 
-                if let Ok(frame) = decoder.decode(&full, width, height) {
-                    if tx_remoto.send(frame).is_err() {
+                if let Ok(frame) = decoder.decode(&full, width, height)
+                    && tx_remoto.send(frame).is_err() {
                         eprintln!("PROBLEMA");
                     }
-                }
             }
         } else {
             // not an RTP fragment, treat as full frame
