@@ -37,7 +37,7 @@ impl Camera {
                     return Ok(());
                 }
             };
-
+            video_processing::camara_set_properties(&mut cam)?;
             // Loop de captura mientras la cámara esté habilitada
             while is_active.load(Ordering::Relaxed) {
                 match video_processing::read_frame(&mut cam) {
@@ -50,9 +50,6 @@ impl Camera {
                         eprintln!("CAMARA: Error leyendo frame: {:?}", e);
                     }
                 }
-
-                // Limita la frecuencia de lectura de cámara (30 FPS aprox)
-                thread::sleep(Duration::from_millis(33));
             }
 
             Ok(())
