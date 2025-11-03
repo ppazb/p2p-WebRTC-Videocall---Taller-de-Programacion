@@ -113,11 +113,9 @@ impl Client {
                         if socket_send.send(&bytes).is_err() {
                             eprintln!("Error enviando señal EndCall");
                         } else {
-                            println!("Señal EndCall enviada");
                         }
                     }
                 }
-                println!("SENDER OVER");
                 return Ok(());
             }
             Self::send_message(socket_send, &mut camara, &mut encoder, tx_local)?;
@@ -138,7 +136,6 @@ impl Client {
         loop {
             // Controlo el flag in_call para salir del thread
             if !in_call.load(Ordering::SeqCst) {
-                println!("RECEIVER OVER");
                 return Ok(());
             }
             if let Some(msg) = Self::recieve_message(socket_recev) {
@@ -180,7 +177,7 @@ impl Client {
         let encoded_frame = encoder.encode(&frame).unwrap_or_default();
 
         if tx_local.send(frame).is_err() {
-            println!("PROBLEMA");
+            eprintln!("PROBLEMA de envio de frame a la UI");
         }
         if encoded_frame.is_empty() {
             return Ok(());
@@ -261,8 +258,8 @@ impl Client {
                             println!("PROBLEMA");
                         }
                     }
-                    Err(e) => {
-                        eprintln!("Decode error (reassembled): {:?}", e);
+                    Err(_) => {
+                        ()
                     }
                 }
             }
@@ -270,13 +267,12 @@ impl Client {
             // not an RTP fragment, treat as full frame
             match decoder.decode(&video_chunk, width, height) {
                 Ok(frame) => {
-                    //println!("frame decoded");
                     if tx_remoto.send(frame).is_err() {
-                        println!("PROBLEMA");
+                        eprintln!("PROBLEMA envio de frame");
                     }
                 }
-                Err(e) => {
-                    eprintln!("Decode error (full-frame): {:?}", e);
+                Err(_) => {
+                    ()
                 }
             }
         }
