@@ -21,20 +21,23 @@ impl VistaCallEnd {
                 ui.separator();
                 
                 ui.add_space(ui.available_width()-100.0);
-
             });
         });
 
         cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("La llamada ha finalizado.");
+            ui.add_space(ui.available_height() / 2.0 - 40.0);
 
-            ui.add_space(20.0);
+            ui.vertical_centered(|ui| {
+                ui.heading("La llamada ha finalizado.");
 
-            if ui.button("Volver al Lobby").clicked() {
-                cambio = CambioVista::ToLobby;
-            }
+                ui.add_space(20.0);
+                
+                if ui.button("Volver al Lobby").clicked() {
+                    cambio = CambioVista::ToLobby;
+                }
+            });
         });
 
         return cambio;
