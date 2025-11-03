@@ -1,4 +1,4 @@
-use eframe::egui;
+use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 
 use crate::vista::cambio::CambioVista;
 
@@ -27,25 +27,59 @@ impl VistaLogin {
         let mut cambio = CambioVista::None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Login");
+            // Centro el frame dentro del panel
+            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::TopDown), |ui| {
+                Frame::new()
+                .fill(Color32::DARK_GRAY)
+                .corner_radius(6.0)
+                .inner_margin(egui::Margin::same(20))
+                .show(ui, |ui| {
+                    ui.set_width(240.0);
+                    ui.set_height(150.0);
 
-            ui.text_edit_singleline(&mut self.username);
-            ui.text_edit_singleline(&mut self.password);
+                    ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::TopDown), |ui| {
+                        // Campo usuario
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Usuario:").color(Color32::WHITE));
+                            ui.add_sized(Vec2::new(ui.available_width(), 22.0), TextEdit::singleline(&mut self.username));
+                        });
 
-            if ui.button("Login").clicked() {
-                if self.username.is_empty() && self.password.is_empty() {
-                    cambio = CambioVista::ToLobby;
-                } else {
-                    self.password = String::new();
-                    self.error_msg = Some("Usuario o contraseña inválidos.".into());
-                }
-            }
+                        ui.add_space(20.0);
 
-            if let Some(msg) = &self.error_msg {
-                ui.colored_label(egui::Color32::RED, msg);
-            }
+                        // Campo contraseña
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Contraseña:").color(Color32::WHITE));
+                            ui.add_sized(
+                                Vec2::new(ui.available_width(), 22.0),
+                                TextEdit::singleline(&mut self.password).password(true),
+                            );
+                        });
+
+                        ui.add_space(10.0);
+
+                        // Aviso de datos ingresados
+                        if let Some(msg) = &self.error_msg {
+                            ui.colored_label(egui::Color32::DARK_RED, msg);
+                        } else {
+                            ui.colored_label(egui::Color32::DARK_RED, "");
+                        }
+
+                        ui.add_space(10.0);
+
+                        // Botón de ingreso
+                        if ui.button("Iniciar Sesión").clicked() {
+                            if self.username.is_empty() && self.password.is_empty() {
+                                cambio = CambioVista::ToLobby;
+                            } else {
+                                self.username = String::new();
+                                self.password = String::new();
+                                self.error_msg = Some("Usuario o contraseña inválidos.".into());
+                            }
+                        }
+                    });
+                });
+            });
         });
-
         cambio
     }
 }

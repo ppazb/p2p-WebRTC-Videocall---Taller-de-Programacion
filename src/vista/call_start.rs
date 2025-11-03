@@ -30,13 +30,13 @@ impl VistaCallStart {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.centered_and_justified(|ui| {
                 Frame::new()
-                .fill(Color32::LIGHT_GRAY)
+                .fill(Color32::DARK_GRAY)
                 .corner_radius(6.0)
                 .inner_margin(egui::Margin::same(8))
                 .show(ui, |ui| {
                     ui.set_height(30.0);
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        ui.label(RichText::new("Llamada de Prueba").strong().color(Color32::BLACK));
+                        ui.label(RichText::new("Llamada de Prueba").strong().color(Color32::WHITE));
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.button("Cancelar llamada").clicked() {
