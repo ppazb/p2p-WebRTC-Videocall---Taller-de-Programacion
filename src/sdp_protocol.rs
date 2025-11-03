@@ -596,10 +596,10 @@ pub fn sdp_handshake(
             match std::net::TcpStream::connect(peer_address.as_str()) {
                 Ok(stream) => { 
                     connected_peer.store(true, std::sync::atomic::Ordering::SeqCst);
-                    return Some(stream);
+                    Some(stream)
                 }
-                Err(_) => return None,
-            };
+                Err(_) => None,
+            }
         // };
     });
 

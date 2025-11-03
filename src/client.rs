@@ -108,7 +108,7 @@ impl Client {
                 println!("SENDER OVER");
                 return Ok(());
             }
-            Self::send_message(&socket_send, &mut camara, &mut encoder, &tx_local)?;
+            Self::send_message(socket_send, &mut camara, &mut encoder, tx_local)?;
         }
         }
     ///Crea un decoder, y una tabla de hash y luego se queda escuchando constantemente por el socket
@@ -125,12 +125,12 @@ impl Client {
                 println!("RECEIVER OVER");
                 return Ok(());
             }
-            if let Some(msg) = Self::recieve_message(& socket_recev) {
+            if let Some(msg) = Self::recieve_message(socket_recev) {
                 //Self::process_content(msg,&mut decoder,&mut chunks_hash,& tx_remoto);
                 match msg.content {
-                    Content::Signal(signal) => Self::signal_handle(signal,& in_call),
-                    Content::Text(text) => continue,
-                    Content::Binary(media) => Self::video_handle(media,&mut decoder,&mut chunks_hash, msg.dimension.0,msg.dimension.1,& tx_remoto),
+                    Content::Signal(signal) => Self::signal_handle(signal,in_call),
+                    Content::Text(_text) => continue,
+                    Content::Binary(media) => Self::video_handle(media,&mut decoder,&mut chunks_hash, msg.dimension.0,msg.dimension.1,tx_remoto),
                 }    
             }
             else {
@@ -148,12 +148,9 @@ impl Client {
         let frame = video_processing::read_frame(camara).map_err(|_e| {
             ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
         })?;
-        let camara_width = video_processing::get_frame_width(&camara)?;
-        let camara_height = video_processing::get_frame_height(&camara)?;
-        let encoded_frame = match encoder.encode(&frame) {
-            Ok(f) => f,
-            Err(_e) => Vec::new()
-        };
+        let camara_width = video_processing::get_frame_width(camara)?;
+        let camara_height = video_processing::get_frame_height(camara)?;
+        let encoded_frame = encoder.encode(&frame).unwrap_or_default();
 
         if tx_local.send(frame).is_err() {
             println!("PROBLEMA");
@@ -184,10 +181,7 @@ impl Client {
         match socket_recev.recv(&mut buff) {
             Ok(0) => None,
             Ok(n) => { 
-                match Message::deserializable(&buff[..n]) {
-                    Some(msg) => Some(msg),
-                    None => None
-                } 
+                Message::deserializable(&buff[..n]).map(|msg| msg) 
             },
             Err(_) => None
         }

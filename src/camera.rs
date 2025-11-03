@@ -5,7 +5,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
-    time::Duration,
 };
 
 use crate::{video_processing, video_processing_errors::VideoProcessingErrors};
