@@ -18,13 +18,11 @@ use eframe::egui;
 use opencv::core::Mat;
 
 pub struct AppUI {
+    // Disposición de widgets
     vista_actual: Vista,
-    cliente: Option<Client>,
-    rx_local: Option<Receiver<Mat>>,
-    rx_remoto: Option<Receiver<Mat>>,
-    in_call: Arc<AtomicBool>,
+    camara: Option<Camera>,
 
-    // Se necesita un objeto global de error?
+    // Elementos para conexión entre clientes
     pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
 
@@ -32,20 +30,19 @@ pub struct AppUI {
     local_adr: String,
     remote_adr: String,
 
-    camara: Option<Camera>,
+    // Elementos para envío y recepción de datos
+    cliente: Option<Client>,
     client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
+    rx_local: Option<Receiver<Mat>>,
+    rx_remoto: Option<Receiver<Mat>>,
+    in_call: Arc<AtomicBool>,
 }
 
-// impl Drop for AppUI {
-//     fn drop(&mut self) {
-//         // Para el Join de los threads
-//         if let Some(handles) = self.thread_handles.take() {
-//             for handle in handles {
-//                 let _ = handle.join();
-//             }
-//         }
-//     }
-// }
+impl Drop for AppUI {
+    fn drop(&mut self) {
+        self.liberar_recursos();
+    }
+}
 
 impl AppUI {
     pub fn new(local_adr: String, remote_adr: String) -> Self {
@@ -79,6 +76,11 @@ impl AppUI {
             },
             CambioVista::ToLobby => {
                 // Desde Login/CallStart/Call
+
+                // Si volví de CallStart, anulo thread de handshake
+                self.in_call.store(false, Ordering::Relaxed);
+                self.liberar_handshake_handle();
+
                 self.crear_camara();
                 self.vista_actual = Vista::VistaLobby(VistaLobby::new());
             },
@@ -99,7 +101,9 @@ impl AppUI {
             },
             CambioVista::ToCallEnd => {
                 // Desde Call
-                //self.crear_camara();
+                self.liberar_recursos();
+
+                self.crear_camara();
                 self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
             },
             CambioVista::CamEnable => {
@@ -115,11 +119,12 @@ impl AppUI {
         self.cliente = None;
         self.rx_local = None;
         self.rx_remoto = None;
-        self.in_call = Arc::new(AtomicBool::new(false));
+        self.in_call.store(false, Ordering::Relaxed);
 
         self.pedido_socket = None;
 
-        // LIBERAR LOS HANDLES DE LLAMADA!!
+        self.liberar_handshake_handle();
+        self.liberar_client_handles();
         self.liberar_camara();
     }
 
@@ -164,7 +169,7 @@ impl AppUI {
 
         let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
             //SDP
-            let ice_info = match sdp_handshake(my_address.as_str(), peer.as_str()) {
+            let ice_info = match sdp_handshake(in_call, my_address.as_str(), peer.as_str()) {
                 Err(e) => {
                     eprintln!("SDP Handshake error: {}", e);
                     let _ = tx_result.send(Err(e.clone()));
@@ -217,8 +222,6 @@ impl AppUI {
             self.client_handles = c.initialize_call();
             self.cliente = Some(c);
         }
-        
-        //self.cliente = Some(cliente);
     }
 
     fn observar_cambios(&mut self) {
@@ -242,26 +245,58 @@ impl AppUI {
                                 self.cambiar_vista(CambioVista::ToCall);
                             },
                             Err(e) => {
-                                // DEBERIA IR A UNA PANTALLA DE ERROR?
                                 eprintln!("Error en handshake: {:?}", e);
+                                self.cambiar_vista(CambioVista::ToLobby);
                             }
                         }
-                        
-                    }
+                    } 
+                    // else {
+                    //     eprintln!("Handshake cancelado");
+                    //     if let Some(h) = self.handshake_handle.take() {
+                    //         let _ = h.join();
+                    //     }
+                    //     self.pedido_socket = None;
+                    //     self.cambiar_vista(CambioVista::ToLobby);
+                    // }
                 }
             },
             Vista::VistaLlamada(_) => {
                 if !self.in_call.load(Ordering::SeqCst) {
-                    self.cliente = None;
-                    self.rx_local = None;
-                    self.rx_remoto = None;
-                    
                     self.cambiar_vista(CambioVista::ToCallEnd);
                 }
             }
             _ => {}
         }
     }
+
+    fn liberar_client_handles(&mut self) {
+        if let Ok(handles) = &mut self.client_handles {
+            while !handles.is_empty() {
+                if let Some(handle) = handles.pop() {
+                    let _ = handle.join();
+                }
+            }
+        }
+    }
+
+    fn liberar_handshake_handle(&mut self) -> Option<UdpSocket>{
+        // Reviso si el channel contiene el socket generado
+        if let Some(rx_result) = &self.pedido_socket {
+            // Cierro el thread de handshake ya finalizado
+            if let Some(h) = self.handshake_handle.take() {
+                let _ = h.join();
+            }
+
+            // Extraigo y devuelvo el socket
+            if let Ok(result) = rx_result.try_recv() {
+                if let Ok(r) = result {
+                    return Some(r);
+                }
+            }
+        }
+        return None;
+    }
+
 }
 
 impl eframe::App for AppUI {

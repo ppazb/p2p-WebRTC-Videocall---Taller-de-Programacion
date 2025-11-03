@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, ColorImage, Frame, Margin, Vec2};
+use eframe::egui::{self, Color32, ColorImage, Frame, Margin, TextureHandle, Ui, Vec2};
 
 use crate::{camera::Camera, vista::{call_end::VistaCallEnd, call_start::VistaCallStart, cambio::CambioVista, llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin}};
 use opencv::{core::{Mat, MatTraitConst, MatTraitConstManual}, imgproc};
@@ -25,7 +25,7 @@ impl Vista {
             Vista::VistaLobby(view) => view.ui(ctx, camara),
             Vista::VistaLlamada(view) => view.ui(ctx),
             Vista::VistaCallStart(view) => view.ui(ctx, camara),
-            Vista::VistaCallEnd(view) => view.ui(ctx),
+            Vista::VistaCallEnd(view) => view.ui(ctx, camara),
         }
     }
 
@@ -87,8 +87,6 @@ impl Vista {
                 ui.add_space(top_space);
 
                 if let Some(cam) = &camera {
-                    
-
                     if cam.is_active() {
                         let frame = cam.get_last_frame();
 
@@ -100,7 +98,9 @@ impl Vista {
                         }
 
                         if let Some(img) = imagen {
+                            //img = Self::apply_rounded_mask(&img, 40.0);
                             let textura = ctx.load_texture("cam_local", img, egui::TextureOptions::LINEAR);
+                            //Self::show_rounded_image(ui, textura, egui::vec2(320.0, 240.0));
                             ui.image((textura.id(), egui::vec2(320.0, 240.0)));
                         };
 
@@ -123,54 +123,70 @@ impl Vista {
                             cambio = CambioVista::CamEnable;
                         }
                     }
-
-                    // let imagen;
-                    // if let Some(f) = &frame {
-                    //     imagen = Self::generar_imagen(f);
-                    // } else {
-                    //     imagen = Self::no_camera_texture();
-                    // }
-
-                    // if let Some(img) = imagen {
-                    //     let textura = ctx.load_texture("cam_local", img, egui::TextureOptions::LINEAR);
-                    //     ui.image((textura.id(), egui::vec2(320.0, 240.0)));
-                    // };
-
-                    // ui.add_space(10.0);
-
-                    // if cam.is_active() {
-                    //     if ui.button("Apagar cámara").clicked() {
-                    //         cambio = CambioVista::CamDisable;
-                    //     }
-                    // } else {
-                    //     if ui.button("Encender cámara").clicked() {
-                    //         cambio = CambioVista::CamEnable;
-                    //     }
-                    // }
                 } 
-                
-                
-                
-                
-                
-                
-                
-                // else {
-                //     if let Some(img) = Self::no_camera_texture() {
-                //         let textura = ctx.load_texture("cam_local", img, egui::TextureOptions::LINEAR);
-                //         ui.image((textura.id(), egui::vec2(320.0, 240.0)));
-                //     }
-
-                //     ui.add_space(10.0);
-
-                //     if ui.button("Encender cámara").clicked() {
-                //         cambio = CambioVista::CamEnable;
-                //     }
-                // }
-
             });
         });
 
         return cambio;
+    }
+
+    fn _apply_rounded_mask(img: &ColorImage, radius: f32) -> ColorImage {
+        let (w, h) = (img.size[0] as f32, img.size[1] as f32);
+        let mut out = img.clone();
+
+        for y in 0..img.size[1] {
+            for x in 0..img.size[0] {
+                let xf = x as f32;
+                let yf = y as f32;
+
+                // Distancias a los bordes (esquinas)
+                let dx = if xf < radius {
+                    radius - xf
+                } else if xf > w - radius {
+                    xf - (w - radius)
+                } else {
+                    0.0
+                };
+
+                let dy = if yf < radius {
+                    radius - yf
+                } else if yf > h - radius {
+                    yf - (h - radius)
+                } else {
+                    0.0
+                };
+
+                // Si estamos dentro del borde redondeado, mantenemos el pixel
+                // Si estamos fuera (más allá del radio), lo hacemos transparente
+                if dx > 0.0 && dy > 0.0 && (dx * dx + dy * dy).sqrt() > radius {
+                    let idx = y * img.size[0] + x;
+                    let mut color = out.pixels[idx];
+                    color = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 0);
+                    out.pixels[idx] = color;
+                }
+            }
+        }
+
+        out
+    }
+
+    fn _show_rounded_image(ui: &mut Ui, tex: TextureHandle, size: Vec2) {
+        let (rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
+        let rounding = egui::CornerRadius::same(20);
+        let painter = ui.painter();
+
+        // Fondo y borde
+        painter.rect_filled(rect, rounding, egui::Color32::from_gray(30));
+        painter.rect_stroke(rect, rounding, egui::Stroke::new(2.0, egui::Color32::LIGHT_GRAY), egui::StrokeKind::Outside);
+
+        painter.image(
+            tex.id(),
+            rect,
+            egui::Rect::from_min_max(
+                egui::pos2(0.0, 0.0),
+                egui::pos2(1.0, 1.0),
+            ),
+            egui::Color32::WHITE,
+        );
     }
 }

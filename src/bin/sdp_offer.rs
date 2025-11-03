@@ -1,3 +1,5 @@
+use std::sync::{Arc, atomic::AtomicBool};
+
 use room_rtc::sdp_protocol::*;
 
 fn main() {
@@ -18,7 +20,7 @@ fn main() {
     // Solamente cambiar "192.168.0.109 8000" el resto no.
 
     // RECORDAR: Si lo corren en dos compus cada compu cambia lo suyo
-    let ice_info = match sdp_handshake(&args[1], &args[2]) {
+    let ice_info = match sdp_handshake(Arc::new(AtomicBool::new(true)), &args[1], &args[2]) {
         Err(e) => {
             eprintln!("SDP Handshake error: {}", e);
             return;

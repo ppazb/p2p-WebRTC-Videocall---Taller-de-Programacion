@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use crate::vista::cambio::CambioVista;
+use crate::{camera::Camera, vista::cambio::CambioVista};
 
 pub struct VistaCallEnd {
     
@@ -12,11 +12,25 @@ impl VistaCallEnd {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista {
-        let mut cambio = CambioVista::None;
+    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Camera>) -> CambioVista {
+        let mut cambio;
+
+        egui::TopBottomPanel::top("menu_bar").exact_height(50.0).show(ctx, |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.heading("Llamada en Curso");
+                ui.separator();
+                
+                ui.add_space(ui.available_width()-100.0);
+
+            });
+        });
+
+        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("La llamada ha finalizado.");
+
+            ui.add_space(20.0);
 
             if ui.button("Volver al Lobby").clicked() {
                 cambio = CambioVista::ToLobby;

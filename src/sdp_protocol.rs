@@ -562,6 +562,7 @@ pub fn create_sdp_answer(
 // Realiza el Handshake SDP entre dos peers, intercambiando a través de TCPSocket que simula el pasaje por Signalling Server
 // devuelve 3 Vectores, uno con las direcciones ICE del peer local, otro con las direcciones ICE del peer remoto y con los codecs
 pub fn sdp_handshake(
+    in_call: Arc<AtomicBool>,
     local_adder: &str,
     peer_adder: &str,
 ) -> Result<(Vec<String>, Vec<String>, Vec<String>), SdpError> {
@@ -611,6 +612,11 @@ pub fn sdp_handshake(
         // y usamos esa conexión
         if connected.load(std::sync::atomic::Ordering::SeqCst) {
             break; 
+        }
+
+        if !in_call.load(std::sync::atomic::Ordering::SeqCst) {
+            println!("Handshake cancelado");
+            break;
         }
 
         if let Ok((stream, _)) = listener.accept() {

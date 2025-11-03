@@ -72,7 +72,7 @@ impl VistaLlamada {
                 // Actualizo frame remoto
                 if let Some(rx) = &self.rx_remoto
                     && let Ok(mat) = rx.try_recv()
-                    && let Some(color_image) = Self::generar_imagen(&mat)
+                    && let Some(color_image) = crate::vista::Vista::generar_imagen(&mat)
                 {
                     // Crear o reemplazar textura
                     if let Some(tex) = &mut self.tex_remoto {
@@ -101,7 +101,7 @@ impl VistaLlamada {
                     true => {
                         if let Some(rx) = &self.rx_local
                             && let Ok(mat) = rx.try_recv()
-                            && let Some(color_image) = Self::generar_imagen(&mat)
+                            && let Some(color_image) = crate::vista::Vista::generar_imagen(&mat)
                         {
                             // Crear o reemplazar textura
                             if let Some(tex) = &mut self.tex_local {
@@ -143,37 +143,6 @@ impl VistaLlamada {
     fn cargar_camara(&mut self) {
         self.cam_enable = true;
         // self.local_cam = Some(Camera::new().unwrap());
-    }
-
-    fn _no_camera_texture(ctx: &egui::Context) -> Option<TextureHandle> {
-        // Recuadro gris 320x240
-        // Genero única vez durante la creación de la vista
-        let gray = Color32::from_gray(60);
-        let image = ColorImage {
-            size: [320, 240],
-            pixels: vec![gray; 320 * 240],
-            source_size: Vec2 { x: 320.0, y: 240.0 },
-        };
-        Some(ctx.load_texture("no_camera", image, egui::TextureOptions::LINEAR))
-    }
-
-    fn generar_imagen(mat: &Mat) -> Option<ColorImage> {
-        // Convierto de BGR a RGB
-        let mut rgb = Mat::default();
-        if mat.channels() == 3 {
-            imgproc::cvt_color(mat, &mut rgb, imgproc::COLOR_BGR2RGB, 0).ok()?;
-        } else {
-            return None;
-        }
-
-        // Defino dimensiones
-        let size = rgb.size().ok()?;
-        let width = size.width as usize;
-        let height = size.height as usize;
-
-        // Genero imagen a partir de bytes
-        let data = rgb.data_bytes().ok()?;
-        Some(ColorImage::from_rgb([width, height], data))
     }
 
     fn redimensionar_textura(tex: &TextureHandle) -> Vec2 {
