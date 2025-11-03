@@ -538,16 +538,8 @@ fn try_connection(
                 connected_peer.store(true, std::sync::atomic::Ordering::SeqCst);
                 Some(stream)
             }
-            Err(_) => None,
+            Err(_) => None
         }
-            match std::net::TcpStream::connect(peer_address.as_str()) {
-                Ok(stream) => { 
-                    connected_peer.store(true, std::sync::atomic::Ordering::SeqCst);
-                    Some(stream)
-                }
-                Err(_) => None,
-            }
-        // };
     });
 
     // Cualquiera de los dos que logre conectarse
