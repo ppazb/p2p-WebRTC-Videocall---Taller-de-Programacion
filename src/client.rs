@@ -181,7 +181,7 @@ impl Client {
         match socket_recev.recv(&mut buff) {
             Ok(0) => None,
             Ok(n) => { 
-                Message::deserializable(&buff[..n]).map(|msg| msg) 
+                Message::deserializable(&buff[..n]) 
             },
             Err(_) => None
         }
