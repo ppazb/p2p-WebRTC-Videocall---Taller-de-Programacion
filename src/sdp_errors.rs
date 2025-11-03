@@ -14,6 +14,7 @@ pub enum SdpError {
     OfferFileWriteError,
     AnswerFileCreationError,
     IncompatibleSession,
+    CodecExtractionError,
     Other(String),
 }
 
@@ -38,6 +39,7 @@ impl fmt::Display for SdpError {
             Self::OfferFileWriteError => write!(f, "Error: \"No se pude escribir offer file\""),
             Self::AnswerFileCreationError => write!(f, "Error: \"No se pude crear answer file\""),
             Self::IncompatibleSession => write!(f, "Error: \"Sesión incompatible\""),
+            Self::CodecExtractionError => write!(f, "Error: \"Error getting codec\""),
             Self::Other(message) => write!(f, "Error: \"{}\"", message),
         }
     }

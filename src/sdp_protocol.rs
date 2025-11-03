@@ -5,21 +5,22 @@
 // t=0 0
 // m=audio 49170 RTP/AVP 0
 // a=rtpmap:0 PCMU/8000
+// a=candidate: 196.168.0.1 80000
 
+use crate::sdp_errors::SdpError;
 use std::fs;
 use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::{fmt, fs::File, vec};
-use crate::sdp_errors::SdpError;
 
 const ORIGIN_COMPONENTS_NUMBER: usize = 6;
 const TIME_COMPONENTS_NUMBER: usize = 2;
 const MEDIA_DESCRIPTION_COMPONENTS_NUMBER: usize = 4;
 
 #[derive(Debug)]
-pub enum SdpFileLineType {
+enum SdpFileLineType {
     Version,
     Origin,
     SessionName,
@@ -30,7 +31,7 @@ pub enum SdpFileLineType {
 }
 
 impl SdpFileLineType {
-    pub fn parse_prefix(line: &str) -> Self {
+    fn parse_prefix(line: &str) -> Self {
         match line {
             "v" => SdpFileLineType::Version,
             "o" => SdpFileLineType::Origin,
@@ -69,7 +70,7 @@ impl SessionDescription {
         }
     }
 
-    pub fn create_prov(local_addr: &str) -> Result<Self, SdpError> {
+    fn create_prov(local_addr: &str) -> Result<Self, SdpError> {
         if let Some((ip, port)) = local_addr.split_once(':') {
             let version = 0;
             let session_name = "demo";
@@ -106,63 +107,22 @@ impl SessionDescription {
         }
     }
 
-    pub fn create(
-        version: usize,
-        origin: &str,
-        session_name: &str,
-        session_time: &str,
-        media: &str,
-        attributes: Vec<&str>,
-    ) -> Result<Self, SdpError> {
-        let origin_struct = Origin::parse(origin)?;
-        let time_struct = Time::parse(session_time)?;
-        let vec_attributes = Attribute::parse_vec_attributes(attributes)?;
-        let mut media_description = MediaDescription::parse(media)?;
-        media_description.add_attr(vec_attributes);
-
-        Ok(Self::new(
-            version,
-            origin_struct,
-            session_name.to_string(),
-            time_struct,
-            media_description,
-        ))
-    }
-
-    pub fn get_address(&self) -> String {
-        let ip = self.origin.unicast_address.to_string();
-        let port = self.media.port.to_string();
-        ip + ":" + &port
-    }
-
     // Solamente recibimos un MediaDescription (podría escalar a más y ser vector de MediaDescription)
     pub fn generate_compatible_session(
         &self,
         session_descrip_offer: &SessionDescription,
     ) -> Option<Self> {
-        // match self
-        //     .media
-        //     .compare_media_descriptions(&session_descrip_offer.media)
-        // {
-        //     Some(compatible_media) => Some(Self::new(
-        //         self.version,
-        //         self.origin.clone(),
-        //         self.session_name.clone(),
-        //         self.session_time.clone(),
-        //         compatible_media,
-        //     )),
-        //     None => None,
-        // }
-
-        self
-            .media
-            .compare_media_descriptions(&session_descrip_offer.media).map(|compatible_media| Self::new(
-                self.version,
-                self.origin.clone(),
-                self.session_name.clone(),
-                self.session_time.clone(),                
-                compatible_media,))
-
+        self.media
+            .compare_media_descriptions(&session_descrip_offer.media)
+            .map(|compatible_media| {
+                Self::new(
+                    self.version,
+                    self.origin.clone(),
+                    self.session_name.clone(),
+                    self.session_time.clone(),
+                    compatible_media,
+                )
+            })
     }
 
     pub fn parse(text_sdp_protocol: &str) -> Result<SessionDescription, SdpError> {
@@ -173,10 +133,7 @@ impl SessionDescription {
         let mut media: Option<MediaDescription> = None;
         let mut temp_vec_attrs = Vec::new();
 
-        // println!("[DEBUG] Media Description Len: {:?}", text_sdp_protocol.len());
         for line in text_sdp_protocol.lines() {
-            // println!("{}", line);
-            // println!("[DEBUG] Media Description Parse: {:?}", line);
             if let Some((attr, value)) = line.trim().split_once('=') {
                 match SdpFileLineType::parse_prefix(attr) {
                     SdpFileLineType::Version => version = Some(value.parse::<usize>()?),
@@ -230,7 +187,7 @@ pub struct MediaDescription {
 }
 
 impl MediaDescription {
-    pub fn new(
+    fn new(
         media: String,
         port: String,
         transport_protocol: String,
@@ -246,11 +203,19 @@ impl MediaDescription {
         }
     }
 
-    pub fn add_attr(&mut self, new_attrs: Vec<Attribute>) {
+    fn add_attr(&mut self, new_attrs: Vec<Attribute>) {
         self.attributes.extend(new_attrs);
     }
 
-    pub fn compare_media_descriptions(
+    fn get_codec(vec_attributes: &Vec<Attribute>) -> Result<&str, SdpError> {
+        let codec = Attribute::get_rtpmap(vec_attributes)
+            .and_then(|rtpmap| Attribute::parse_rtpmap(rtpmap))
+            .map(|(codec, _)| codec)
+            .ok_or(SdpError::CodecExtractionError)?;
+        Ok(codec)
+    }
+
+    fn compare_media_descriptions(
         &self,
         another_media_descrip: &MediaDescription,
     ) -> Option<MediaDescription> {
@@ -276,7 +241,7 @@ impl MediaDescription {
         }
     }
 
-    pub fn parse(str_mediadescrip: &str) -> Result<Self, SdpError> {
+    fn parse(str_mediadescrip: &str) -> Result<Self, SdpError> {
         // println!("[DEBUG] Media Parsing: {}", str_mediadescrip);
         let media_components: Vec<&str> = str_mediadescrip.split_whitespace().collect();
 
@@ -309,7 +274,7 @@ impl fmt::Display for MediaDescription {
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
-pub struct IceInformation {
+struct IceInformation {
     ufrag: String,
     pwd: String,
     candidates: Vec<String>,
@@ -317,13 +282,13 @@ pub struct IceInformation {
 
 /// ATTRIBUTE
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub enum Attribute {
+enum Attribute {
     Property(String),
     Value(String, String),
 }
 
 impl Attribute {
-    pub fn parse(str_attribute: &str) -> Result<Self, SdpError> {
+    fn parse(str_attribute: &str) -> Result<Self, SdpError> {
         if let Some((key, value)) = str_attribute.split_once(':') {
             Ok(Attribute::Value(key.to_string(), value.to_string()))
         } else {
@@ -331,7 +296,7 @@ impl Attribute {
         }
     }
 
-    pub fn get_rtpmap(vec_attributes: &Vec<Attribute>) -> Option<&str> {
+    fn get_rtpmap(vec_attributes: &Vec<Attribute>) -> Option<&str> {
         for attr in vec_attributes {
             if let Attribute::Value(k, v) = attr
                 && k.as_str() == "rtpmap"
@@ -343,7 +308,7 @@ impl Attribute {
         None
     }
 
-    pub fn parse_rtpmap(rtpmap: &str) -> Option<(&str, &str)> {
+    fn parse_rtpmap(rtpmap: &str) -> Option<(&str, &str)> {
         if let Some((_, codec_clock)) = rtpmap.split_once(' ')
             && let Some((codec, clock)) = codec_clock.split_once('/')
         {
@@ -352,7 +317,12 @@ impl Attribute {
         None
     }
 
-    pub fn extract_ice_information(
+    fn get_ice_candidate(vec_attributes: &Vec<Attribute>) -> Result<Vec<String>, SdpError> {
+        let ice_candidates = Attribute::extract_ice_information(vec_attributes)?.candidates;
+        Ok(ice_candidates)
+    }
+
+    fn extract_ice_information(
         vec_attributes: &Vec<Attribute>,
     ) -> Result<IceInformation, SdpError> {
         let mut ice_info = IceInformation {
@@ -377,16 +347,6 @@ impl Attribute {
 
         Ok(ice_info)
     }
-
-    pub fn parse_vec_attributes(vec_attributes: Vec<&str>) -> Result<Vec<Attribute>, SdpError> {
-        let mut vec_struct_attributes = Vec::new();
-
-        for attr in vec_attributes {
-            vec_struct_attributes.push(Self::parse(attr)?);
-        }
-
-        Ok(vec_struct_attributes)
-    }
 }
 
 impl fmt::Display for Attribute {
@@ -410,7 +370,7 @@ pub struct Origin {
 }
 
 impl Origin {
-    pub fn new(
+    fn new(
         username: String,
         session_id: usize,
         session_version: usize,
@@ -428,7 +388,7 @@ impl Origin {
         }
     }
 
-    pub fn parse(str_origin: &str) -> Result<Self, SdpError> {
+    fn parse(str_origin: &str) -> Result<Self, SdpError> {
         let origin_components: Vec<&str> = str_origin.split_whitespace().collect();
 
         if origin_components.len() != ORIGIN_COMPONENTS_NUMBER {
@@ -470,11 +430,11 @@ pub struct Time {
 }
 
 impl Time {
-    pub fn new(start: usize, stop: usize) -> Self {
+    fn new(start: usize, stop: usize) -> Self {
         Self { start, stop }
     }
 
-    pub fn parse(str_time: &str) -> Result<Self, SdpError> {
+    fn parse(str_time: &str) -> Result<Self, SdpError> {
         let time_components: Vec<&str> = str_time.split_whitespace().collect();
 
         if time_components.len() != TIME_COMPONENTS_NUMBER {
@@ -495,10 +455,7 @@ impl fmt::Display for Time {
 }
 
 // Provisoria para 2 clientes, después obtener los datos del .config
-pub fn generate_offer(
-    session_descrip: &SessionDescription,
-    file_path: &str,
-) -> Result<File, SdpError> {
+fn generate_offer(session_descrip: &SessionDescription, file_path: &str) -> Result<File, SdpError> {
     let mut sdp_offer = match File::create(file_path) {
         Ok(f) => f,
         Err(_) => return Err(SdpError::OfferFileCreationError),
@@ -512,10 +469,7 @@ pub fn generate_offer(
     Ok(sdp_offer)
 }
 
-pub fn create_sdp_offer(
-    local_adder: &str,
-    file_path: &str,
-) -> Result<SessionDescription, SdpError> {
+fn create_sdp_offer(local_adder: &str, file_path: &str) -> Result<SessionDescription, SdpError> {
     let session_description = SessionDescription::create_prov(local_adder)?;
 
     let _offer = generate_offer(&session_description, file_path)?;
@@ -524,7 +478,7 @@ pub fn create_sdp_offer(
 }
 
 // Provisoria para 2 clientes, después obtener los datos del .config
-pub fn generate_answer(
+fn generate_answer(
     session_descrip_answer: &SessionDescription,
     file_path: &str,
 ) -> Result<File, SdpError> {
@@ -541,7 +495,7 @@ pub fn generate_answer(
     Ok(sdp_answer)
 }
 
-pub fn create_sdp_answer(
+fn create_sdp_answer(
     my_session_descripton: &SessionDescription,
     offer: &SessionDescription,
     file_path: &str,
@@ -557,6 +511,75 @@ pub fn create_sdp_answer(
     };
 
     Ok(session_descrip_answer)
+}
+
+fn try_connection(
+    in_call: Arc<AtomicBool>,
+    local_adder: &str,
+    peer_adder: &str,
+) -> Result<TcpStream, SdpError> {
+    let listener = std::net::TcpListener::bind(local_adder).map_err(|_| SdpError::InvalidAdder)?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|_| SdpError::Other(String::from("Non_blocking error")))?;
+
+    let connected = Arc::new(AtomicBool::new(false));
+    let connected_peer = Arc::clone(&connected);
+
+    // Intento conectarme al peer 8001 desde otro thread
+    let peer_address = peer_adder.to_string();
+    let connection_peer = std::thread::spawn(move || {
+        if connected_peer.load(std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        };
+
+        match std::net::TcpStream::connect(peer_address.as_str()) {
+            Ok(stream) => {
+                connected_peer.store(true, std::sync::atomic::Ordering::SeqCst);
+                Some(stream)
+            }
+            Err(_) => None,
+        }
+    });
+
+    // Cualquiera de los dos que logre conectarse
+    let mut connection_accepted: Option<TcpStream> = None;
+
+    // Loop hasta que algún peer logre conectarse
+    loop {
+        // Pregunta si sigue el Thread de conexión al peer, si ya se conectó sale del loop
+        // y usamos esa conexión
+        if connected.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
+
+        if !in_call.load(std::sync::atomic::Ordering::SeqCst) {
+            println!("Handshake cancelado");
+            break;
+        }
+
+        if let Ok((stream, _)) = listener.accept() {
+            connected.store(true, std::sync::atomic::Ordering::SeqCst);
+            connection_accepted = Some(stream);
+            break;
+        };
+    }
+
+    let stream = match connection_accepted {
+        Some(s) => {
+            let _ = connection_peer.join();
+            s
+        }
+        None => {
+            if let Ok(Some(stream)) = connection_peer.join() {
+                stream
+            } else {
+                return Err(SdpError::InvalidAdder);
+            }
+        }
+    };
+
+    Ok(stream)
 }
 
 // Realiza el Handshake SDP entre dos peers, intercambiando a través de TCPSocket que simula el pasaje por Signalling Server
@@ -575,76 +598,9 @@ pub fn sdp_handshake(
     //     peer 196.168.0.109:8001
 
     // Abro el listener TCP y escucho en mi local 8000
-    let listener = std::net::TcpListener::bind(local_adder).map_err(|_| SdpError::InvalidAdder)?;
-    listener
-        .set_nonblocking(true)
-        .map_err(|_| SdpError::Other(String::from("Non_blocking error")))?;
-
-
-    let connected = Arc::new(AtomicBool::new(false));
-    let connected_peer = Arc::clone(&connected); 
-
-    // Intento conectarme al peer 8001 desde otro thread
-    let peer_address = peer_adder.to_string();
-    let connection_peer = std::thread::spawn(move || {
-        // loop {
-
-            if connected_peer.load(std::sync::atomic::Ordering::SeqCst) {
-                return None; 
-            };
-
-            match std::net::TcpStream::connect(peer_address.as_str()) {
-                Ok(stream) => { 
-                    connected_peer.store(true, std::sync::atomic::Ordering::SeqCst);
-                    return Some(stream);
-                }
-                Err(_) => return None,
-            };
-        // };
-    });
-
-    // Cualquiera de los dos que logre conectarse 
-    let mut connection_accepted: Option<TcpStream> = None;
-
-    // Loop hasta que algún peer logre conectarse
-    loop {
-        // Pregunta si sigue el Thread de conexión al peer, si ya se conectó sale del loop
-        // y usamos esa conexión
-        if connected.load(std::sync::atomic::Ordering::SeqCst) {
-            break; 
-        }
-
-        if !in_call.load(std::sync::atomic::Ordering::SeqCst) {
-            println!("Handshake cancelado");
-            break;
-        }
-
-        if let Ok((stream, _)) = listener.accept() {
-            connected.store(true, std::sync::atomic::Ordering::SeqCst);
-            connection_accepted = Some(stream);
-            break;
-        };
-    };
-
-    let mut stream = match connection_accepted {
-        Some(s) => {
-            let _ = connection_peer.join(); 
-            s
-        },
-        None => {
-            if let Ok(option) = connection_peer.join() {
-                if let Some(stream) = option {
-                    stream  
-                } else {
-                    return Err(SdpError::InvalidAdder);
-                }
-            } else {
-                return Err(SdpError::InvalidAdder);
-            }
-        }
-    };
-
-
+    let local_adder_signalling = local_adder.to_string();
+    let peer_adder_singnalling = peer_adder.to_string();
+    let mut stream = try_connection(in_call, &local_adder_signalling, &peer_adder_singnalling)?;
 
     let offer_my_session = create_sdp_offer(local_adder, "src/my_offer.sdp")?;
     let mut my_ice_candidates =
@@ -654,16 +610,12 @@ pub fn sdp_handshake(
     if local_adder < peer_adder {
         // Soy quién envía mi offer y recibo el Answer de mi peer
 
-        println!(
-        "[DEBUG] Lado Enviar Offer: {:?}\n",
-        offer_my_session
-        );
-
+        println!("[DEBUG] Lado Enviar Offer: {:?}\n", offer_my_session);
 
         // Levanto mi Offer del archivo
         let my_offer = fs::read_to_string("src/my_offer.sdp")
             .map_err(|_| SdpError::Other(String::from("Read my_offer error")))?;
-        let mut client_answer_session_description = SessionDescription::default();
+        let client_answer_session_description;
 
         // Envío mi Offer por el TcpStream de signalling
         stream
@@ -672,16 +624,12 @@ pub fn sdp_handshake(
         stream
             .flush()
             .map_err(|_| SdpError::Other(String::from("[LADO ENVIO OFFER] Flush error")))?;
-        let _ = stream.shutdown(std::net::Shutdown::Write); 
+        let _ = stream.shutdown(std::net::Shutdown::Write);
 
         // Espero para leer el Answer del peer
-        let mut reader  = BufReader::new(&mut stream);
+        let mut reader = BufReader::new(&mut stream);
         let mut signal_str = String::new();
-        let _ = reader.read_to_string(&mut signal_str); 
-        // let n = stream
-        //     .read(&mut buffer)
-        //     .map_err(|_| SdpError::Other(String::from("[LADO ENVIO OFFER] TCPStream error")))?;
-        // let signal_str = String::from_utf8_lossy(&buffer[..n]);
+        let _ = reader.read_to_string(&mut signal_str);
 
         let _ = stream.shutdown(std::net::Shutdown::Read);
 
@@ -697,17 +645,14 @@ pub fn sdp_handshake(
             None => {
                 return Err(SdpError::IncompatibleSession);
             }
-        }; 
+        };
 
         // Parseo y obtengo el Codec compartido, mis ICE Candidates y los del peer
-        let codec = Attribute::get_rtpmap(&client_answer_session_description.media.attributes)
-            .and_then(|rtpmap| Attribute::parse_rtpmap(rtpmap))
-            .map(|(codec, _)| codec)
-            .ok_or(SdpError::Other(String::from("[LADO ENVIO OFFER] Codec parse error")))?;
-        let mut ice_candidates_peer = Attribute::extract_ice_information(
-            &client_answer_session_description.media.attributes,
-        )?
-        .candidates;
+        let codec =
+            MediaDescription::get_codec(&client_answer_session_description.media.attributes)?;
+
+        let mut ice_candidates_peer =
+            Attribute::get_ice_candidate(&client_answer_session_description.media.attributes)?;
         ice_candidates_peer.push(peer_adder.to_string());
         my_ice_candidates.push(local_adder.to_string());
 
@@ -719,31 +664,18 @@ pub fn sdp_handshake(
     } else {
         // Soy quien recibo el Offer y creo el Answer
 
+        println!("[DEBUG] Lado Enviar Answer: {:?}\n", offer_my_session);
 
-        println!(
-        "[DEBUG] Lado Enviar Answer: {:?}\n",
-        offer_my_session
-        );
-
-
-        // let mut buffer = [0; 1024];
-        // let n = stream
-        //     .read(&mut buffer)
-        //     .map_err(|_| SdpError::Other(String::from("[LADO ENVIO ANSWER] TCPStream error")))?;
-        // let signal_str = String::from_utf8_lossy(&buffer[..n]);
-
-
-        let mut reader  = BufReader::new(&mut stream);
+        let mut reader = BufReader::new(&mut stream);
         let mut signal_str = String::new();
-        let _ = reader.read_to_string(&mut signal_str); 
+        let _ = reader.read_to_string(&mut signal_str);
 
         let _ = stream.shutdown(std::net::Shutdown::Read);
-
 
         // SessionDescription del Offer recibido
         let sdp_offer: SessionDescription = SessionDescription::default();
         // SessionDescription de mi Answer a generar
-        let mut answer_peer_session: SessionDescription = SessionDescription::default();
+        let answer_peer_session;
 
         // Parseo del Offer recibido y creo mi Answer
         match signal_str.strip_prefix("offer\n") {
@@ -774,13 +706,8 @@ pub fn sdp_handshake(
 
         // Parse y obtengo el Codec compartido, mis ICE Candidates y los del peer
         // en este caso los ICE candidates del peer vienen del Offer recibido
-        let codec = Attribute::get_rtpmap(&answer_peer_session.media.attributes)
-            .and_then(|rtpmap| Attribute::parse_rtpmap(rtpmap))
-            .map(|(codec, _)| codec)
-            .ok_or(SdpError::Other(String::from("[LADO ENVIO ANSWER] Codec parse error")))?;
-
-        let mut ice_candidates_peer =
-            Attribute::extract_ice_information(&sdp_offer.media.attributes)?.candidates;
+        let codec = MediaDescription::get_codec(&answer_peer_session.media.attributes)?;
+        let mut ice_candidates_peer = Attribute::get_ice_candidate(&sdp_offer.media.attributes)?;
         ice_candidates_peer.push(peer_adder.to_string());
         my_ice_candidates.push(local_adder.to_string());
 

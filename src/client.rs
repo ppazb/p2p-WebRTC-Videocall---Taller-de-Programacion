@@ -20,7 +20,7 @@ use std::{net::UdpSocket, thread};
 #[derive(Debug)]
 pub struct Client {
     socket_send: UdpSocket,
-    socket_recev:UdpSocket,
+    socket_recev: UdpSocket,
     //sessions: Session,
     tx_local: Sender<Mat>,
     tx_remoto: Sender<Mat>,
@@ -29,7 +29,7 @@ pub struct Client {
 
 impl Client {
     ///Constructor de cliente, requiere de un socket para generar un receptor y un emisor
-    /// tambien recive channel para comunicarse con la UI. 
+    /// tambien recive channel para comunicarse con la UI.
     pub fn new(
         socket: UdpSocket,
         tx_local: Sender<Mat>,
@@ -40,7 +40,7 @@ impl Client {
 
         Ok(Self {
             socket_recev: socket.try_clone().map_err(ClientErrors::CantClone)?,
-            socket_send:socket,
+            socket_send: socket,
             tx_local,
             tx_remoto,
             in_call,
@@ -62,21 +62,29 @@ impl Client {
     pub fn initialize_call(
         &self,
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
-        let socket_recev = self.socket_recev.try_clone().map_err(ClientErrors::CantClone)?;
-        let socket_send = self.socket_send.try_clone().map_err(ClientErrors::CantClone)?;
+        let socket_recev = self
+            .socket_recev
+            .try_clone()
+            .map_err(ClientErrors::CantClone)?;
+        let socket_send = self
+            .socket_send
+            .try_clone()
+            .map_err(ClientErrors::CantClone)?;
         // Thread receiver
         let tx_remoto = self.tx_remoto.clone();
         let in_call = Arc::clone(&self.in_call);
 
-        let receiver_thread = 
-        thread::spawn(move || -> Result<(), ClientErrors> {Self::reciver(&socket_recev, &tx_remoto, &in_call)});
+        let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+            Self::reciver(&socket_recev, &tx_remoto, &in_call)
+        });
 
         // Thread sender
         let tx_local = self.tx_local.clone();
         let in_call = Arc::clone(&self.in_call);
 
-        let sender_thread = 
-        thread::spawn(move || -> Result<(), ClientErrors> {Self::sender(&socket_send, &tx_local, &in_call)});
+        let sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
+            Self::sender(&socket_send, &tx_local, &in_call)
+        });
         let handles = vec![receiver_thread, sender_thread];
         Ok(handles)
     }
@@ -84,7 +92,11 @@ impl Client {
     /// hasta encontrarse con la señal de terminar,luego de esto enviar el mensaje de "fin" de llamada
     /// realiza este envio varias veces para asegurar que llegue a destino por estar utilizando UDP
     /// Al detectar la señal de fin de llamada le comunica esta decision a la aplicacion para un cierre correcto
-    fn sender(socket_send: & UdpSocket,tx_local: & Sender<Mat>,in_call: & Arc<AtomicBool>) -> Result<(),ClientErrors> {
+    fn sender(
+        socket_send: &UdpSocket,
+        tx_local: &Sender<Mat>,
+        in_call: &Arc<AtomicBool>,
+    ) -> Result<(), ClientErrors> {
         let mut camara = video_processing::initialize_camara().map_err(|_e| {
             ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
         })?;
@@ -110,13 +122,17 @@ impl Client {
             }
             Self::send_message(&socket_send, &mut camara, &mut encoder, &tx_local)?;
         }
-        }
+    }
     ///Crea un decoder, y una tabla de hash y luego se queda escuchando constantemente por el socket
     /// detecta el tipo de mensaje que se recive y delega la responsabilidad a la funcion determinada
     /// pasando los recursos necesarios para permitir el funcionamiento correcto
     /// la estructura esta pensada para ser escalable y agregar funcionalidad sea un proceso simple
     /// En caso de detectar el fin de la llamada comunica esta decision a la aplicacion para un correcto cierre.
-    fn reciver(socket_recev: & UdpSocket,tx_remoto: & Sender<Mat>,in_call: & Arc<AtomicBool>) ->Result<(),ClientErrors> {
+    fn reciver(
+        socket_recev: &UdpSocket,
+        tx_remoto: &Sender<Mat>,
+        in_call: &Arc<AtomicBool>,
+    ) -> Result<(), ClientErrors> {
         let mut decoder = DecoderRtc::new_decoder()?;
         let mut chunks_hash: HashMap<u64, Vec<(u32, Vec<u8>)>> = HashMap::new();
         loop {
@@ -125,24 +141,35 @@ impl Client {
                 println!("RECEIVER OVER");
                 return Ok(());
             }
-            if let Some(msg) = Self::recieve_message(& socket_recev) {
+            if let Some(msg) = Self::recieve_message(&socket_recev) {
                 //Self::process_content(msg,&mut decoder,&mut chunks_hash,& tx_remoto);
                 match msg.content {
-                    Content::Signal(signal) => Self::signal_handle(signal,& in_call),
+                    Content::Signal(signal) => Self::signal_handle(signal, &in_call),
                     Content::Text(text) => continue,
-                    Content::Binary(media) => Self::video_handle(media,&mut decoder,&mut chunks_hash, msg.dimension.0,msg.dimension.1,& tx_remoto),
-                }    
-            }
-            else {
+                    Content::Binary(media) => Self::video_handle(
+                        media,
+                        &mut decoder,
+                        &mut chunks_hash,
+                        msg.dimension.0,
+                        msg.dimension.1,
+                        &tx_remoto,
+                    ),
+                }
+            } else {
                 continue;
             }
         }
-        }
+    }
     /// Se encarga de recibir el frame de la camara y encodearlo.
     /// Luego envia el frame tanto a la UI como por mensaje de video a los clientes.
     /// Antes de enviar el mensaje se asegura de crear un paquete RTC con el mensaje serializado
     /// para esto indexea cada parte de un mismo mensaje en un bucle para su posterior remsamblaje
-    fn send_message(socket_send: & UdpSocket, camara:&mut VideoCapture, encoder:&mut EncoderRtc,tx_local: & Sender<Mat>) -> Result<(),ClientErrors>{
+    fn send_message(
+        socket_send: &UdpSocket,
+        camara: &mut VideoCapture,
+        encoder: &mut EncoderRtc,
+        tx_local: &Sender<Mat>,
+    ) -> Result<(), ClientErrors> {
         let chunk_size: usize = 1200;
         // Leo frame y lo cargo al emisor local, la UI va a leerlos cuando la cámara esté habilitada
         let frame = video_processing::read_frame(camara).map_err(|_e| {
@@ -152,21 +179,22 @@ impl Client {
         let camara_height = video_processing::get_frame_height(&camara)?;
         let encoded_frame = match encoder.encode(&frame) {
             Ok(f) => f,
-            Err(_e) => Vec::new()
+            Err(_e) => Vec::new(),
         };
 
         if tx_local.send(frame).is_err() {
             println!("PROBLEMA");
         }
-        if encoded_frame.is_empty() {return Ok(());};
+        if encoded_frame.is_empty() {
+            return Ok(());
+        };
 
         // Serializo el frame encodeado
         let mut index_chunk: u32 = 0;
         for chunk in encoded_frame.chunks(chunk_size) {
             let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
             let rtp_bytes = rtp_package.to_bytes();
-            let video_to_send =
-                Message::new_msg_binary(rtp_bytes, camara_width, camara_height);
+            let video_to_send = Message::new_msg_binary(rtp_bytes, camara_width, camara_height);
             let bytes_to_send = video_to_send
                 .serialize()
                 .map_err(|_e| ClientErrors::SerializeBits)?;
@@ -179,48 +207,51 @@ impl Client {
     }
     /// Reemsambla el manesaje recibido por socket en caso de haber sido recibido completo, lo devuelve
     /// si no se recibio nada devuelve None
-    fn recieve_message(socket_recev: & UdpSocket) -> Option<Message> {
+    fn recieve_message(socket_recev: &UdpSocket) -> Option<Message> {
         let mut buff = vec![0u8; 60000];
         match socket_recev.recv(&mut buff) {
             Ok(0) => None,
-            Ok(n) => { 
-                match Message::deserializable(&buff[..n]) {
-                    Some(msg) => Some(msg),
-                    None => None
-                } 
+            Ok(n) => match Message::deserializable(&buff[..n]) {
+                Some(msg) => Some(msg),
+                None => None,
             },
-            Err(_) => None
+            Err(_) => None,
         }
     }
     ///manejo de señal, en caso de querer cortar la llamada comunica esto
     /// la funcion nos permite agregar diversos manejos de señal en caso de ser necesario
-    fn signal_handle(signal:Signal, in_call: & Arc<AtomicBool>){
+    fn signal_handle(signal: Signal, in_call: &Arc<AtomicBool>) {
         match signal {
             Signal::EndCall => {
                 // El otro cliente genera la señal, se deben terminar los threads de la llamada
                 in_call.store(false, Ordering::SeqCst);
             }
-    }
+        }
     }
     /// Funcion encargada de maneja el video al ser recibido, utiliza el hash map para reemsamblar el frame antes de decodearlo
-    /// utilizando el time stamp y el indice que se agrega al momento de encodearlo de esta manera podemos saber y agrupar que 
+    /// utilizando el time stamp y el indice que se agrega al momento de encodearlo de esta manera podemos saber y agrupar que
     /// chunks de video pertenecen al mismo frame y deben ir juntas, una vez que se recive el ultimo chunk (siempre es el mas chico)
     /// se recorre todos los chunks del hash para esa clave en orden de indice( porque UDP no garantiza orden)
     /// y se envia el frame a desencodear, si el frame esta correcto, lo enviamos a la UI para su visualizacion
     /// En caso contrario continuamos, puesto que normal que nos siempre se envie un frame completo puesto que el encoder tarde mas
     /// de un ciclo en generarlo.
-    /// Tambien se contempla el caso de que el frame entre en un chunk, por lo cual debe ser desencodeado inmediatamente ya que no 
+    /// Tambien se contempla el caso de que el frame entre en un chunk, por lo cual debe ser desencodeado inmediatamente ya que no
     /// hay "partes".
-    fn video_handle(video_chunk:Vec<u8>, decoder:&mut DecoderRtc,chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,width:i32,height:i32,tx_remoto: & Sender<Mat>) {
+    fn video_handle(
+        video_chunk: Vec<u8>,
+        decoder: &mut DecoderRtc,
+        chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,
+        width: i32,
+        height: i32,
+        tx_remoto: &Sender<Mat>,
+    ) {
         let chunk_size = 1200;
         if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
             let time_stamp = rtp.time_stamp;
             let entry = chunks_hash.entry(time_stamp).or_default();
             entry.push((rtp.index, rtp.payload));
 
-            if entry.last().map(|(_, p)| p.len()).unwrap_or(0)
-                < chunk_size
-            {
+            if entry.last().map(|(_, p)| p.len()).unwrap_or(0) < chunk_size {
                 // reassemble
                 entry.sort_by_key(|(i, _)| *i);
                 let mut full: Vec<u8> = Vec::new();
@@ -229,11 +260,7 @@ impl Client {
                 }
                 chunks_hash.remove(&time_stamp);
 
-                match decoder.decode(
-                    &full,
-                    width,
-                    height,
-                ) {
+                match decoder.decode(&full, width, height) {
                     Ok(frame) => {
                         // println!("frame decoded");
                         if tx_remoto.send(frame).is_err() {
@@ -241,20 +268,13 @@ impl Client {
                         }
                     }
                     Err(e) => {
-                        eprintln!(
-                            "Decode error (reassembled): {:?}",
-                            e
-                        );
+                        eprintln!("Decode error (reassembled): {:?}", e);
                     }
                 }
             }
         } else {
             // not an RTP fragment, treat as full frame
-            match decoder.decode(
-                &video_chunk,
-                width,
-                height,
-            ) {
+            match decoder.decode(&video_chunk, width, height) {
                 Ok(frame) => {
                     //println!("frame decoded");
                     if tx_remoto.send(frame).is_err() {
@@ -264,8 +284,7 @@ impl Client {
                 Err(e) => {
                     eprintln!("Decode error (full-frame): {:?}", e);
                 }
-
-        }
+            }
         }
     }
 }

@@ -19,7 +19,7 @@ pub enum Signal {
     EndCall = 0,
 }
 ///Estructura para abstraer y encapsular que se envia por UDP.
-/// La idea es poder tener una interfaz flexible que nos permita luego del lado del receptor 
+/// La idea es poder tener una interfaz flexible que nos permita luego del lado del receptor
 /// saber cual era la intencion del mensaje.
 pub struct Message {
     pub typemsg: MsgType,

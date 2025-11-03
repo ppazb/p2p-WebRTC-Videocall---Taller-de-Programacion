@@ -24,9 +24,7 @@ impl EncoderRtc {
         let encoderh264 = Encoder::with_api_config(openh264::OpenH264API::from_source(), config)
             .map_err(|_| EncodingErrors::EncoderInit)?;
 
-        Ok(Self {
-            encoderh264
-        })
+        Ok(Self { encoderh264 })
     }
     /// funcion del encoder para encodear frames, recivimos un frame tipico de opcenCV el cual debe ser convertido
     /// a formato YUV Source para poder encodearlo con OPENH264, por lo tanto se recive el frame y se convierte a formato
@@ -56,16 +54,14 @@ impl DecoderRtc {
     ///constructor para decoder
     pub fn new_decoder() -> Result<Self, DecodingErrors> {
         let decoderh264 = Decoder::new().map_err(|_| DecodingErrors::DecodeInit)?;
-        Ok(Self {
-            decoderh264,
-        })
+        Ok(Self { decoderh264 })
     }
     /// funcion de decoding en la cual recivimos una tira de bytes, el cual primero se deserializa al frame
     /// YUV source y luego si esto funciona es convertido nuevamente a un formato compatible con OPENCV.
     /// Es necesario tener el ancho y alto en que se encodo originalment el mesaje porque pueden ser camara con calidades
-    /// distintas, por lo cual no se puede asumir sus dimensiones. El frames es recosntruido dimension a dimnension. 
+    /// distintas, por lo cual no se puede asumir sus dimensiones. El frames es recosntruido dimension a dimnension.
     /// el ciclo es bytes -> YUV -> BGR si el proceso funciona correctamente devuelve el frame en formato compatible
-    /// con OPENCV. 
+    /// con OPENCV.
     pub fn decode(
         &mut self,
         h264_data: &[u8],
