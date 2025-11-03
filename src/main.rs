@@ -7,7 +7,7 @@ fn main() -> eframe::Result<()> {
     // cargo run --bin sdp_offer <ip:port> <ip:port>
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
-        println!("Indicar los puertos local y remoto");
+        eprintln!("Indicar los puertos local y remoto");
         return Ok(());
     }
 
