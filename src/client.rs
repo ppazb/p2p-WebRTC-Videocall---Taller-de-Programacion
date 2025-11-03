@@ -110,9 +110,10 @@ impl Client {
 
                 for _ in 0..3 {
                     if let Ok(bytes) = msg.serialize()
-                        && socket_send.send(&bytes).is_err() {
-                            eprintln!("Error enviando señal EndCall");
-                        }
+                        && socket_send.send(&bytes).is_err()
+                    {
+                        eprintln!("Error enviando señal EndCall");
+                    }
                 }
                 return Ok(());
             }
@@ -258,9 +259,10 @@ impl Client {
         } else {
             // not an RTP fragment, treat as full frame
             if let Ok(frame) = decoder.decode(&video_chunk, width, height)
-                && tx_remoto.send(frame).is_err() {
-                    eprintln!("PROBLEMA envio de frame");
-                }
+                && tx_remoto.send(frame).is_err()
+            {
+                eprintln!("PROBLEMA envio de frame");
+            }
         }
     }
 }

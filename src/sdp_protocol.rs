@@ -538,7 +538,7 @@ fn try_connection(
                 connected_peer.store(true, std::sync::atomic::Ordering::SeqCst);
                 Some(stream)
             }
-            Err(_) => None
+            Err(_) => None,
         }
     });
 
