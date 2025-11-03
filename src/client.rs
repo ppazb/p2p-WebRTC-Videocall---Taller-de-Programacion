@@ -109,12 +109,10 @@ impl Client {
                 let msg = Message::new_msg_signalling(Signal::EndCall);
 
                 for _ in 0..3 {
-                    if let Ok(bytes) = msg.serialize() {
-                        if socket_send.send(&bytes).is_err() {
+                    if let Ok(bytes) = msg.serialize()
+                        && socket_send.send(&bytes).is_err() {
                             eprintln!("Error enviando señal EndCall");
-                        } else {
                         }
-                    }
                 }
                 return Ok(());
             }
@@ -251,30 +249,18 @@ impl Client {
                 }
                 chunks_hash.remove(&time_stamp);
 
-                match decoder.decode(&full, width, height) {
-                    Ok(frame) => {
-                        // println!("frame decoded");
-                        if tx_remoto.send(frame).is_err() {
-                            println!("PROBLEMA");
-                        }
-                    }
-                    Err(_) => {
-                        ()
+                if let Ok(frame) = decoder.decode(&full, width, height) {
+                    if tx_remoto.send(frame).is_err() {
+                        eprintln!("PROBLEMA");
                     }
                 }
             }
         } else {
             // not an RTP fragment, treat as full frame
-            match decoder.decode(&video_chunk, width, height) {
-                Ok(frame) => {
-                    if tx_remoto.send(frame).is_err() {
-                        eprintln!("PROBLEMA envio de frame");
-                    }
+            if let Ok(frame) = decoder.decode(&video_chunk, width, height)
+                && tx_remoto.send(frame).is_err() {
+                    eprintln!("PROBLEMA envio de frame");
                 }
-                Err(_) => {
-                    ()
-                }
-            }
         }
     }
 }
