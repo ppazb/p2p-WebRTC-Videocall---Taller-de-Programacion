@@ -145,7 +145,7 @@ impl Client {
                 //Self::process_content(msg,&mut decoder,&mut chunks_hash,& tx_remoto);
                 match msg.content {
                     Content::Signal(signal) => Self::signal_handle(signal, in_call),
-                    Content::Text(text) => continue,
+                    Content::Text(_text) => continue,
                     Content::Binary(media) => Self::video_handle(
                         media,
                         &mut decoder,
@@ -208,7 +208,7 @@ impl Client {
         let mut buff = vec![0u8; 60000];
         match socket_recev.recv(&mut buff) {
             Ok(0) => None,
-            Ok(n) => Message::deserializable(&buff[..n]).map(|msg| msg),
+            Ok(n) => Message::deserializable(&buff[..n]),
             Err(_) => None,
         }
     }
