@@ -17,3 +17,8 @@ Cargo.lock
 # Added by cargo
 
 /target
+offer.sd
+src/answer.sdp
+src/offer.sdp
+src/my_answer.sdp
+src/my_offer.sdp
