@@ -1,4 +1,4 @@
-use eframe::egui::{self, ColorImage, Frame, Margin};
+use eframe::egui::{self, Align, Color32, ColorImage, CornerRadius, Frame, Layout, Margin, RichText, Rounding, vec2};
 use crate::{camera::Camera, vista::cambio::{self, CambioVista}};
 
 pub struct VistaLobby {
@@ -34,17 +34,24 @@ impl VistaLobby {
 
         cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
 
+        // Tarjeta de usuario
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                // Contenido principal de la vista
-                ui.vertical(|ui| {
-                    ui.set_width(ui.available_width() * 0.6);
+            Frame::new()
+                .fill(Color32::LIGHT_GRAY)
+                .corner_radius(6.0)
+                .inner_margin(egui::Margin::same(8))
+                .show(ui, |ui| {
+                    ui.set_height(30.0);
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                        ui.label(RichText::new("Llamada de Prueba").strong().color(Color32::BLACK));
 
-                    if ui.button("Iniciar llamada").clicked() {
-                        cambio = CambioVista::ToCallStart;
-                    }
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("Iniciar llamada").clicked() {
+                                cambio = CambioVista::ToCallStart;
+                            }
+                        });
+                    });
                 });
-            });
         });
 
         cambio
