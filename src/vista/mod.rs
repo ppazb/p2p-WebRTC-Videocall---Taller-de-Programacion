@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use eframe::egui::{self, Color32, ColorImage, Frame, Margin, TextureHandle, Ui, Vec2};
 
 use crate::{
@@ -28,11 +30,11 @@ pub enum Vista {
 }
 
 impl Vista {
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Camera>) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
         match self {
             Vista::VistaLogin(view) => view.ui(ctx),
             Vista::VistaLobby(view) => view.ui(ctx, camara),
-            Vista::VistaLlamada(view) => view.ui(ctx),
+            Vista::VistaLlamada(view) => view.ui(ctx, camara),
             Vista::VistaCallStart(view) => view.ui(ctx, camara),
             Vista::VistaCallEnd(view) => view.ui(ctx, camara),
         }
@@ -69,7 +71,10 @@ impl Vista {
         Some(image)
     }
 
-    fn camera_preview_side_panel(ctx: &egui::Context, camera: &Option<Camera>) -> CambioVista {
+    fn camera_preview_side_panel(
+        ctx: &egui::Context,
+        camera: &Option<Arc<Mutex<Camera>>>,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::SidePanel::right("preview")
@@ -103,8 +108,10 @@ impl Vista {
                     let top_space = (ui.available_height() - 240.0 - 10.0).max(0.0) / 2.0;
                     ui.add_space(top_space);
 
-                    if let Some(cam) = &camera {
-                        if cam.is_active() {
+                    if let Some(cam) = camera {
+                        if let Ok(cam) = cam.lock()
+                            && cam.is_active()
+                        {
                             let frame = cam.get_last_frame();
 
                             let imagen;

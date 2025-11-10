@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use eframe::egui;
 
 use crate::{camera::Camera, vista::cambio::CambioVista};
@@ -15,7 +17,7 @@ impl VistaCallEnd {
         Self {}
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Camera>) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
         let mut cambio;
 
         egui::TopBottomPanel::top("menu_bar")

@@ -1,17 +1,16 @@
+use crate::camera::Camera;
 use crate::client_errors::ClientErrors;
 use crate::encoding::{DecoderRtc, EncoderRtc};
 use crate::mensaje::Message;
 use crate::mensaje::{Content, Signal};
 use crate::rtp::RtpPackage;
 use crate::sdp_protocol::*;
-use crate::video_processing;
 use crate::video_processing_errors::VideoProcessingErrors;
-use opencv::core::Mat;
-use opencv::videoio::VideoCapture;
+use opencv::core::{Mat, MatTraitConst};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::SyncSender;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use std::vec;
@@ -22,9 +21,10 @@ pub struct Client {
     socket_send: UdpSocket,
     socket_recev: UdpSocket,
     //sessions: Session,
-    tx_local: Sender<Mat>,
-    tx_remoto: Sender<Mat>,
+    tx_remoto: SyncSender<Mat>,
     in_call: Arc<AtomicBool>,
+
+    camera: Arc<Mutex<Camera>>,
 }
 
 impl Client {
@@ -32,20 +32,22 @@ impl Client {
     /// tambien recive channel para comunicarse con la UI.
     pub fn new(
         socket: UdpSocket,
-        tx_local: Sender<Mat>,
-        tx_remoto: Sender<Mat>,
+        tx_remoto: SyncSender<Mat>,
         in_call: Arc<AtomicBool>,
+        camera: Arc<Mutex<Camera>>,
     ) -> Result<Self, ClientErrors> {
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
 
         Ok(Self {
             socket_recev: socket.try_clone().map_err(ClientErrors::CantClone)?,
             socket_send: socket,
-            tx_local,
             tx_remoto,
             in_call,
+
+            camera,
         })
     }
+
     ///Se encarga de matchear y aplicaar el paseo de SDP
     pub fn handle_signalling(&self, text: String) {
         let peer_session_description = match SessionDescription::parse(&text) {
@@ -55,6 +57,7 @@ impl Client {
 
         println!("[Session Description] {}", peer_session_description);
     }
+
     ///Inicia la comunicacion entre 2 clientes genera 2 hilos de ejecucion uno como receptor y otro como emsior
     /// Dentro de cada hilo recive los componentes para poder comunicarse con la UI.
     /// Ademas cada hilo levanta los recursos necesarios: camara, decoder, encoder que necesite.
@@ -79,27 +82,25 @@ impl Client {
         });
 
         // Thread sender
-        let tx_local = self.tx_local.clone();
         let in_call = Arc::clone(&self.in_call);
+        let camera = Arc::clone(&self.camera);
 
         let sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
-            Self::sender(&socket_send, &tx_local, &in_call)
+            Self::sender(&socket_send, &camera, &in_call)
         });
         let handles = vec![receiver_thread, sender_thread];
         Ok(handles)
     }
+
     ///Levanta la camara, y se queda constantemente enviando mensajes por medio de la funcion
     /// hasta encontrarse con la señal de terminar,luego de esto enviar el mensaje de "fin" de llamada
     /// realiza este envio varias veces para asegurar que llegue a destino por estar utilizando UDP
     /// Al detectar la señal de fin de llamada le comunica esta decision a la aplicacion para un cierre correcto
     fn sender(
         socket_send: &UdpSocket,
-        tx_local: &Sender<Mat>,
+        camera: &Arc<Mutex<Camera>>,
         in_call: &Arc<AtomicBool>,
     ) -> Result<(), ClientErrors> {
-        let mut camara = video_processing::initialize_camara().map_err(|_e| {
-            ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
-        })?;
         let mut encoder = EncoderRtc::new_encoding()?;
 
         loop {
@@ -117,9 +118,10 @@ impl Client {
                 }
                 return Ok(());
             }
-            Self::send_message(socket_send, &mut camara, &mut encoder, tx_local)?;
+            Self::send_message(socket_send, camera, &mut encoder)?;
         }
     }
+
     ///Crea un decoder, y una tabla de hash y luego se queda escuchando constantemente por el socket
     /// detecta el tipo de mensaje que se recive y delega la responsabilidad a la funcion determinada
     /// pasando los recursos necesarios para permitir el funcionamiento correcto
@@ -127,11 +129,12 @@ impl Client {
     /// En caso de detectar el fin de la llamada comunica esta decision a la aplicacion para un correcto cierre.
     fn reciver(
         socket_recev: &UdpSocket,
-        tx_remoto: &Sender<Mat>,
+        tx_remoto: &SyncSender<Mat>,
         in_call: &Arc<AtomicBool>,
     ) -> Result<(), ClientErrors> {
         let mut decoder = DecoderRtc::new_decoder()?;
         let mut chunks_hash: HashMap<u64, Vec<(u32, Vec<u8>)>> = HashMap::new();
+
         loop {
             // Controlo el flag in_call para salir del thread
             if !in_call.load(Ordering::SeqCst) {
@@ -156,33 +159,41 @@ impl Client {
             }
         }
     }
+
     /// Se encarga de recibir el frame de la camara y encodearlo.
     /// Luego envia el frame tanto a la UI como por mensaje de video a los clientes.
     /// Antes de enviar el mensaje se asegura de crear un paquete RTC con el mensaje serializado
     /// para esto indexea cada parte de un mismo mensaje en un bucle para su posterior remsamblaje
     fn send_message(
         socket_send: &UdpSocket,
-        camara: &mut VideoCapture,
+        camera: &Arc<Mutex<Camera>>,
         encoder: &mut EncoderRtc,
-        tx_local: &Sender<Mat>,
     ) -> Result<(), ClientErrors> {
         let chunk_size: usize = 1200;
-        // Leo frame y lo cargo al emisor local, la UI va a leerlos cuando la cámara esté habilitada
-        let frame = video_processing::read_frame(camara).map_err(|_e| {
-            ClientErrors::VideoProcessingError(VideoProcessingErrors::CamaraSettup)
-        })?;
-        let camara_width = video_processing::get_frame_width(camara)?;
-        let camara_height = video_processing::get_frame_height(camara)?;
-        let encoded_frame = encoder.encode(&frame).unwrap_or_default();
 
-        if tx_local.send(frame).is_err() {
-            eprintln!("PROBLEMA de envio de frame a la UI");
-        }
-        if encoded_frame.is_empty() {
-            return Ok(());
+        // Tomo el lock de la cámara, y cargo el frame más reciente
+        let (frame, camara_width, camara_height) = {
+            let cam = camera.lock().map_err(|_| {
+                ClientErrors::VideoProcessingError(VideoProcessingErrors::AccessCamara)
+            })?;
+
+            if let Some(f) = cam.get_last_frame() {
+                let width = f.cols();
+                let height = f.rows();
+                (f, width, height)
+            } else {
+                // No hay frame disponible
+                return Ok(());
+            }
         };
 
-        // Serializo el frame encodeado
+        // Encodeo el frame cargado, y lo serializo para enviar los datos por el socket
+        let encoded_frame = encoder.encode(&frame).unwrap_or_default();
+
+        // if encoded_frame.is_empty() {
+        //     return Ok(());
+        // };
+
         let mut index_chunk: u32 = 0;
         for chunk in encoded_frame.chunks(chunk_size) {
             let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
@@ -198,6 +209,7 @@ impl Client {
         }
         Ok(())
     }
+
     /// Reemsambla el manesaje recibido por socket en caso de haber sido recibido completo, lo devuelve
     /// si no se recibio nada devuelve None
     fn recieve_message(socket_recev: &UdpSocket) -> Option<Message> {
@@ -208,6 +220,7 @@ impl Client {
             Err(_) => None,
         }
     }
+
     ///manejo de señal, en caso de querer cortar la llamada comunica esto
     /// la funcion nos permite agregar diversos manejos de señal en caso de ser necesario
     fn signal_handle(signal: Signal, in_call: &Arc<AtomicBool>) {
@@ -218,6 +231,7 @@ impl Client {
             }
         }
     }
+
     /// Funcion encargada de maneja el video al ser recibido, utiliza el hash map para reemsamblar el frame antes de decodearlo
     /// utilizando el time stamp y el indice que se agrega al momento de encodearlo de esta manera podemos saber y agrupar que
     /// chunks de video pertenecen al mismo frame y deben ir juntas, una vez que se recive el ultimo chunk (siempre es el mas chico)
@@ -233,7 +247,7 @@ impl Client {
         chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,
         width: i32,
         height: i32,
-        tx_remoto: &Sender<Mat>,
+        tx_remoto: &SyncSender<Mat>,
     ) {
         let chunk_size = 1200;
         if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
@@ -251,14 +265,18 @@ impl Client {
                 chunks_hash.remove(&time_stamp);
 
                 if let Ok(frame) = decoder.decode(&full, width, height)
-                    && tx_remoto.send(frame).is_err() {
-                        eprintln!("PROBLEMA");
-                    }
+                    && tx_remoto.try_send(frame).is_err()
+                {
+                    // Intento enviar frame a la interfaz
+                    // El envío puede fallar si ya hay un frame en el syncchannel que no se mostró todavía
+                    // Esto evita también que se acumulen frames con la app minimizada
+                    eprintln!("VIDEO HANDLE: UI tiene un frame sin leer!");
+                }
             }
         } else {
             // not an RTP fragment, treat as full frame
             if let Ok(frame) = decoder.decode(&video_chunk, width, height)
-                && tx_remoto.send(frame).is_err()
+                && tx_remoto.try_send(frame).is_err()
             {
                 eprintln!("PROBLEMA envio de frame");
             }

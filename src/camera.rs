@@ -5,10 +5,12 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use crate::{video_processing, video_processing_errors::VideoProcessingErrors};
 
+#[derive(Debug)]
 pub struct Camera {
     is_active: Arc<AtomicBool>,
     last_frame: Arc<Mutex<Option<Mat>>>,
@@ -49,6 +51,7 @@ impl Camera {
                     return Ok(());
                 }
             };
+
             video_processing::camara_set_properties(&mut cam)?;
             // Loop de captura mientras la cámara esté habilitada
             while is_active.load(Ordering::Relaxed) {
@@ -62,6 +65,9 @@ impl Camera {
                         eprintln!("CAMARA: Error leyendo frame: {:?}", e);
                     }
                 }
+
+                // Sleep entre frames de video placeholder
+                thread::sleep(Duration::from_millis(33));
             }
 
             Ok(())

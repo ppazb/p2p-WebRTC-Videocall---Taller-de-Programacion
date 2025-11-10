@@ -1,7 +1,7 @@
 use std::net::UdpSocket;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use crate::camera::Camera;
@@ -20,7 +20,7 @@ use opencv::core::Mat;
 pub struct AppUI {
     // Disposición de widgets
     vista_actual: Vista,
-    camara: Option<Camera>,
+    camara: Option<Arc<Mutex<Camera>>>,
 
     // Elementos para conexión entre clientes
     pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
@@ -33,8 +33,7 @@ pub struct AppUI {
     // Elementos para envío y recepción de datos
     cliente: Option<Client>,
     client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
-    rx_local: Option<Receiver<Mat>>,
-    rx_remoto: Option<Receiver<Mat>>,
+    rx_remoto: Option<Receiver<Mat>>, // Canal de recepción para UI
     in_call: Arc<AtomicBool>,
 }
 
@@ -49,7 +48,6 @@ impl AppUI {
         Self {
             vista_actual: Vista::VistaLogin(VistaLogin::new()),
             cliente: None,
-            rx_local: None,
             rx_remoto: None,
             in_call: Arc::new(AtomicBool::new(false)),
 
@@ -94,7 +92,6 @@ impl AppUI {
                 // Desde CallStart
                 // Envío los receptores a la vista (dejan de estar disponibles en AppUI)
                 self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
-                    self.rx_local.take(),
                     self.rx_remoto.take(),
                     Arc::clone(&self.in_call),
                 ))
@@ -117,7 +114,6 @@ impl AppUI {
 
     fn liberar_recursos(&mut self) {
         self.cliente = None;
-        self.rx_local = None;
         self.rx_remoto = None;
         self.in_call.store(false, Ordering::Relaxed);
 
@@ -136,18 +132,22 @@ impl AppUI {
         let mut camara = Camera::new();
         camara.enable_camera();
 
-        self.camara = Some(camara);
+        self.camara = Some(Arc::new(Mutex::new(camara)));
     }
 
     fn iniciar_camara(&mut self) {
-        if let Some(cam) = &mut self.camara {
-            cam.enable_camera();
+        if let Some(cam) = &self.camara
+            && let Ok(mut c) = cam.lock()
+        {
+            c.enable_camera();
         }
     }
 
     fn detener_camara(&mut self) {
-        if let Some(cam) = &mut self.camara {
-            cam.disable_camera();
+        if let Some(cam) = &self.camara
+            && let Ok(mut c) = cam.lock()
+        {
+            c.disable_camera();
         }
     }
 
@@ -208,19 +208,24 @@ impl AppUI {
     }
 
     pub fn crear_cliente(&mut self, socket: UdpSocket) {
-        // Creo channels para la transmisión y recepción de frames, de ambas cámaras
-        let (tx_local, rx_local) = std::sync::mpsc::channel();
-        let (tx_remoto, rx_remoto) = std::sync::mpsc::channel();
-
-        // Los receptores son atributos de la app, usados durante la llamada
-        self.rx_local = Some(rx_local);
+        // Creo channel para la recepción de frames remotos, y el envío a la vista
+        let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
         self.rx_remoto = Some(rx_remoto);
 
         // Cargo e inicializo los threads de envío y recepción de frames
-        let cliente = Client::new(socket, tx_local, tx_remoto, Arc::clone(&self.in_call));
-        if let Ok(c) = cliente {
-            self.client_handles = c.initialize_call();
-            self.cliente = Some(c);
+        if let Some(cam) = &self.camara {
+            let cliente = Client::new(
+                socket,
+                tx_remoto,
+                Arc::clone(&self.in_call),
+                Arc::clone(cam),
+            );
+            if let Ok(c) = cliente {
+                self.client_handles = c.initialize_call();
+                self.cliente = Some(c);
+            }
+        } else {
+            eprintln!("CAMARA NO INICIALIZADA!");
         }
     }
 
@@ -239,7 +244,7 @@ impl AppUI {
                     // Creo el nuevo cliente
                     match result {
                         Ok(s) => {
-                            self.liberar_camara(); // Cierro la cámara para usarla en el thread de envío
+                            //self.liberar_camara(); // Cierro la cámara para usarla en el thread de envío
                             self.pedido_socket = None;
 
                             self.crear_cliente(s);
