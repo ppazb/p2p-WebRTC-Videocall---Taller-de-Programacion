@@ -133,7 +133,7 @@ impl Client {
         in_call: &Arc<AtomicBool>,
     ) -> Result<(), ClientErrors> {
         let mut decoder = DecoderRtc::new_decoder()?;
-        let mut chunks_hash: HashMap<u64, Vec<(u32, Vec<u8>)>> = HashMap::new();
+        let mut chunks_hash: HashMap<u32, Vec<(u16, Vec<u8>)>> = HashMap::new();
 
         loop {
             // Controlo el flag in_call para salir del thread
@@ -194,7 +194,7 @@ impl Client {
         //     return Ok(());
         // };
 
-        let mut index_chunk: u32 = 0;
+        let mut index_chunk: u16 = 0;
         for chunk in encoded_frame.chunks(chunk_size) {
             let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
             let rtp_bytes = rtp_package.to_bytes();
@@ -244,7 +244,7 @@ impl Client {
     fn video_handle(
         video_chunk: Vec<u8>,
         decoder: &mut DecoderRtc,
-        chunks_hash: &mut HashMap<u64, Vec<(u32, Vec<u8>)>>,
+        chunks_hash: &mut HashMap<u32, Vec<(u16, Vec<u8>)>>,
         width: i32,
         height: i32,
         tx_remoto: &SyncSender<Mat>,
@@ -253,7 +253,7 @@ impl Client {
         if let Some(rtp) = RtpPackage::from_bytes(&video_chunk) {
             let time_stamp = rtp.time_stamp;
             let entry = chunks_hash.entry(time_stamp).or_default();
-            entry.push((rtp.index, rtp.payload));
+            entry.push((rtp.secuence_number, rtp.payload));
 
             if entry.last().map(|(_, p)| p.len()).unwrap_or(0) < chunk_size {
                 // reassemble
@@ -262,7 +262,7 @@ impl Client {
                 for (_, p) in entry.drain(..) {
                     full.extend(p);
                 }
-                chunks_hash.remove(&time_stamp);
+                chunks_hash.remove(& time_stamp);
 
                 if let Ok(frame) = decoder.decode(&full, width, height)
                     && tx_remoto.try_send(frame).is_err()
