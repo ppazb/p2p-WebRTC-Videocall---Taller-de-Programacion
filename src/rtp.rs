@@ -58,9 +58,9 @@ impl RtpPackage {
         let version:u8 = (data[0] >> 6) & 0x03;
         let padding = (data[0] & 0x20) != 0;
         let extension = (data[0] & 0x10) != 0;
-        let csrs_count = (data[0] & 0x0F);
+        let csrs_count = data[0] & 0x0F;
         let maker = (data[1] & 0x80) != 0;
-        let payload_type = (data[1] & 0x7F);
+        let payload_type = data[1] & 0x7F;
         let index: u16 = u16::from_be_bytes([data[2], data[3]]);
         let time_stamp = u32::from_be_bytes([
             data[4], data[5], data[6], data[7]
@@ -74,15 +74,15 @@ impl RtpPackage {
         };
         Some(
         Self {
-            version: version,
-            padding: padding,
-            extension:extension,
+            version,
+            padding,
+            extension,
             csrc_count:csrs_count,
-            maker:maker,
-            payload_type: payload_type,
+            maker,
+            payload_type,
             secuence_number:index,
-            time_stamp: time_stamp,//Utc::now().timestamp_millis() as u32,
-            ssrc: ssrc,
+            time_stamp,
+            ssrc,
             payload,
         }
     )
