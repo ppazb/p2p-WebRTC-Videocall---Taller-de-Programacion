@@ -215,12 +215,14 @@ impl AppUI {
         // Cargo e inicializo los threads de envío y recepción de frames
         if let Some(cam) = &self.camara {
             let cliente = Client::new(
-                socket,
                 tx_remoto,
                 Arc::clone(&self.in_call),
                 Arc::clone(cam),
             );
-            if let Ok(c) = cliente {
+            if let Ok(mut c) = cliente {
+                let _ = c.add_peer(socket);
+                // c.set_rol(true); Esto debemos sacarlo de SDP
+                //let _ = c.perform_dtls_handshake(); //No hace nada todavia
                 self.client_handles = c.initialize_call();
                 self.cliente = Some(c);
             }

@@ -12,18 +12,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::vec;
 use std::{net::UdpSocket, thread};
-
+extern crate dimpl;
 #[derive(Debug)]
 pub struct Client {
-    socket_send: UdpSocket,
-    socket_recev: UdpSocket,
-    //sessions: Session,
+    socket_send: Option<UdpSocket>,
+    socket_recev: Option<UdpSocket>,
     tx_remoto: SyncSender<Mat>,
     in_call: Arc<AtomicBool>,
-
+    is_active_comunicator: Arc<AtomicBool>,
     camera: Arc<Mutex<Camera>>,
 }
 
@@ -31,23 +30,29 @@ impl Client {
     ///Constructor de cliente, requiere de un socket para generar un receptor y un emisor
     /// tambien recive channel para comunicarse con la UI.
     pub fn new(
-        socket: UdpSocket,
         tx_remoto: SyncSender<Mat>,
         in_call: Arc<AtomicBool>,
-        camera: Arc<Mutex<Camera>>,
+        camera: Arc<Mutex<Camera>>
     ) -> Result<Self, ClientErrors> {
-        socket.set_read_timeout(Some(Duration::from_millis(100)))?;
 
         Ok(Self {
-            socket_recev: socket.try_clone().map_err(ClientErrors::CantClone)?,
-            socket_send: socket,
+            socket_recev: None,
+            socket_send: None,
             tx_remoto,
             in_call,
-
+            is_active_comunicator: Arc::new(AtomicBool::new(false)), //por defecto desativado,
             camera,
         })
     }
-
+    pub fn add_peer(&mut self,socket: UdpSocket) -> Result<(), ClientErrors> {
+        socket.set_read_timeout(Some(Duration::from_millis(100)))?;
+        self.socket_recev = Some (socket.try_clone().map_err(ClientErrors::CantClone)?);
+        self.socket_send = Some (socket);
+        Ok(())
+    }
+    pub fn set_rol(&self,is_client:bool) {
+        self.is_active_comunicator.store(is_client, Ordering::SeqCst);
+    }
     ///Se encarga de matchear y aplicaar el paseo de SDP
     pub fn handle_signalling(&self, text: String) {
         let peer_session_description = match SessionDescription::parse(&text) {
@@ -67,10 +72,15 @@ impl Client {
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self
             .socket_recev
+            .as_ref()
+            .ok_or(ClientErrors::SocketNotInitialized)?
             .try_clone()
             .map_err(ClientErrors::CantClone)?;
+
         let socket_send = self
             .socket_send
+            .as_ref()
+            .ok_or(ClientErrors::SocketNotInitialized)?
             .try_clone()
             .map_err(ClientErrors::CantClone)?;
         // Thread receiver
@@ -282,4 +292,67 @@ impl Client {
             }
         }
     }
+    pub fn perform_dtls_handshake(&self) -> Result<bool,ClientErrors> {
+        let certificate = dimpl::certificate::generate_self_signed_certificate()?;
+        let config = Arc::new(dimpl::Config::default());
+        let mut dtls = dimpl::Dtls::new(config, certificate.certificate, certificate.private_key);
+
+        let mut buf_in = vec![0u8;2048];
+        let mut buf_out = vec![0u8;2048];
+        dtls.set_active(self.is_active_comunicator.load(Ordering::SeqCst));
+
+        //let instant = Instant::now();
+        //let handshake_timeout = Duration::from_secs(10);
+        loop {
+            
+            loop {
+                match dtls.poll_output(&mut buf_out) {
+                    dimpl::Output::Packet(pkt) => {
+                        self.socket_send
+                        .as_ref()
+                        .ok_or(ClientErrors::SocketNotInitialized)?
+                        .send(pkt)?;
+                    }
+                    dimpl::Output::Connected => break,
+                    dimpl::Output::PeerCert(_c) => {}
+                    dimpl::Output::KeyingMaterial(_km,_profile ) => {
+                        continue;
+                        
+
+                    }
+                    dimpl::Output::ApplicationData(_data) => {},
+                    dimpl::Output::Timeout(t) => {
+                        let now = Instant::now();
+                        if t > now {
+                            std::thread::sleep(t-now);
+                        }
+                        break;
+                    }
+
+                }
+                }
+                if let Some(ref s) = self.socket_recev {
+                    match s.recv(&mut buf_in) {
+                        Ok(n) => {
+                            if let Err(_e) = dtls.handle_packet(&buf_in[..n]) {
+                                // manejo del error interno si corresponde
+                            }
+                        }
+                        Err(ref e)
+                            if e.kind() == std::io::ErrorKind::WouldBlock
+                                || e.kind() == std::io::ErrorKind::TimedOut =>
+                        {
+                            continue;
+                        }
+                        Err(e) => {
+                            return Err(ClientErrors::CantConect(e));
+                        }
+                    }
+                } else {
+                    return Err(ClientErrors::SocketNotInitialized);
+                }
+    }
+
+
+    } 
 }
