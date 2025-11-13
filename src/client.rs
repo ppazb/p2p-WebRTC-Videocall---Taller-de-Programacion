@@ -87,6 +87,10 @@ impl Client {
         let tx_remoto = self.tx_remoto.clone();
         let in_call = Arc::clone(&self.in_call);
 
+        if !self.perform_dtls_handshake().is_ok() {
+            println!("NO FUNCO DTLS");
+            return Err(ClientErrors::SocketNotInitialized)
+        }
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             Self::reciver(&socket_recev, &tx_remoto, &in_call)
         });
@@ -297,62 +301,70 @@ impl Client {
         let config = Arc::new(dimpl::Config::default());
         let mut dtls = dimpl::Dtls::new(config, certificate.certificate, certificate.private_key);
 
-        let mut buf_in = vec![0u8;2048];
-        let mut buf_out = vec![0u8;2048];
+        let mut buf_in = vec![0u8; 2048];
+        let mut buf_out = vec![0u8; 2048];
         dtls.set_active(self.is_active_comunicator.load(Ordering::SeqCst));
+        if let Err(e) = dtls.handle_timeout(Instant::now()) {
+            eprintln!("DTLS initial handle_timeout error: {:?}", e);
+        }
 
-        //let instant = Instant::now();
-        //let handshake_timeout = Duration::from_secs(10);
+        let handshake_start = Instant::now();
+        let handshake_timeout = Duration::from_secs(10);
         loop {
-            
             loop {
                 match dtls.poll_output(&mut buf_out) {
                     dimpl::Output::Packet(pkt) => {
-                        self.socket_send
-                        .as_ref()
-                        .ok_or(ClientErrors::SocketNotInitialized)?
-                        .send(pkt)?;
+                        if let Some(ref s) = self.socket_send {
+                            if let Err(e) = s.send(pkt) {
+                                return Err(ClientErrors::CantSendMsg(e));
+                            }
+                        } else {
+                            return Err(ClientErrors::SocketNotInitialized);
+                        }
                     }
-                    dimpl::Output::Connected => break,
-                    dimpl::Output::PeerCert(_c) => {}
-                    dimpl::Output::KeyingMaterial(_km,_profile ) => {
-                        continue;
-                        
-
+                    dimpl::Output::Connected => {
+                        return Ok(true);
                     }
-                    dimpl::Output::ApplicationData(_data) => {},
-                    dimpl::Output::Timeout(t) => {
+                    dimpl::Output::PeerCert(_c) => {
+                    }
+                    dimpl::Output::KeyingMaterial(_km, _profile) => {
+                    }
+                    dimpl::Output::ApplicationData(_data) => {
+                    }
+                    dimpl::Output::Timeout(deadline) => {
                         let now = Instant::now();
-                        if t > now {
-                            std::thread::sleep(t-now);
+                        if deadline > now {
+                            std::thread::sleep(deadline - now);
+                        }
+                        if let Err(e) = dtls.handle_timeout(Instant::now()) {
+                            eprintln!("DTLS handle_timeout error: {:?}", e);
                         }
                         break;
                     }
+                }
+            }
 
-                }
-                }
-                if let Some(ref s) = self.socket_recev {
-                    match s.recv(&mut buf_in) {
-                        Ok(n) => {
-                            if let Err(_e) = dtls.handle_packet(&buf_in[..n]) {
-                                // manejo del error interno si corresponde
-                            }
-                        }
-                        Err(ref e)
-                            if e.kind() == std::io::ErrorKind::WouldBlock
-                                || e.kind() == std::io::ErrorKind::TimedOut =>
-                        {
-                            continue;
-                        }
-                        Err(e) => {
-                            return Err(ClientErrors::CantConect(e));
+            if let Some(ref s) = self.socket_recev {
+                match s.recv(&mut buf_in) {
+                    Ok(n) => {
+                        if let Err(e) = dtls.handle_packet(&buf_in[..n]) {
+                            eprintln!("DTLS handle_packet error: {:?}", e);
                         }
                     }
-                } else {
-                    return Err(ClientErrors::SocketNotInitialized);
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                    }
+                    Err(e) => {
+                        return Err(ClientErrors::CantConect(e));
+                    }
                 }
+            } else {
+                return Err(ClientErrors::SocketNotInitialized);
+            }
+            if handshake_start.elapsed() > handshake_timeout {
+                return Ok(false);
+            }
+        }
     }
-
-
-    } 
 }
