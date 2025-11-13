@@ -21,3 +21,5 @@ pub mod client_errors;
 pub mod app;
 pub mod camera;
 pub mod vista;
+pub mod config;
+pub mod signalling_error;

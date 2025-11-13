@@ -1,12 +1,14 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
+use room_rtc::config::get_config_app;
 use room_rtc::sdp_protocol::*;
+use room_rtc::config; 
 
 fn main() {
     // cargo run --bin sdp_offer <ip:port> <ip:port>
 
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
+    if args.len() != 2 {
         return;
     }
 
@@ -20,20 +22,28 @@ fn main() {
     // Solamente cambiar "192.168.0.109 8000" el resto no.
 
     // RECORDAR: Si lo corren en dos compus cada compu cambia lo suyo
-    let ice_info = match sdp_handshake(Arc::new(AtomicBool::new(true)), &args[1], &args[2]) {
+    // let ice_info = match sdp_handshake(Arc::new(AtomicBool::new(true)), &args[1], &args[2]) {
+    //     Err(e) => {
+    //         eprintln!("SDP Handshake error: {}", e);
+    //         return;
+    //     }
+    //     Ok(info) => info,
+    // };
+    let session_info = match get_config_app(&args[1]) {
+        Ok(s) => s, 
         Err(e) => {
-            eprintln!("SDP Handshake error: {}", e);
-            return;
+            eprint!("Error config: {:?}", e);
+            return; 
         }
-        Ok(info) => info,
-    };
+    }; 
+    let _ = sdp_handshake(Arc::new(AtomicBool::new(true)), session_info.sdp_handshake);
 
     // La terminal que fue el lado que envió el Offer mostrará algo como: [DEBUG] LADO OFFER
     // La termina que fue el lado que recibió Offer y envió Answer mostrará algo como: [DEBUG] LADO ANSWER
 
-    println!("[DEBUG] ICE info local: {:?}\n", ice_info.0);
-    println!("[DEBUG] ICE info peer: {:?}\n", ice_info.1);
-    println!("[DEBUG] Codecs: {:?}\n", ice_info.2);
+    // println!("[DEBUG] ICE info local: {:?}\n", ice_info.0);
+    // println!("[DEBUG] ICE info peer: {:?}\n", ice_info.1);
+    // println!("[DEBUG] Codecs: {:?}\n", ice_info.2);
 
     // Se debe mostrar algo así:
     // [DEBUG] ICE info local: ["192.168.0.109:8000", "192.168.0.109:8001", "192.168.0.109:8002", "192.168.0.109:8080"]

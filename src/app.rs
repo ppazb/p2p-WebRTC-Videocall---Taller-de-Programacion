@@ -7,6 +7,7 @@ use std::thread::JoinHandle;
 use crate::camera::Camera;
 use crate::client::Client;
 use crate::client_errors::ClientErrors;
+use crate::config::{AppParameters, SdpHandshakeParameters};
 use crate::ice::{crear_conexion_ice, elegir_codec};
 use crate::sdp_errors::SdpError;
 use crate::sdp_protocol::sdp_handshake;
@@ -27,8 +28,7 @@ pub struct AppUI {
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
 
     // DEBUG: puertos para cliente
-    local_adr: String,
-    remote_adr: String,
+    app_params: AppParameters,
 
     // Elementos para envío y recepción de datos
     cliente: Option<Client>,
@@ -44,7 +44,8 @@ impl Drop for AppUI {
 }
 
 impl AppUI {
-    pub fn new(local_adr: String, remote_adr: String) -> Self {
+    // Modifico firma AppUI
+    pub fn new(app_params: AppParameters) -> Self {
         Self {
             vista_actual: Vista::VistaLogin(VistaLogin::new()),
             cliente: None,
@@ -55,8 +56,7 @@ impl AppUI {
             handshake_handle: None,
             client_handles: Ok(Vec::new()),
 
-            local_adr,
-            remote_adr,
+            app_params,
 
             camara: None,
         }
@@ -160,8 +160,12 @@ impl AppUI {
         self.in_call.store(true, Ordering::SeqCst);
 
         // Copias necesarias para mover al thread
-        let my_address = self.local_adr.clone();
-        let peer = self.remote_adr.clone();
+
+        let handshake_params: SdpHandshakeParameters = self.app_params.sdp_handshake.clone(); 
+
+        // let my_address = self.app_params.local_adder.clone();
+        // let server_address = self.app_params.server_adder.clone(); 
+        // let peer = self.remote_adr.clone();
         let in_call = Arc::clone(&self.in_call); // USAR IN_CALL PARA CANCELAR LA SOLICITUD!!
 
         // Canal para devolver el nuevo socket
@@ -169,7 +173,7 @@ impl AppUI {
 
         let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
             //SDP
-            let ice_info = match sdp_handshake(in_call, my_address.as_str(), peer.as_str()) {
+            let ice_info = match sdp_handshake(in_call, handshake_params) {
                 Err(e) => {
                     eprintln!("SDP Handshake error: {}", e);
                     let _ = tx_result.send(Err(e.clone()));

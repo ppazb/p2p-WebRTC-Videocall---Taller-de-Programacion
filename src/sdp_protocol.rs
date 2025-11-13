@@ -7,6 +7,9 @@
 // a=rtpmap:0 PCMU/8000
 // a=candidate: 196.168.0.1 80000
 
+use serde::{Deserialize, Serialize};
+
+use crate::config::SdpHandshakeParameters;
 use crate::sdp_errors::SdpError;
 use std::fs;
 use std::io::{BufReader, Read, Write};
@@ -70,7 +73,7 @@ impl SessionDescription {
         }
     }
 
-    fn create_prov(local_addr: &str) -> Result<Self, SdpError> {
+    fn create(local_addr: &str) -> Result<Self, SdpError> {
         if let Some((ip, port)) = local_addr.split_once(':') {
             let version = 0;
             let session_name = "demo";
@@ -470,7 +473,7 @@ fn generate_offer(session_descrip: &SessionDescription, file_path: &str) -> Resu
 }
 
 fn create_sdp_offer(local_adder: &str, file_path: &str) -> Result<SessionDescription, SdpError> {
-    let session_description = SessionDescription::create_prov(local_adder)?;
+    let session_description = SessionDescription::create(local_adder)?;
 
     let _offer = generate_offer(&session_description, file_path)?;
 
@@ -582,141 +585,81 @@ fn try_connection(
     Ok(stream)
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct SignallingMessage {
+    user_name: String, 
+    user_id: String, 
+    password: String, 
+    offer: String
+}
+
+impl SignallingMessage {
+
+    pub fn new(user_name: &str, user_id: usize, password: &str, offer: String) -> Self {
+        Self {
+            user_name: user_name.to_string(), 
+            user_id: user_id.to_string(),
+            password: password.to_string(), 
+            offer
+        }
+    }
+
+    pub fn generate_message(&self) -> String {
+
+        let mut message = match serde_json::to_string(self) {
+            Ok(m) => m, 
+            Err(e) => {
+                eprintln!("[DEBUG] Signalling Message Error"); 
+                return String::new(); 
+            }
+        }; 
+
+        message.push('\n');
+        message
+    }
+}
+
+
 // Realiza el Handshake SDP entre dos peers, intercambiando a través de TCPSocket que simula el pasaje por Signalling Server
 // devuelve 3 Vectores, uno con las direcciones ICE del peer local, otro con las direcciones ICE del peer remoto y con los codecs
 pub fn sdp_handshake(
     in_call: Arc<AtomicBool>,
-    local_adder: &str,
-    peer_adder: &str,
+    handshake_params: SdpHandshakeParameters, 
 ) -> Result<(Vec<String>, Vec<String>, Vec<String>), SdpError> {
     println!(
-        "\n\n[DEBUG] Iniciando SDP Handshake entre {} y {}\n",
-        local_adder, peer_adder
+        "\n\n[DEBUG] Iniciando SDP Handshake con local adder {} y signalling adder {}\n",
+        handshake_params.local_adder, handshake_params.server_adder
     );
 
-    // Ej: local 196.168.0.109:8000
-    //     peer 196.168.0.109:8001
+    let mut server_stream = match std::net::TcpStream::connect(&handshake_params.server_adder) {
+        Ok(stream) => stream,
+        Err(_) => return Err(SdpError::ConnectionError),
+    }; 
 
-    // Abro el listener TCP y escucho en mi local 8000
-    let local_adder_signalling = local_adder.to_string();
-    let peer_adder_singnalling = peer_adder.to_string();
-    let mut stream = try_connection(in_call, &local_adder_signalling, &peer_adder_singnalling)?;
+    let sdp_offer_session_descrip = match create_sdp_offer(&handshake_params.local_adder, &handshake_params.offer_path) {
+        Ok(sd) => sd, 
+        Err(e) => return Err(SdpError::OfferFileCreationError), 
+    }; 
+    // Levanto mi Offer del archivo
+    let my_offer = fs::read_to_string(&handshake_params.offer_path)
+    .map_err(|_| SdpError::Other(String::from("Read Offer error")))?;
 
-    let offer_my_session = create_sdp_offer(local_adder, "src/my_offer.sdp")?;
-    let mut my_ice_candidates =
-        Attribute::extract_ice_information(&offer_my_session.media.attributes)?.candidates;
+    let message_offer = SignallingMessage::new(&sdp_offer_session_descrip.origin.username, 
+                                                                    sdp_offer_session_descrip.origin.session_id,
+                                                                            "abc123", 
+                                                                        my_offer); 
 
-    // Para separar quién envía el Offer y quién recibe el Offer y envía el Answer
-    if local_adder < peer_adder {
-        // Soy quién envía mi offer y recibo el Answer de mi peer
+    server_stream
+    .write_all(message_offer.generate_message().as_bytes())
+    .map_err(|_| SdpError::OfferFileWriteError)?;
+    server_stream
+    .flush()
+    .map_err(|_| SdpError::Other(String::from("[LADO ENVIO OFFER] Flush error")))?;
+    // let _ = server_stream.shutdown(std::net::Shutdown::Write);
 
-        println!("[DEBUG] Lado Enviar Offer: {:?}\n", offer_my_session);
 
-        // Levanto mi Offer del archivo
-        let my_offer = fs::read_to_string("src/my_offer.sdp")
-            .map_err(|_| SdpError::Other(String::from("Read my_offer error")))?;
-        let client_answer_session_description;
 
-        // Envío mi Offer por el TcpStream de signalling
-        stream
-            .write_all(my_offer.as_bytes())
-            .map_err(|_| SdpError::OfferFileWriteError)?;
-        stream
-            .flush()
-            .map_err(|_| SdpError::Other(String::from("[LADO ENVIO OFFER] Flush error")))?;
-        let _ = stream.shutdown(std::net::Shutdown::Write);
-
-        // Espero para leer el Answer del peer
-        let mut reader = BufReader::new(&mut stream);
-        let mut signal_str = String::new();
-        let _ = reader.read_to_string(&mut signal_str);
-
-        let _ = stream.shutdown(std::net::Shutdown::Read);
-
-        // SessionDescription del Answer recibido
-        match signal_str.strip_prefix("answer\n") {
-            Some(answer_client) => {
-                client_answer_session_description = SessionDescription::parse(answer_client)?;
-                println!(
-                    "[DEBUG] LADO OFFER Answer Recibido: {:?}\n",
-                    client_answer_session_description
-                );
-            }
-            None => {
-                return Err(SdpError::IncompatibleSession);
-            }
-        };
-
-        // Parseo y obtengo el Codec compartido, mis ICE Candidates y los del peer
-        let codec =
-            MediaDescription::get_codec(&client_answer_session_description.media.attributes)?;
-
-        let mut ice_candidates_peer =
-            Attribute::get_ice_candidate(&client_answer_session_description.media.attributes)?;
-        ice_candidates_peer.push(peer_adder.to_string());
-        my_ice_candidates.push(local_adder.to_string());
-
-        Ok((
-            my_ice_candidates,
-            ice_candidates_peer,
-            vec![codec.to_string()],
-        ))
-    } else {
-        // Soy quien recibo el Offer y creo el Answer
-
-        println!("[DEBUG] Lado Enviar Answer: {:?}\n", offer_my_session);
-
-        let mut reader = BufReader::new(&mut stream);
-        let mut signal_str = String::new();
-        let _ = reader.read_to_string(&mut signal_str);
-
-        let _ = stream.shutdown(std::net::Shutdown::Read);
-
-        // SessionDescription del Offer recibido
-        let sdp_offer: SessionDescription = SessionDescription::default();
-        // SessionDescription de mi Answer a generar
-        let answer_peer_session;
-
-        // Parseo del Offer recibido y creo mi Answer
-        match signal_str.strip_prefix("offer\n") {
-            Some(offer_sent) => {
-                let sdp_offer = SessionDescription::parse(offer_sent)?;
-                println!("[DEBUG] LADO ANSWER Offer Recibido: {:?}\n", sdp_offer);
-
-                answer_peer_session =
-                    create_sdp_answer(&offer_my_session, &sdp_offer, "src/my_answer.sdp")?;
-                println!(
-                    "[DEBUG] LADO ANSWER Answer Creado: {:?}\n",
-                    answer_peer_session
-                );
-
-                let answer = fs::read_to_string("src/my_answer.sdp")
-                    .map_err(|_| SdpError::Other(String::from("Read answer_peer error")))?;
-
-                stream
-                    .write_all(answer.as_bytes())
-                    .map_err(|_| SdpError::IncompatibleSession)?;
-                stream
-                    .flush()
-                    .map_err(|_| SdpError::Other(String::from("Flush error")))?;
-                let _ = stream.shutdown(std::net::Shutdown::Write);
-            }
-            None => return Err(SdpError::IncompatibleSession),
-        }
-
-        // Parse y obtengo el Codec compartido, mis ICE Candidates y los del peer
-        // en este caso los ICE candidates del peer vienen del Offer recibido
-        let codec = MediaDescription::get_codec(&answer_peer_session.media.attributes)?;
-        let mut ice_candidates_peer = Attribute::get_ice_candidate(&sdp_offer.media.attributes)?;
-        ice_candidates_peer.push(peer_adder.to_string());
-        my_ice_candidates.push(local_adder.to_string());
-
-        Ok((
-            my_ice_candidates,
-            ice_candidates_peer,
-            vec![codec.to_string()],
-        ))
-    }
+    Ok((vec![], vec![], vec![]))
 }
 
 #[test]
