@@ -1,8 +1,8 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
+use room_rtc::config;
 use room_rtc::config::get_config_app;
 use room_rtc::sdp_protocol::*;
-use room_rtc::config; 
 
 fn main() {
     // cargo run --bin sdp_offer <ip:port> <ip:port>
@@ -30,12 +30,12 @@ fn main() {
     //     Ok(info) => info,
     // };
     let session_info = match get_config_app(&args[1]) {
-        Ok(s) => s, 
+        Ok(s) => s,
         Err(e) => {
             eprint!("Error config: {:?}", e);
-            return; 
+            return;
         }
-    }; 
+    };
     let _ = sdp_handshake(Arc::new(AtomicBool::new(true)), session_info.sdp_handshake);
 
     // La terminal que fue el lado que envió el Offer mostrará algo como: [DEBUG] LADO OFFER

@@ -161,10 +161,10 @@ impl AppUI {
 
         // Copias necesarias para mover al thread
 
-        let handshake_params: SdpHandshakeParameters = self.app_params.sdp_handshake.clone(); 
+        let handshake_params: SdpHandshakeParameters = self.app_params.sdp_handshake.clone();
 
         // let my_address = self.app_params.local_adder.clone();
-        // let server_address = self.app_params.server_adder.clone(); 
+        // let server_address = self.app_params.server_adder.clone();
         // let peer = self.remote_adr.clone();
         let in_call = Arc::clone(&self.in_call); // USAR IN_CALL PARA CANCELAR LA SOLICITUD!!
 
@@ -218,11 +218,7 @@ impl AppUI {
 
         // Cargo e inicializo los threads de envío y recepción de frames
         if let Some(cam) = &self.camara {
-            let cliente = Client::new(
-                tx_remoto,
-                Arc::clone(&self.in_call),
-                Arc::clone(cam),
-            );
+            let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
                 // c.set_rol(true); Esto debemos sacarlo de SDP

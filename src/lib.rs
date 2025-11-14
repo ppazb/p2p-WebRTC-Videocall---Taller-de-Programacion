@@ -20,6 +20,9 @@ pub mod client_errors;
 
 pub mod app;
 pub mod camera;
-pub mod vista;
 pub mod config;
 pub mod signalling_error;
+pub mod vista;
+
+pub mod server_users;
+pub mod server_users_errors;

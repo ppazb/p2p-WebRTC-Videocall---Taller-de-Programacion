@@ -587,44 +587,41 @@ fn try_connection(
 
 #[derive(Serialize, Deserialize, Debug)]
 struct SignallingMessage {
-    user_name: String, 
-    user_id: String, 
-    password: String, 
-    offer: String
+    user_name: String,
+    user_id: String,
+    password: String,
+    offer: String,
 }
 
 impl SignallingMessage {
-
     pub fn new(user_name: &str, user_id: usize, password: &str, offer: String) -> Self {
         Self {
-            user_name: user_name.to_string(), 
+            user_name: user_name.to_string(),
             user_id: user_id.to_string(),
-            password: password.to_string(), 
-            offer
+            password: password.to_string(),
+            offer,
         }
     }
 
     pub fn generate_message(&self) -> String {
-
         let mut message = match serde_json::to_string(self) {
-            Ok(m) => m, 
+            Ok(m) => m,
             Err(e) => {
-                eprintln!("[DEBUG] Signalling Message Error"); 
-                return String::new(); 
+                eprintln!("[DEBUG] Signalling Message Error");
+                return String::new();
             }
-        }; 
+        };
 
         message.push('\n');
         message
     }
 }
 
-
 // Realiza el Handshake SDP entre dos peers, intercambiando a través de TCPSocket que simula el pasaje por Signalling Server
 // devuelve 3 Vectores, uno con las direcciones ICE del peer local, otro con las direcciones ICE del peer remoto y con los codecs
 pub fn sdp_handshake(
     in_call: Arc<AtomicBool>,
-    handshake_params: SdpHandshakeParameters, 
+    handshake_params: SdpHandshakeParameters,
 ) -> Result<(Vec<String>, Vec<String>, Vec<String>), SdpError> {
     println!(
         "\n\n[DEBUG] Iniciando SDP Handshake con local adder {} y signalling adder {}\n",
@@ -634,30 +631,31 @@ pub fn sdp_handshake(
     let mut server_stream = match std::net::TcpStream::connect(&handshake_params.server_adder) {
         Ok(stream) => stream,
         Err(_) => return Err(SdpError::ConnectionError),
-    }; 
+    };
 
-    let sdp_offer_session_descrip = match create_sdp_offer(&handshake_params.local_adder, &handshake_params.offer_path) {
-        Ok(sd) => sd, 
-        Err(e) => return Err(SdpError::OfferFileCreationError), 
-    }; 
+    let sdp_offer_session_descrip =
+        match create_sdp_offer(&handshake_params.local_adder, &handshake_params.offer_path) {
+            Ok(sd) => sd,
+            Err(e) => return Err(SdpError::OfferFileCreationError),
+        };
     // Levanto mi Offer del archivo
     let my_offer = fs::read_to_string(&handshake_params.offer_path)
-    .map_err(|_| SdpError::Other(String::from("Read Offer error")))?;
+        .map_err(|_| SdpError::Other(String::from("Read Offer error")))?;
 
-    let message_offer = SignallingMessage::new(&sdp_offer_session_descrip.origin.username, 
-                                                                    sdp_offer_session_descrip.origin.session_id,
-                                                                            "abc123", 
-                                                                        my_offer); 
+    let message_offer = SignallingMessage::new(
+        &sdp_offer_session_descrip.origin.username,
+        sdp_offer_session_descrip.origin.session_id,
+        "abc123",
+        my_offer,
+    );
 
     server_stream
-    .write_all(message_offer.generate_message().as_bytes())
-    .map_err(|_| SdpError::OfferFileWriteError)?;
+        .write_all(message_offer.generate_message().as_bytes())
+        .map_err(|_| SdpError::OfferFileWriteError)?;
     server_stream
-    .flush()
-    .map_err(|_| SdpError::Other(String::from("[LADO ENVIO OFFER] Flush error")))?;
+        .flush()
+        .map_err(|_| SdpError::Other(String::from("[LADO ENVIO OFFER] Flush error")))?;
     // let _ = server_stream.shutdown(std::net::Shutdown::Write);
-
-
 
     Ok((vec![], vec![], vec![]))
 }

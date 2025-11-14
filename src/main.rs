@@ -12,13 +12,12 @@ fn main() -> eframe::Result<()> {
     }
 
     let session_info = match get_config_app(&args[1]) {
-        Ok(s) => s, 
+        Ok(s) => s,
         Err(e) => {
-            eprint!("Error config: {:?}", e); 
-            return Ok(())
+            eprint!("Error config: {:?}", e);
+            return Ok(());
         }
-    }; 
-
+    };
 
     let screen_size = eframe::egui::Vec2::new(
         1366.0, // ancho
@@ -48,8 +47,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "RoomRTC - Sobrevivir Taller",
         native_options,
-        Box::new(|_cc| {
-            Ok(Box::new(AppUI::new(session_info)))
-        }),
+        Box::new(|_cc| Ok(Box::new(AppUI::new(session_info)))),
     )
 }

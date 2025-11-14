@@ -1,4 +1,4 @@
-use dimpl::certificate::{CertificateError};
+use dimpl::certificate::CertificateError;
 
 use crate::encoding_errors::{DecodingErrors, EncodingErrors};
 use crate::ice_errors::IceErrors;
@@ -23,7 +23,7 @@ pub enum ClientErrors {
     SdpError(SdpError),
     IceError(IceErrors),
     DtlsError(CertificateError),
-    SocketNotInitialized
+    SocketNotInitialized,
 }
 
 impl From<io::Error> for ClientErrors {
@@ -76,7 +76,7 @@ impl fmt::Display for ClientErrors {
             Self::SdpError(sdp_error) => writeln!(f, "{}", sdp_error),
             Self::IceError(ice_error) => writeln!(f, "{}", ice_error),
             Self::DtlsError(dtls_error) => writeln!(f, "{}", dtls_error),
-            Self::SocketNotInitialized  => writeln!(f, "El cliente no tiene socket")
+            Self::SocketNotInitialized => writeln!(f, "El cliente no tiene socket"),
         }
     }
 }

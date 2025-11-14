@@ -2,7 +2,7 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum SdpError {
-    ConnectionError, 
+    ConnectionError,
     ParseError,
     ParseIntError(std::num::ParseIntError),
     InvalidOriginFormat,

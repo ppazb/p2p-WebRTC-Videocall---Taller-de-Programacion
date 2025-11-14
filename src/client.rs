@@ -32,9 +32,8 @@ impl Client {
     pub fn new(
         tx_remoto: SyncSender<Mat>,
         in_call: Arc<AtomicBool>,
-        camera: Arc<Mutex<Camera>>
+        camera: Arc<Mutex<Camera>>,
     ) -> Result<Self, ClientErrors> {
-
         Ok(Self {
             socket_recev: None,
             socket_send: None,
@@ -44,14 +43,15 @@ impl Client {
             camera,
         })
     }
-    pub fn add_peer(&mut self,socket: UdpSocket) -> Result<(), ClientErrors> {
+    pub fn add_peer(&mut self, socket: UdpSocket) -> Result<(), ClientErrors> {
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
-        self.socket_recev = Some (socket.try_clone().map_err(ClientErrors::CantClone)?);
-        self.socket_send = Some (socket);
+        self.socket_recev = Some(socket.try_clone().map_err(ClientErrors::CantClone)?);
+        self.socket_send = Some(socket);
         Ok(())
     }
-    pub fn set_rol(&self,is_client:bool) {
-        self.is_active_comunicator.store(is_client, Ordering::SeqCst);
+    pub fn set_rol(&self, is_client: bool) {
+        self.is_active_comunicator
+            .store(is_client, Ordering::SeqCst);
     }
     ///Se encarga de matchear y aplicaar el paseo de SDP
     pub fn handle_signalling(&self, text: String) {
@@ -89,7 +89,7 @@ impl Client {
 
         if !self.perform_dtls_handshake().is_ok() {
             println!("NO FUNCO DTLS");
-            return Err(ClientErrors::SocketNotInitialized)
+            return Err(ClientErrors::SocketNotInitialized);
         }
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             Self::reciver(&socket_recev, &tx_remoto, &in_call)
@@ -276,7 +276,7 @@ impl Client {
                 for (_, p) in entry.drain(..) {
                     full.extend(p);
                 }
-                chunks_hash.remove(& time_stamp);
+                chunks_hash.remove(&time_stamp);
 
                 if let Ok(frame) = decoder.decode(&full, width, height)
                     && tx_remoto.try_send(frame).is_err()
@@ -296,7 +296,7 @@ impl Client {
             }
         }
     }
-    pub fn perform_dtls_handshake(&self) -> Result<bool,ClientErrors> {
+    pub fn perform_dtls_handshake(&self) -> Result<bool, ClientErrors> {
         let certificate = dimpl::certificate::generate_self_signed_certificate()?;
         let config = Arc::new(dimpl::Config::default());
         let mut dtls = dimpl::Dtls::new(config, certificate.certificate, certificate.private_key);
@@ -325,12 +325,9 @@ impl Client {
                     dimpl::Output::Connected => {
                         return Ok(true);
                     }
-                    dimpl::Output::PeerCert(_c) => {
-                    }
-                    dimpl::Output::KeyingMaterial(_km, _profile) => {
-                    }
-                    dimpl::Output::ApplicationData(_data) => {
-                    }
+                    dimpl::Output::PeerCert(_c) => {}
+                    dimpl::Output::KeyingMaterial(_km, _profile) => {}
+                    dimpl::Output::ApplicationData(_data) => {}
                     dimpl::Output::Timeout(deadline) => {
                         let now = Instant::now();
                         if deadline > now {
@@ -351,10 +348,9 @@ impl Client {
                             eprintln!("DTLS handle_packet error: {:?}", e);
                         }
                     }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut =>
-                    {
-                    }
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut => {}
                     Err(e) => {
                         return Err(ClientErrors::CantConect(e));
                     }
