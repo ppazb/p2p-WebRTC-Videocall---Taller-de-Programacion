@@ -3,6 +3,7 @@ use std::io::{BufReader, Read};
 use std::net::TcpStream;
 use std::sync::{Arc, mpsc};
 
+use room_rtc::server_users;
 use room_rtc::config::*;
 use room_rtc::signalling_error::SignallingServerError;
 use serde::Deserialize;
@@ -24,6 +25,9 @@ fn main() -> Result<(), SignallingServerError> {
     };
     println!("\n\n[DEBUG] SERVER - Config Info: {:?}", server_info);
 
+    let file_path = &server_info.users_db_path;
+    let login_handle = server_users::ServerUserData::new(file_path);
+    
     let listener = std::net::TcpListener::bind(&server_info.server_adder)
         .map_err(|_| SignallingServerError::ConnectionError)?;
 

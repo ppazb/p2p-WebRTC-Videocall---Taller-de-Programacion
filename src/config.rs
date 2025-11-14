@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use std::fs;
 
+use crate::server_users::ServerUserData;
+
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct AppParameters {
     pub sdp_handshake: SdpHandshakeParameters,
@@ -18,6 +20,7 @@ pub struct SdpHandshakeParameters {
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct SignallingServerParameters {
     pub server_adder: String,
+    pub users_db_path: String 
 }
 
 pub fn get_config_app(config_file_path: &str) -> Result<AppParameters, Box<dyn std::error::Error>> {

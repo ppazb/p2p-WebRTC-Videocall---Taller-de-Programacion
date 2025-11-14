@@ -23,7 +23,7 @@ impl VistaLogin {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context,tcp: Option<&mut std::net::TcpStream>) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -77,6 +77,7 @@ impl VistaLogin {
 
                                     // Botón de ingreso
                                     if ui.button("Iniciar Sesión").clicked() {
+                                        
                                         if self.username.is_empty() && self.password.is_empty() {
                                             cambio = CambioVista::ToLobby;
                                         } else {

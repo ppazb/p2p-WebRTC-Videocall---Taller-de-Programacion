@@ -1,4 +1,4 @@
-use std::net::UdpSocket;
+use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
@@ -35,6 +35,7 @@ pub struct AppUI {
     client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
     rx_remoto: Option<Receiver<Mat>>, // Canal de recepción para UI
     in_call: Arc<AtomicBool>,
+    signaling_comunicator: TcpStream
 }
 
 impl Drop for AppUI {
@@ -45,21 +46,25 @@ impl Drop for AppUI {
 
 impl AppUI {
     // Modifico firma AppUI
-    pub fn new(app_params: AppParameters) -> Self {
-        Self {
-            vista_actual: Vista::VistaLogin(VistaLogin::new()),
-            cliente: None,
-            rx_remoto: None,
-            in_call: Arc::new(AtomicBool::new(false)),
+    pub fn new(app_params: AppParameters) -> Option<Self> {
+        if let Ok(stream) =  TcpStream::connect(&app_params.sdp_handshake.server_adder) {  
+            Some(Self {
+                vista_actual: Vista::VistaLogin(VistaLogin::new()),
+                cliente: None,
+                rx_remoto: None,
+                in_call: Arc::new(AtomicBool::new(false)),
 
-            pedido_socket: None,
-            handshake_handle: None,
-            client_handles: Ok(Vec::new()),
+                pedido_socket: None,
+                handshake_handle: None,
+                client_handles: Ok(Vec::new()),
 
-            app_params,
+                app_params,
+                signaling_comunicator: stream,
+                camara: None,
 
-            camara: None,
-        }
+            })
+    }
+    else {None}
     }
 
     fn cambiar_vista(&mut self, cambio: CambioVista) {
@@ -302,7 +307,7 @@ impl eframe::App for AppUI {
         // cada frame, la vista actual muestra su ui
         // algunas acciones provocan cambios de vista
         // se debería preservar información y cargarla durante la transicion
-        let cambio = self.vista_actual.ui(ctx, &self.camara);
+        let cambio = self.vista_actual.ui(ctx, &self.camara, Some(&mut self.signaling_comunicator) );
         self.cambiar_vista(cambio);
         ctx.request_repaint();
     }
