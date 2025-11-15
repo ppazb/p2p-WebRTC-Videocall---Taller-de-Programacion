@@ -307,7 +307,7 @@ impl eframe::App for AppUI {
         // cada frame, la vista actual muestra su ui
         // algunas acciones provocan cambios de vista
         // se debería preservar información y cargarla durante la transicion
-        let cambio = self.vista_actual.ui(ctx, &self.camara, Some(&mut self.signaling_comunicator) );
+        let cambio = self.vista_actual.ui(ctx, &self.camara, &mut self.signaling_comunicator);
         self.cambiar_vista(cambio);
         ctx.request_repaint();
     }

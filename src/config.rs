@@ -20,7 +20,7 @@ pub struct SdpHandshakeParameters {
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct SignallingServerParameters {
     pub server_adder: String,
-    pub users_db_path: String 
+    pub users_db: String 
 }
 
 pub fn get_config_app(config_file_path: &str) -> Result<AppParameters, Box<dyn std::error::Error>> {

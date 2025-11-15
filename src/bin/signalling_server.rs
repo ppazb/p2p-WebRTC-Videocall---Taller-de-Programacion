@@ -3,7 +3,7 @@ use std::io::{BufReader, Read};
 use std::net::TcpStream;
 use std::sync::{Arc, mpsc};
 
-use room_rtc::server_users;
+use room_rtc::server_users::{self, ServerUserData};
 use room_rtc::config::*;
 use room_rtc::signalling_error::SignallingServerError;
 use serde::Deserialize;
@@ -25,25 +25,36 @@ fn main() -> Result<(), SignallingServerError> {
     };
     println!("\n\n[DEBUG] SERVER - Config Info: {:?}", server_info);
 
-    let file_path = &server_info.users_db_path;
-    let login_handle = server_users::ServerUserData::new(file_path);
+    let file_path = &server_info.users_db;
+    let login = Arc::new(server_users::ServerUserData::new(file_path).unwrap());
     
     let listener = std::net::TcpListener::bind(&server_info.server_adder)
         .map_err(|_| SignallingServerError::ConnectionError)?;
 
-    let (tx, rx) = mpsc::channel::<User>();
+    //let (tx, rx) = mpsc::channel::<User>();
+    let (tx, rx) = mpsc::channel::<Result<(), SignallingServerError>>();
+    
+    
 
     let mut handles = Vec::new();
     let mut clients = HashMap::<String, User>::new();
 
     let listener_thread_handle = std::thread::spawn(move || {
+        
         let mut client_handles = Vec::new();
+        
         for stream in listener.incoming() {
+            println!("[DEGUE] Llegué");
+            let login_signalling = Arc::clone(&login); 
             match stream {
                 Ok(s) => {
                     println!("\n\n[DEBUG] SERVER - Connection User Succeded");
                     let tx_user_info = tx.clone();
-                    let new_client = std::thread::spawn(move || client_handle(s, tx_user_info));
+                    let new_client = std::thread::spawn(move || {
+                        login_handle(s, tx_user_info,login_signalling );
+                    }
+                        //client_handle(s, tx_user_info));
+                    );
                     client_handles.push(new_client);
                 }
 
@@ -55,14 +66,22 @@ fn main() -> Result<(), SignallingServerError> {
     });
 
     handles.push(listener_thread_handle);
-
-    for user in rx.iter() {
-        println!("\n\n[DEBUG] SERVER - User Info: {:?}", user);
-        clients.insert(user.user_info.user_id.to_string(), user);
-        println!("\n\n[DEBUG] SERVER - HashMap Users: {:?}", clients);
-    }
+    // for user in rx.iter() {
+    //     println!("\n\n[DEBUG] SERVER - User Info: {:?}", user);
+    //     clients.insert(user.user_info.user_id.to_string(), user);
+    //     println!("\n\n[DEBUG] SERVER - HashMap Users: {:?}", clients);
+    // }
 
     Ok(())
+}
+
+
+fn login_handle(mut stream: TcpStream, tx: mpsc::Sender<Result<(), SignallingServerError>>, loggin: Arc<ServerUserData>  ) {
+    let mut reader = BufReader::new(&mut stream);
+    let mut signal_str = String::new();
+    let _ = reader.read_to_string(&mut signal_str);
+    println!("\n\n[DEBUG] SERVER - Login Information {:?}", signal_str); 
+    
 }
 
 fn client_handle(mut stream: TcpStream, tx: mpsc::Sender<User>) {

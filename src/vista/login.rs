@@ -1,3 +1,5 @@
+use std::{io::{Read, Write}, str::FromStr};
+
 use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 
 use crate::vista::cambio::CambioVista;
@@ -23,7 +25,7 @@ impl VistaLogin {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context,tcp: Option<&mut std::net::TcpStream>) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context,tcp: &mut std::net::TcpStream) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -77,7 +79,18 @@ impl VistaLogin {
 
                                     // Botón de ingreso
                                     if ui.button("Iniciar Sesión").clicked() {
+                                        let user = String::from(&self.username);
+                                        let a = String::from(user + "\n");
+                                        let pass = String::from(&self.password);
+                                        let b = String::from(pass + "\n");
                                         
+                                        let _ = tcp.write_all(a.as_bytes());
+                                        let _ = tcp.write_all(b.as_bytes());
+
+                                        let mut buffer = [0, 252]; 
+                                        tcp.read(&mut buffer); 
+
+                                        println!("[DEBUG] VISTA - Signalling Answer: {:?}", buffer); 
                                         if self.username.is_empty() && self.password.is_empty() {
                                             cambio = CambioVista::ToLobby;
                                         } else {
