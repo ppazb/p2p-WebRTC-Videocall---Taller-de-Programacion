@@ -83,14 +83,19 @@ impl VistaLogin {
                                         let a = String::from(user + "\n");
                                         let pass = String::from(&self.password);
                                         let b = String::from(pass + "\n");
-                                        
-                                        let _ = tcp.write_all(a.as_bytes());
-                                        let _ = tcp.write_all(b.as_bytes());
 
-                                        let mut buffer = [0, 252]; 
-                                        tcp.read(&mut buffer); 
+                                        let mut tcp_signalling = tcp.try_clone().unwrap(); 
+                                        let signalling_handle = std::thread::spawn(move || {
+                                            let _ = tcp_signalling.write_all(a.as_bytes());
+                                            let _ = tcp_signalling.write_all(b.as_bytes());
 
-                                        println!("[DEBUG] VISTA - Signalling Answer: {:?}", buffer); 
+                                            tcp_signalling.flush().unwrap(); 
+                                            let mut buffer = [0, 252]; 
+                                            tcp_signalling.read(&mut buffer); 
+                                            println!("[DEBUG] VISTA - Signalling Answer: {:?}", buffer);
+                                        }); 
+ 
+                                         
                                         if self.username.is_empty() && self.password.is_empty() {
                                             cambio = CambioVista::ToLobby;
                                         } else {

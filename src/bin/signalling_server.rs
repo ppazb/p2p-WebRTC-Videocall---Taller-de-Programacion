@@ -34,9 +34,7 @@ fn main() -> Result<(), SignallingServerError> {
     //let (tx, rx) = mpsc::channel::<User>();
     let (tx, rx) = mpsc::channel::<Result<(), SignallingServerError>>();
     
-    
-
-    let mut handles = Vec::new();
+    // let mut handles = Vec::new();
     let mut clients = HashMap::<String, User>::new();
 
     let listener_thread_handle = std::thread::spawn(move || {
@@ -61,11 +59,16 @@ fn main() -> Result<(), SignallingServerError> {
                 Err(e) => {
                     eprintln!("\n[DEBUG] SERVER - Connection User Error")
                 }
-            }
+            }; 
         }
+
+        for handle in client_handles {
+            handle.join().unwrap(); 
+        }; 
     });
 
-    handles.push(listener_thread_handle);
+    listener_thread_handle.join(); 
+    // handles.push(listener_thread_handle);
     // for user in rx.iter() {
     //     println!("\n\n[DEBUG] SERVER - User Info: {:?}", user);
     //     clients.insert(user.user_info.user_id.to_string(), user);
