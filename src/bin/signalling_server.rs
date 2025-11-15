@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, mpsc};
 
@@ -32,7 +32,7 @@ fn main() -> Result<(), SignallingServerError> {
         .map_err(|_| SignallingServerError::ConnectionError)?;
 
     //let (tx, rx) = mpsc::channel::<User>();
-    let (tx, rx) = mpsc::channel::<Result<(), SignallingServerError>>();
+    let (tx, rx) = mpsc::channel::<Result<TcpStream, SignallingServerError>>();
     
     // let mut handles = Vec::new();
     let mut clients = HashMap::<String, User>::new();
@@ -67,6 +67,19 @@ fn main() -> Result<(), SignallingServerError> {
         }; 
     });
 
+    for answer in rx.iter() {
+        match answer { 
+            Ok(mut stream) => {
+                let _ = stream.write_all(b"OK\n");
+            },
+            Err(e) => {
+                eprintln!("[ERROR] Server error: {:?}", e);
+                return Err(e);
+            }
+        };
+    }
+
+
     listener_thread_handle.join(); 
     // handles.push(listener_thread_handle);
     // for user in rx.iter() {
@@ -79,12 +92,34 @@ fn main() -> Result<(), SignallingServerError> {
 }
 
 
-fn login_handle(mut stream: TcpStream, tx: mpsc::Sender<Result<(), SignallingServerError>>, loggin: Arc<ServerUserData>  ) {
-    let mut reader = BufReader::new(&mut stream);
-    let mut signal_str = String::new();
-    let _ = reader.read_to_string(&mut signal_str);
-    println!("\n\n[DEBUG] SERVER - Login Information {:?}", signal_str); 
+fn login_handle(mut stream: TcpStream, tx: mpsc::Sender<Result<TcpStream, SignallingServerError>>, loggin: Arc<ServerUserData>) {
+    use std::io::BufRead;
     
+    let mut reader = BufReader::new(&stream);
+    let mut username = String::new();
+    let mut password = String::new();
+    
+    // Leer username (primera línea)
+    if let Ok(n) = reader.read_line(&mut username) {
+        if n > 0 {
+            let user_trimmed = username.trim().to_string();
+            eprintln!("\n[DEBUG SERVER] Received username: {}", user_trimmed);
+        }
+    }
+    
+    // Leer password (segunda línea)
+    if let Ok(n) = reader.read_line(&mut password) {
+        if n > 0 {
+            let pass_trimmed = password.trim().to_string();
+            eprintln!("[DEBUG SERVER] Received password: {}", pass_trimmed);
+        }
+    }
+    
+    eprintln!("[DEBUG SERVER] Sending OK response...");
+    let mut stream_write = &stream;
+    let _ = stream_write.write_all(b"OK\n");
+    let _ = stream_write.flush();
+    eprintln!("[DEBUG SERVER] Response sent!\n");
 }
 
 fn client_handle(mut stream: TcpStream, tx: mpsc::Sender<User>) {

@@ -20,7 +20,7 @@ impl VistaLobby {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>,tcp: &mut std::net::TcpStream) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::TopBottomPanel::top("menu_bar")

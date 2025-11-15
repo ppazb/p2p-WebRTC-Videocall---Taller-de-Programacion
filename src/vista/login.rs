@@ -1,4 +1,4 @@
-use std::{io::{Read, Write}, str::FromStr};
+use std::{io::{Read, Write}, str::FromStr, sync::mpsc};
 
 use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 
@@ -8,6 +8,7 @@ pub struct VistaLogin {
     pub username: String,
     pub password: String,
     pub error_msg: Option<String>,
+    pub auth_rx: Option<mpsc::Receiver<String>>,
 }
 
 impl Default for VistaLogin {
@@ -22,11 +23,35 @@ impl VistaLogin {
             username: String::new(),
             password: String::new(),
             error_msg: None,
+            auth_rx: None,
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context,tcp: &mut std::net::TcpStream) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context, tcp: &mut std::net::TcpStream) -> CambioVista {
         let mut cambio = CambioVista::None;
+
+        // Procesar resultado de autenticación anterior si existe
+        if let Some(rx) = &self.auth_rx {
+            match rx.try_recv() {
+                Ok(response) => {
+                    eprintln!("[DEBUG] Auth response received: {}", response);
+                    self.auth_rx = None;
+                    if response.contains("OK") || response.contains("ok") {
+                        cambio = CambioVista::ToLobby;
+                    } else {
+                        self.error_msg = Some("Usuario o contraseña inválidos.".into());
+                        self.password.clear();
+                    }
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.error_msg = Some("Verificando credenciales...".into());
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.auth_rx = None;
+                    self.error_msg = Some("Error de conexión con el servidor.".into());
+                }
+            }
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Centro el frame dentro del panel
@@ -78,32 +103,62 @@ impl VistaLogin {
                                     ui.add_space(10.0);
 
                                     // Botón de ingreso
-                                    if ui.button("Iniciar Sesión").clicked() {
+                                    if ui.button("Iniciar Sesión").clicked() && self.auth_rx.is_none() {
                                         let user = String::from(&self.username);
-                                        let a = String::from(user + "\n");
+                                        let user_msg = String::from(user + "\n");
                                         let pass = String::from(&self.password);
-                                        let b = String::from(pass + "\n");
+                                        let pass_msg = String::from(pass + "\n");
 
-                                        let mut tcp_signalling = tcp.try_clone().unwrap(); 
-                                        let signalling_handle = std::thread::spawn(move || {
-                                            let _ = tcp_signalling.write_all(a.as_bytes());
-                                            let _ = tcp_signalling.write_all(b.as_bytes());
+                                        let mut tcp_signalling = tcp.try_clone().unwrap();
+                                        //tcp_signalling.set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                                        //    .expect("Failed to set read timeout");
+                                        let (tx, rx) = mpsc::channel::<String>();
+                                        self.auth_rx = Some(rx);
 
-                                            tcp_signalling.flush().unwrap(); 
-                                            let mut buffer = [0, 252]; 
-                                            tcp_signalling.read(&mut buffer); 
-                                            println!("[DEBUG] VISTA - Signalling Answer: {:?}", buffer);
-                                        }); 
- 
-                                         
-                                        if self.username.is_empty() && self.password.is_empty() {
-                                            cambio = CambioVista::ToLobby;
-                                        } else {
-                                            self.username = String::new();
-                                            self.password = String::new();
-                                            self.error_msg =
-                                                Some("Usuario o contraseña inválidos.".into());
-                                        }
+                                        std::thread::spawn(move || {
+                                            use std::io::BufRead;
+                                            
+                                            eprintln!("[DEBUG CLIENT] Sending user: {}", user_msg.trim());
+                                            if let Err(e) = tcp_signalling.write_all(user_msg.as_bytes()) {
+                                                eprintln!("[ERROR] Failed to write username: {}", e);
+                                                let _ = tx.send(format!("ERROR: {}", e));
+                                                return;
+                                            }
+                                            
+                                            eprintln!("[DEBUG CLIENT] Sending pass: {}", pass_msg.trim());
+                                            if let Err(e) = tcp_signalling.write_all(pass_msg.as_bytes()) {
+                                                eprintln!("[ERROR] Failed to write password: {}", e);
+                                                let _ = tx.send(format!("ERROR: {}", e));
+                                                return;
+                                            }
+                                            
+                                            if let Err(e) = tcp_signalling.flush() {
+                                                eprintln!("[ERROR] Failed to flush: {}", e);
+                                                let _ = tx.send(format!("ERROR: {}", e));
+                                                return;
+                                            }
+
+                                            eprintln!("[DEBUG CLIENT] Waiting for response...");
+                                            let mut reader = std::io::BufReader::new(&tcp_signalling);
+                                            let mut response = String::new();
+                                            match reader.read_line(&mut response) {
+                                                Ok(n) if n > 0 => {
+                                                    let resp_trimmed = response.trim().to_string();
+                                                    eprintln!("[DEBUG CLIENT] Received response: {}", resp_trimmed);
+                                                    let _ = tx.send(resp_trimmed);
+                                                }
+                                                Ok(_) => {
+                                                    eprintln!("[ERROR] Connection closed by server");
+                                                    let _ = tx.send("ERROR: Connection closed".to_string());
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[ERROR] Failed to read response: {}", e);
+                                                    let _ = tx.send(format!("ERROR: {}", e));
+                                                }
+                                            }
+                                        });
+                                        
+                                        self.error_msg = Some("Enviando credenciales...".into());
                                     }
                                 },
                             );
