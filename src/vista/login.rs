@@ -1,14 +1,17 @@
-use std::{io::{Read, Write}, str::FromStr, sync::mpsc};
+use std::io::Write;
+use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 
 use crate::vista::cambio::CambioVista;
+use crate::signalling_protocol::{ClientMessage, ServerMessage};
 
 pub struct VistaLogin {
     pub username: String,
     pub password: String,
     pub error_msg: Option<String>,
     pub auth_rx: Option<mpsc::Receiver<String>>,
+    pub current_user_id: Option<String>,
 }
 
 impl Default for VistaLogin {
@@ -24,6 +27,7 @@ impl VistaLogin {
             password: String::new(),
             error_msg: None,
             auth_rx: None,
+            current_user_id: None,
         }
     }
 
@@ -36,7 +40,12 @@ impl VistaLogin {
                 Ok(response) => {
                     eprintln!("[DEBUG] Auth response received: {}", response);
                     self.auth_rx = None;
-                    if response.contains("OK") || response.contains("ok") {
+                    if response.starts_with("OK:") {
+                        // Extraer user_id de "OK:user_id_string"
+                        if let Some(user_id) = response.strip_prefix("OK:") {
+                            self.current_user_id = Some(user_id.to_string());
+                            eprintln!("[DEBUG] Current user ID: {}", user_id);
+                        }
                         cambio = CambioVista::ToLobby;
                     } else {
                         self.error_msg = Some("Usuario o contraseña inválidos.".into());
@@ -104,34 +113,38 @@ impl VistaLogin {
 
                                     // Botón de ingreso
                                     if ui.button("Iniciar Sesión").clicked() && self.auth_rx.is_none() {
-                                        let user = String::from(&self.username);
-                                        let user_msg = String::from(user + "\n");
-                                        let pass = String::from(&self.password);
-                                        let pass_msg = String::from(pass + "\n");
+                                        let user = self.username.clone();
+                                        let pass = self.password.clone();
 
                                         let mut tcp_signalling = tcp.try_clone().unwrap();
-                                        //tcp_signalling.set_read_timeout(Some(std::time::Duration::from_secs(5)))
-                                        //    .expect("Failed to set read timeout");
                                         let (tx, rx) = mpsc::channel::<String>();
                                         self.auth_rx = Some(rx);
 
                                         std::thread::spawn(move || {
                                             use std::io::BufRead;
-                                            
-                                            eprintln!("[DEBUG CLIENT] Sending user: {}", user_msg.trim());
-                                            if let Err(e) = tcp_signalling.write_all(user_msg.as_bytes()) {
-                                                eprintln!("[ERROR] Failed to write username: {}", e);
+
+                                            // Crear mensaje JSON
+                                            let login_msg = ClientMessage::Login {
+                                                username: user.clone(),
+                                                password: pass.clone(),
+                                            };
+
+                                            let json_msg = match login_msg.to_json_line() {
+                                                Ok(msg) => msg,
+                                                Err(e) => {
+                                                    eprintln!("[ERROR] Failed to serialize login message: {}", e);
+                                                    let _ = tx.send(format!("ERROR: {}", e));
+                                                    return;
+                                                }
+                                            };
+
+                                            eprintln!("[DEBUG CLIENT] Sending login message: {}", json_msg.trim());
+                                            if let Err(e) = tcp_signalling.write_all(json_msg.as_bytes()) {
+                                                eprintln!("[ERROR] Failed to write login message: {}", e);
                                                 let _ = tx.send(format!("ERROR: {}", e));
                                                 return;
                                             }
-                                            
-                                            eprintln!("[DEBUG CLIENT] Sending pass: {}", pass_msg.trim());
-                                            if let Err(e) = tcp_signalling.write_all(pass_msg.as_bytes()) {
-                                                eprintln!("[ERROR] Failed to write password: {}", e);
-                                                let _ = tx.send(format!("ERROR: {}", e));
-                                                return;
-                                            }
-                                            
+
                                             if let Err(e) = tcp_signalling.flush() {
                                                 eprintln!("[ERROR] Failed to flush: {}", e);
                                                 let _ = tx.send(format!("ERROR: {}", e));
@@ -143,9 +156,29 @@ impl VistaLogin {
                                             let mut response = String::new();
                                             match reader.read_line(&mut response) {
                                                 Ok(n) if n > 0 => {
-                                                    let resp_trimmed = response.trim().to_string();
-                                                    eprintln!("[DEBUG CLIENT] Received response: {}", resp_trimmed);
-                                                    let _ = tx.send(resp_trimmed);
+                                                    let awser = response.trim().to_string();
+                                                    eprintln!("[DEBUG CLIENT] Received response: {}", awser);
+
+                                                    // Parsear respuesta JSON
+                                                    match serde_json::from_str::<ServerMessage>(&awser) {
+                                                        Ok(ServerMessage::LoginOk { username }) => {
+                                                            eprintln!("[DEBUG CLIENT] Login successful! User ID: {}", username);
+                                                            let _ = tx.send(format!("OK:{}", username));
+                                                        }
+                                                        Ok(ServerMessage::LoginError { reason }) => {
+                                                            eprintln!("[DEBUG CLIENT] Login error from server");
+                                                            eprintln!("[DEBUG CLIENT] Reason: {}", reason);
+                                                            let _ = tx.send("ERROR: Login failed".to_string());
+                                                        }
+                                                        Ok(_) => {
+                                                            eprintln!("[DEBUG CLIENT] Unexpected response type");
+                                                            let _ = tx.send("ERROR: Unexpected response".to_string());
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("[ERROR] Failed to parse response: {}", e);
+                                                            let _ = tx.send(format!("ERROR: {}", e));
+                                                        }
+                                                    }
                                                 }
                                                 Ok(_) => {
                                                     eprintln!("[ERROR] Connection closed by server");
@@ -157,7 +190,7 @@ impl VistaLogin {
                                                 }
                                             }
                                         });
-                                        
+
                                         self.error_msg = Some("Enviando credenciales...".into());
                                     }
                                 },

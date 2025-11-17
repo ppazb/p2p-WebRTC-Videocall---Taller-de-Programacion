@@ -1,159 +1,144 @@
 use std::collections::HashMap;
-use std::io::{BufReader, Read, Write};
-use std::net::TcpStream;
-use std::sync::{Arc, mpsc};
-
-use room_rtc::server_users::{self, ServerUserData};
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener};
+use std::sync::{Arc, Mutex};
+use room_rtc::server_users::ServerUserData;
+use room_rtc::signalling_protocol::{ClientMessage, ServerMessage};
 use room_rtc::config::*;
 use room_rtc::signalling_error::SignallingServerError;
-use serde::Deserialize;
 
 fn main() -> Result<(), SignallingServerError> {
-    // cargo run --bin signalling_server src/server_config.rs
-    // Para obtener el config de Signalling
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
+        eprintln!("Usage: {} <config_file>", args[0]);
         return Err(SignallingServerError::ConnectionError);
     }
 
     let server_info: SignallingServerParameters = match get_config_signalling(&args[1]) {
         Ok(info) => info,
         Err(e) => {
-            eprintln!("\n[DEBUG] SERVER - Config Info Error: {:?}", e);
+            eprintln!("\n[ERROR] Config Error: {:?}", e);
             return Err(SignallingServerError::ConfigInfoError);
         }
     };
-    println!("\n\n[DEBUG] SERVER - Config Info: {:?}", server_info);
+    println!("[SERVER] Starting on {}", server_info.server_adder);
 
-    let file_path = &server_info.users_db;
-    let login = Arc::new(server_users::ServerUserData::new(file_path).unwrap());
-    
-    let listener = std::net::TcpListener::bind(&server_info.server_adder)
+    let listener = TcpListener::bind(&server_info.server_adder)
         .map_err(|_| SignallingServerError::ConnectionError)?;
 
-    //let (tx, rx) = mpsc::channel::<User>();
-    let (tx, rx) = mpsc::channel::<Result<TcpStream, SignallingServerError>>();
-    
-    // let mut handles = Vec::new();
-    let mut clients = HashMap::<String, User>::new();
+    let file_path = &server_info.users_db;
+    let login = ServerUserData::new(file_path).unwrap();
+    let active_clients: Arc<Mutex<ServerUserData>> = Arc::new(Mutex::new(login));
 
-    let listener_thread_handle = std::thread::spawn(move || {
-        
-        let mut client_handles = Vec::new();
-        
-        for stream in listener.incoming() {
-            println!("[DEGUE] Llegué");
-            let login_signalling = Arc::clone(&login); 
-            match stream {
-                Ok(s) => {
-                    println!("\n\n[DEBUG] SERVER - Connection User Succeded");
-                    let tx_user_info = tx.clone();
-                    let new_client = std::thread::spawn(move || {
-                        login_handle(s, tx_user_info,login_signalling );
-                    }
-                        //client_handle(s, tx_user_info));
-                    );
-                    client_handles.push(new_client);
-                }
+    println!("[SERVER] Listening for connections...\n");
 
-                Err(e) => {
-                    eprintln!("\n[DEBUG] SERVER - Connection User Error")
-                }
-            }; 
-        }
-
-        for handle in client_handles {
-            handle.join().unwrap(); 
-        }; 
-    });
-
-    for answer in rx.iter() {
-        match answer { 
-            Ok(mut stream) => {
-                let _ = stream.write_all(b"OK\n");
-            },
-            Err(e) => {
-                eprintln!("[ERROR] Server error: {:?}", e);
-                return Err(e);
+    for stream in listener.incoming() {
+        match stream {
+            Ok(s) => {
+                println!("[SERVER] New connection received");
+                let clients = Arc::clone(&active_clients);
+                std::thread::spawn(move || {
+                    let _ = handle_client(s, clients);
+                });
             }
-        };
+            Err(e) => {
+                eprintln!("[ERROR] Connection error: {}", e);
+            }
+        }
     }
-
-
-    listener_thread_handle.join(); 
-    // handles.push(listener_thread_handle);
-    // for user in rx.iter() {
-    //     println!("\n\n[DEBUG] SERVER - User Info: {:?}", user);
-    //     clients.insert(user.user_info.user_id.to_string(), user);
-    //     println!("\n\n[DEBUG] SERVER - HashMap Users: {:?}", clients);
-    // }
 
     Ok(())
 }
 
+fn handle_client(
+    stream: std::net::TcpStream,
+    active_clients: Arc<Mutex<ServerUserData>>,
+) -> std::io::Result<()> {
+    let read_stream = stream.try_clone()?;
+    let mut reader = BufReader::new(read_stream);
+    let mut stream_write = stream;
+    let mut current_user_id: Option<String> = None;
 
-fn login_handle(mut stream: TcpStream, tx: mpsc::Sender<Result<TcpStream, SignallingServerError>>, loggin: Arc<ServerUserData>) {
-    use std::io::BufRead;
-    
-    let mut reader = BufReader::new(&stream);
-    let mut username = String::new();
-    let mut password = String::new();
-    
-    // Leer username (primera línea)
-    if let Ok(n) = reader.read_line(&mut username) {
-        if n > 0 {
-            let user_trimmed = username.trim().to_string();
-            eprintln!("\n[DEBUG SERVER] Received username: {}", user_trimmed);
+    // Loop infinito: leer múltiples mensajes del mismo cliente
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                eprintln!("[SERVER] Client disconnected");
+                break;
+            }
+            Ok(_) => {
+                eprintln!("[DEBUG SERVER] Received: {}", line);
+
+                // Parsear JSON
+                match serde_json::from_str::<ClientMessage>(&line) {
+                    Ok(ClientMessage::Login { username, password  }) => {
+                        {
+                            let mut clients = active_clients.lock().unwrap();
+                            if let Ok(result_verification) = clients.verificar_login(&username, &password) {
+                                // Verificar que el cliente esté en estado desconectado (cambiar en server_user verficar_login)
+                                clients.conectar(&username); 
+                                eprintln!("[SERVER] User '{}' logged in", username);
+
+                                let response = ServerMessage::LoginOk { username };
+                                let response_json = response.to_json_line().unwrap();
+                                stream_write.write_all(response_json.as_bytes())?;
+                                stream_write.flush()?;
+                                eprintln!("[SERVER] Sent LoginOk\n");  
+                            } else {
+                                let response = ServerMessage::LoginError { reason: "Datos invalidos".to_string() };
+                                let response_json = response.to_json_line().unwrap();
+                                stream_write.write_all(response_json.as_bytes())?;
+                                stream_write.flush()?;
+                                eprintln!("[SERVER] user or password invalid '{}' logged in", username);
+
+                            }
+                        }
+                    }
+                    Ok(ClientMessage::Logout { username }) => {
+                        {
+                            let mut clients = active_clients.lock().unwrap();
+                            let _ = clients.desconectar(&username); 
+                        }
+
+                        eprintln!("[SERVER] User {} logged out", &username);
+                        let response = ServerMessage::LogoutOk;
+                        let response_json = response.to_json_line().unwrap();
+                        stream_write.write_all(response_json.as_bytes())?;
+                        stream_write.flush()?;
+                        eprintln!("[SERVER] Sent LogoutOk\n");
+                    }
+                    Ok(ClientMessage::GetUsers {}) => {
+                        
+                        let clients_guard = active_clients.lock().unwrap();
+                        let clients_map = clients_guard.get_listado_usuarios();
+                        drop(clients_guard);
+
+                        let users_list = format!(
+                            "{{\"type\":\"users_list\",\"users\":{}}}\n",
+                            serde_json::to_string(&clients_map).unwrap()
+                        );
+                        let response = ServerMessage::UserList { users: users_list };
+                        let response_json = response.to_json_line().unwrap();
+                        stream_write.write_all(response_json.as_bytes())?;
+                        stream_write.flush()?;
+                        eprintln!("[SERVER] Sent users list\n");
+                    }
+                    Err(e) => {
+                        eprintln!("[ERROR] Failed to parse JSON: {}", e);
+                        let response = ServerMessage::Error { reason: "Invalid JSON".to_string() };
+                        let response_json = response.to_json_line().unwrap();
+                        let _ = stream_write.write_all(response_json.as_bytes());
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[ERROR] Read error: {}", e);
+                break;
+            }
         }
     }
-    
-    // Leer password (segunda línea)
-    if let Ok(n) = reader.read_line(&mut password) {
-        if n > 0 {
-            let pass_trimmed = password.trim().to_string();
-            eprintln!("[DEBUG SERVER] Received password: {}", pass_trimmed);
-        }
-    }
-    
-    eprintln!("[DEBUG SERVER] Sending OK response...");
-    let mut stream_write = &stream;
-    let _ = stream_write.write_all(b"OK\n");
-    let _ = stream_write.flush();
-    eprintln!("[DEBUG SERVER] Response sent!\n");
-}
 
-fn client_handle(mut stream: TcpStream, tx: mpsc::Sender<User>) {
-    let mut reader = BufReader::new(&mut stream);
-    let mut signal_str = String::new();
-    let _ = reader.read_to_string(&mut signal_str);
-    println!("[DEBUG] SERVER - Client Handle: {:?}", signal_str);
 
-    let user_info: UserInfo = match serde_json::from_str(&signal_str) {
-        Ok(user) => user,
-        Err(e) => {
-            eprintln!("\n[DEBUG] SERVER - Deserialize User Infor: {:?}", e);
-            return;
-        }
-    };
-
-    let user: User = User {
-        user_info,
-        socket: stream,
-    };
-
-    tx.send(user);
-}
-
-#[derive(Debug, Deserialize, PartialEq, Default)]
-pub struct UserInfo {
-    pub user_name: String,
-    pub user_id: String,
-    pub password: String,
-    pub offer: String,
-}
-
-#[derive(Debug)]
-pub struct User {
-    pub user_info: UserInfo,
-    pub socket: TcpStream,
+    Ok(())
 }
