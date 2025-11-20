@@ -138,5 +138,3 @@ impl ServerUserData {
         Ok(())
     }
 }
-
-

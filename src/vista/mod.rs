@@ -30,10 +30,15 @@ pub enum Vista {
 }
 
 impl Vista {
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>, tcp: &mut std::net::TcpStream) -> CambioVista {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        tcp: &mut std::net::TcpStream,
+    ) -> CambioVista {
         match self {
             Vista::VistaLogin(view) => view.ui(ctx, tcp),
-            Vista::VistaLobby(view) => view.ui(ctx, camara,tcp),
+            Vista::VistaLobby(view) => view.ui(ctx, camara, tcp),
             Vista::VistaLlamada(view) => view.ui(ctx, camara),
             Vista::VistaCallStart(view) => view.ui(ctx, camara),
             Vista::VistaCallEnd(view) => view.ui(ctx, camara),

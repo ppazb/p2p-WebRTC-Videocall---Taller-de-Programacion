@@ -1,11 +1,11 @@
+use room_rtc::config::*;
+use room_rtc::server_users::ServerUserData;
+use room_rtc::signalling_error::SignallingServerError;
+use room_rtc::signalling_protocol::{ClientMessage, ServerMessage, vec_to_json_array};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener};
+use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
-use room_rtc::server_users::ServerUserData;
-use room_rtc::signalling_protocol::{ClientMessage, ServerMessage};
-use room_rtc::config::*;
-use room_rtc::signalling_error::SignallingServerError;
 
 fn main() -> Result<(), SignallingServerError> {
     let args: Vec<String> = std::env::args().collect();
@@ -71,63 +71,71 @@ fn handle_client(
                 eprintln!("[DEBUG SERVER] Received: {}", line);
 
                 // Parsear JSON
-                match serde_json::from_str::<ClientMessage>(&line) {
-                    Ok(ClientMessage::Login { username, password  }) => {
+                match ClientMessage::from_json(&line) {
+                    Some(ClientMessage::Login { username, password }) => {
                         {
                             let mut clients = active_clients.lock().unwrap();
-                            if let Ok(result_verification) = clients.verificar_login(&username, &password) {
+                            if let Ok(result_verification) =
+                                clients.verificar_login(&username, &password)
+                            {
                                 // Verificar que el cliente esté en estado desconectado (cambiar en server_user verficar_login)
-                                clients.conectar(&username); 
+                                clients.conectar(&username);
                                 eprintln!("[SERVER] User '{}' logged in", username);
 
                                 let response = ServerMessage::LoginOk { username };
-                                let response_json = response.to_json_line().unwrap();
+                                let response_json = response.to_json_line();
                                 stream_write.write_all(response_json.as_bytes())?;
                                 stream_write.flush()?;
-                                eprintln!("[SERVER] Sent LoginOk\n");  
+                                eprintln!("[SERVER] Sent LoginOk\n");
                             } else {
-                                let response = ServerMessage::LoginError { reason: "Datos invalidos".to_string() };
-                                let response_json = response.to_json_line().unwrap();
+                                let response = ServerMessage::LoginError {
+                                    reason: "Datos invalidos".to_string(),
+                                };
+                                let response_json = response.to_json_line();
                                 stream_write.write_all(response_json.as_bytes())?;
                                 stream_write.flush()?;
-                                eprintln!("[SERVER] user or password invalid '{}' logged in", username);
-
+                                eprintln!(
+                                    "[SERVER] user or password invalid '{}' logged in",
+                                    username
+                                );
                             }
                         }
                     }
-                    Ok(ClientMessage::Logout { username }) => {
+                    Some(ClientMessage::Logout { username }) => {
                         {
                             let mut clients = active_clients.lock().unwrap();
-                            let _ = clients.desconectar(&username); 
+                            let _ = clients.desconectar(&username);
                         }
 
                         eprintln!("[SERVER] User {} logged out", &username);
                         let response = ServerMessage::LogoutOk;
-                        let response_json = response.to_json_line().unwrap();
+                        let response_json = response.to_json_line();
                         stream_write.write_all(response_json.as_bytes())?;
                         stream_write.flush()?;
                         eprintln!("[SERVER] Sent LogoutOk\n");
                     }
-                    Ok(ClientMessage::GetUsers {}) => {
-                        
+                    Some(ClientMessage::GetUsers {}) => {
                         let clients_guard = active_clients.lock().unwrap();
                         let clients_map = clients_guard.get_listado_usuarios();
                         drop(clients_guard);
 
-                        let users_list = format!(
-                            "{{\"type\":\"users_list\",\"users\":{}}}\n",
-                            serde_json::to_string(&clients_map).unwrap()
-                        );
+                        // let users_list = format!(
+                        //     "{{\"type\":\"users_list\",\"users\":{}}}\n",
+                        //     serde_json::to_string(&clients_map).unwrap()
+                        // );
+                        let users_list = vec_to_json_array(&clients_map);
                         let response = ServerMessage::UserList { users: users_list };
-                        let response_json = response.to_json_line().unwrap();
+                        let response_json = response.to_json_line();
                         stream_write.write_all(response_json.as_bytes())?;
                         stream_write.flush()?;
                         eprintln!("[SERVER] Sent users list\n");
                     }
-                    Err(e) => {
-                        eprintln!("[ERROR] Failed to parse JSON: {}", e);
-                        let response = ServerMessage::Error { reason: "Invalid JSON".to_string() };
-                        let response_json = response.to_json_line().unwrap();
+                    None => {
+                        eprintln!("[ERROR] Failed to parse JSON");
+                        let response = ServerMessage::Error {
+                            reason: "Invalid JSON".to_string(),
+                        };
+                        let response_json = response.to_json_line();
                         let _ = stream_write.write_all(response_json.as_bytes());
                     }
                 }
@@ -138,7 +146,6 @@ fn handle_client(
             }
         }
     }
-
 
     Ok(())
 }

@@ -3,8 +3,8 @@ use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 
-use crate::vista::cambio::CambioVista;
 use crate::signalling_protocol::{ClientMessage, ServerMessage};
+use crate::vista::cambio::CambioVista;
 
 pub struct VistaLogin {
     pub username: String,
@@ -129,14 +129,15 @@ impl VistaLogin {
                                                 password: pass.clone(),
                                             };
 
-                                            let json_msg = match login_msg.to_json_line() {
-                                                Ok(msg) => msg,
-                                                Err(e) => {
-                                                    eprintln!("[ERROR] Failed to serialize login message: {}", e);
-                                                    let _ = tx.send(format!("ERROR: {}", e));
-                                                    return;
-                                                }
-                                            };
+                                            let json_msg = login_msg.to_json_line();
+                                            // {
+                                            //     Ok(msg) => msg,
+                                            //     Err(e) => {
+                                            //         eprintln!("[ERROR] Failed to serialize login message: {}", e);
+                                            //         let _ = tx.send(format!("ERROR: {}", e));
+                                            //         return;
+                                            //     }
+                                            // };
 
                                             eprintln!("[DEBUG CLIENT] Sending login message: {}", json_msg.trim());
                                             if let Err(e) = tcp_signalling.write_all(json_msg.as_bytes()) {
@@ -156,27 +157,27 @@ impl VistaLogin {
                                             let mut response = String::new();
                                             match reader.read_line(&mut response) {
                                                 Ok(n) if n > 0 => {
-                                                    let awser = response.trim().to_string();
-                                                    eprintln!("[DEBUG CLIENT] Received response: {}", awser);
+                                                    let answer = response.trim().to_string();
+                                                    eprintln!("[DEBUG CLIENT] Received response: {}", answer);
 
                                                     // Parsear respuesta JSON
-                                                    match serde_json::from_str::<ServerMessage>(&awser) {
-                                                        Ok(ServerMessage::LoginOk { username }) => {
+                                                    match ServerMessage::from_json(&answer) {
+                                                        Some(ServerMessage::LoginOk { username }) => {
                                                             eprintln!("[DEBUG CLIENT] Login successful! User ID: {}", username);
                                                             let _ = tx.send(format!("OK:{}", username));
                                                         }
-                                                        Ok(ServerMessage::LoginError { reason }) => {
+                                                        Some(ServerMessage::LoginError { reason }) => {
                                                             eprintln!("[DEBUG CLIENT] Login error from server");
                                                             eprintln!("[DEBUG CLIENT] Reason: {}", reason);
                                                             let _ = tx.send("ERROR: Login failed".to_string());
                                                         }
-                                                        Ok(_) => {
+                                                        Some(_) => {
                                                             eprintln!("[DEBUG CLIENT] Unexpected response type");
                                                             let _ = tx.send("ERROR: Unexpected response".to_string());
                                                         }
-                                                        Err(e) => {
-                                                            eprintln!("[ERROR] Failed to parse response: {}", e);
-                                                            let _ = tx.send(format!("ERROR: {}", e));
+                                                        None => {
+                                                            eprintln!("[ERROR] Failed to parse response");
+                                                            let _ = tx.send(format!("ERROR: Failed to parse response"));
                                                         }
                                                     }
                                                 }

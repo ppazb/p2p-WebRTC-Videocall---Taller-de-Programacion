@@ -35,7 +35,7 @@ pub struct AppUI {
     client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
     rx_remoto: Option<Receiver<Mat>>, // Canal de recepción para UI
     in_call: Arc<AtomicBool>,
-    signaling_comunicator: TcpStream
+    signaling_comunicator: TcpStream,
 }
 
 impl Drop for AppUI {
@@ -47,7 +47,7 @@ impl Drop for AppUI {
 impl AppUI {
     // Modifico firma AppUI
     pub fn new(app_params: AppParameters) -> Option<Self> {
-        if let Ok(stream) =  TcpStream::connect(&app_params.sdp_handshake.server_adder) {  
+        if let Ok(stream) = TcpStream::connect(&app_params.sdp_handshake.server_adder) {
             Some(Self {
                 vista_actual: Vista::VistaLogin(VistaLogin::new()),
                 cliente: None,
@@ -61,10 +61,10 @@ impl AppUI {
                 app_params,
                 signaling_comunicator: stream,
                 camara: None,
-
             })
-    }
-    else {None}
+        } else {
+            None
+        }
     }
 
     fn cambiar_vista(&mut self, cambio: CambioVista) {
@@ -307,7 +307,9 @@ impl eframe::App for AppUI {
         // cada frame, la vista actual muestra su ui
         // algunas acciones provocan cambios de vista
         // se debería preservar información y cargarla durante la transicion
-        let cambio = self.vista_actual.ui(ctx, &self.camara, &mut self.signaling_comunicator);
+        let cambio = self
+            .vista_actual
+            .ui(ctx, &self.camara, &mut self.signaling_comunicator);
         self.cambiar_vista(cambio);
         ctx.request_repaint();
     }

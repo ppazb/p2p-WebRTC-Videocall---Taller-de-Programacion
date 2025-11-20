@@ -43,13 +43,17 @@ fn main() -> eframe::Result<()> {
     //         )))
     //     }),
     // )
-    let app = match  AppUI::new(session_info) {
+    let app = match AppUI::new(session_info) {
         Some(app) => app,
-        None => return eframe::Result::Err(eframe::Error::AppCreation("Fallo inicializar la app revisar config".into()))
+        None => {
+            return eframe::Result::Err(eframe::Error::AppCreation(
+                "Fallo inicializar la app revisar config".into(),
+            ));
+        }
     };
     eframe::run_native(
         "RoomRTC - Sobrevivir Taller",
         native_options,
-        Box::new(|_cc| Ok(Box::new( app))),
+        Box::new(|_cc| Ok(Box::new(app))),
     )
 }
