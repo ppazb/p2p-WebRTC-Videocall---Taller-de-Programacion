@@ -15,6 +15,8 @@ pub enum ClientMessage {
 
     // #[serde(rename = "get_users")]
     GetUsers {},
+
+    Offer { username: String, user_id: String, password: String, offer: String}, 
 }
 
 /// Mensajes que envía el servidor al cliente
@@ -54,6 +56,13 @@ impl ClientMessage {
             }
 
             ClientMessage::GetUsers {} => "{\"type\":\"get_users\"}\n".to_string(),
+
+            ClientMessage::Offer { username, user_id, password, offer} =>   format!(
+            "{{\"type\":\"offer\",\"username\":\"{}\",\"user_id\":\"{}\",\"password\":\"{}\",\"offer\":\"{}\"}}\n",
+            replace_special_character(username),
+            replace_special_character(user_id),
+            replace_special_character(password),
+            replace_special_character(offer))
         }
     }
 
@@ -74,6 +83,12 @@ impl ClientMessage {
             }),
 
             "get_users" => Some(ClientMessage::GetUsers {}),
+
+            "offer" => Some(ClientMessage::Offer { 
+                                    username: parsed_objects.get("username")?.as_str(), 
+                                    user_id: parsed_objects.get("user_id")?.as_str(), 
+                                    password: parsed_objects.get("password")?.as_str(), 
+                                    offer: parsed_objects.get("offer")?.as_str()}),
 
             _ => None,
         }
@@ -148,6 +163,7 @@ fn replace_special_character(s: &str) -> String {
         .replace('\r', "\\r")
         .replace('\t', "\\t")
 }
+
 
 pub fn vec_to_json_array(vec_string: &Vec<String>) -> String {
     let mut output_str = String::from("[");

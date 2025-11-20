@@ -130,6 +130,13 @@ fn handle_client(
                         stream_write.flush()?;
                         eprintln!("[SERVER] Sent users list\n");
                     }
+
+                    Some(ClientMessage::Offer { username, user_id, password, offer }) => {
+
+                        let offer = offer.as_str(); 
+                        eprintln!("[SERVER] OFFER: {:?}\n", offer);
+                    }
+
                     None => {
                         eprintln!("[ERROR] Failed to parse JSON");
                         let response = ServerMessage::Error {

@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::SdpHandshakeParameters;
 use crate::sdp_errors::SdpError;
+use crate::signalling_protocol::ClientMessage;
 use std::fs;
 use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
@@ -585,37 +586,6 @@ fn try_connection(
     Ok(stream)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct SignallingMessage {
-    user_name: String,
-    user_id: String,
-    password: String,
-    offer: String,
-}
-
-impl SignallingMessage {
-    pub fn new(user_name: &str, user_id: usize, password: &str, offer: String) -> Self {
-        Self {
-            user_name: user_name.to_string(),
-            user_id: user_id.to_string(),
-            password: password.to_string(),
-            offer,
-        }
-    }
-
-    pub fn generate_message(&self) -> String {
-        let mut message = match serde_json::to_string(self) {
-            Ok(m) => m,
-            Err(e) => {
-                eprintln!("[DEBUG] Signalling Message Error");
-                return String::new();
-            }
-        };
-
-        message.push('\n');
-        message
-    }
-}
 
 // Realiza el Handshake SDP entre dos peers, intercambiando a través de TCPSocket que simula el pasaje por Signalling Server
 // devuelve 3 Vectores, uno con las direcciones ICE del peer local, otro con las direcciones ICE del peer remoto y con los codecs
@@ -642,15 +612,15 @@ pub fn sdp_handshake(
     let my_offer = fs::read_to_string(&handshake_params.offer_path)
         .map_err(|_| SdpError::Other(String::from("Read Offer error")))?;
 
-    let message_offer = SignallingMessage::new(
-        &sdp_offer_session_descrip.origin.username,
-        sdp_offer_session_descrip.origin.session_id,
-        "abc123",
-        my_offer,
-    );
+    let message_offer = ClientMessage::Offer {
+        username: String::from(&sdp_offer_session_descrip.origin.username),
+        user_id: sdp_offer_session_descrip.origin.session_id.to_string(),
+        password: String::from("abc123"),
+        offer: my_offer.clone(),
+    };
 
     server_stream
-        .write_all(message_offer.generate_message().as_bytes())
+        .write_all(message_offer.to_json_line().as_bytes())
         .map_err(|_| SdpError::OfferFileWriteError)?;
     server_stream
         .flush()

@@ -12,7 +12,7 @@ pub enum JsonStruct {
 impl JsonStruct {
     pub fn as_str(&self) -> String {
         match self {
-            JsonStruct::Str(s) => s.to_string(),
+            JsonStruct::Str(s) => json_replace_character_back(s),
             _ => {
                 eprintln!("Not a JsonStruct::Str");
                 return String::new();
@@ -39,6 +39,14 @@ impl JsonStruct {
             }
         }
     }
+}
+
+pub fn json_replace_character_back(s: &str)  -> String {
+    s.replace("\\n", "\n")
+     .replace("\\r", "\r")
+     .replace("\\t", "\t")
+     .replace("\\\"", "\"")
+     .replace("\\\\", "\\")
 }
 
 pub fn json_split_fields(json: &str) -> Vec<String> {
