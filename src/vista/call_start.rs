@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use eframe::egui::{self, Align, Color32, Frame, Layout, RichText};
+use eframe::egui::{self, Color32, Frame, RichText};
 
 use crate::{camera::Camera, vista::cambio::CambioVista};
 
@@ -42,23 +42,35 @@ impl VistaCallStart {
 
                         ui.vertical_centered(|ui| {
                             ui.add_space(10.0);
-                            
+
                             ui.label(
-                                RichText::new(format!("Conectando con {}...", self.target_username))
-                                    .strong()
-                                    .size(18.0)
-                                    .color(Color32::WHITE),
+                                RichText::new(format!(
+                                    "Conectando con {}...",
+                                    self.target_username
+                                ))
+                                .strong()
+                                .size(18.0)
+                                .color(Color32::WHITE),
                             );
 
                             ui.add_space(20.0);
-                            
+
                             ui.spinner();
-                            ui.label(RichText::new("Negociando conexión (SDP/ICE)...").italics().color(Color32::LIGHT_GRAY));
+                            ui.label(
+                                RichText::new("Negociando conexión (SDP/ICE)...")
+                                    .italics()
+                                    .color(Color32::LIGHT_GRAY),
+                            );
 
                             ui.add_space(30.0);
 
-                            if ui.button(RichText::new("Cancelar llamada").color(Color32::RED)).clicked() {
-                                cambio = CambioVista::ToLobby { username: String::new() };
+                            if ui
+                                .button(RichText::new("Cancelar llamada").color(Color32::RED))
+                                .clicked()
+                            {
+                                cambio = CambioVista::ToLobby {
+                                    username: String::new(),
+                                };
                             }
                         });
                     });

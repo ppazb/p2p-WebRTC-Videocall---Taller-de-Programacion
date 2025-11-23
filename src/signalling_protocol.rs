@@ -6,23 +6,23 @@ use crate::json_parser::json_clasify;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    Login { 
-        username: String, 
-        password: String 
+    Login {
+        username: String,
+        password: String,
     },
 
-    Logout { 
-        username: String 
+    Logout {
+        username: String,
     },
 
     GetUsers {},
 
-    Offer { 
-        username: String, 
-        user_id: String, 
-        password: String, 
+    Offer {
+        username: String,
+        user_id: String,
+        password: String,
         offer: String,
-        target_user: Option<String>
+        target_user: Option<String>,
     },
 
     Answer {
@@ -39,66 +39,40 @@ pub enum ClientMessage {
 
     CallEnd {
         username: String,
-        target_user: String
-        
+        target_user: String,
     },
-    
+
     CallReject {
         username: String,
         target_user: String,
-    }
+    },
 }
 
 /// Mensajes que envía el servidor al cliente
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
-    LoginOk { 
-        username: String 
-    },
+    LoginOk { username: String },
 
-    LoginError { 
-        reason: String 
-    },
+    LoginError { reason: String },
 
     LogoutOk,
 
-    UserList { 
-        users: Vec<String>
-    },
+    UserList { users: Vec<String> },
 
-    UserJoined { 
-        username: String 
-    },
+    UserJoined { username: String },
 
-    UserLeft { 
-        username: String 
-    },
+    UserLeft { username: String },
 
-    OfferForwarded {
-        from_user: String,
-        offer: String,
-    },
+    OfferForwarded { from_user: String, offer: String },
 
-    OfferAvailable {
-        from_user: String,
-        offer: String,
-    },
+    OfferAvailable { from_user: String, offer: String },
 
-    AnswerForwarded {
-        from_user: String,
-        answer: String,
-    },
+    AnswerForwarded { from_user: String, answer: String },
 
-    CallEnded {
-        from_user: String,
-    },
-    CallRejected {
-        from_user: String
-    },
+    CallEnded { from_user: String },
+    CallRejected { from_user: String },
 
-    Error { 
-        reason: String 
-    },
+    Error { reason: String },
 }
 
 impl ClientMessage {
@@ -115,10 +89,16 @@ impl ClientMessage {
 
             ClientMessage::GetUsers {} => "{\"type\":\"get_users\"}\n".to_string(),
 
-            ClientMessage::Offer { username, user_id, password, offer, target_user } => {
+            ClientMessage::Offer {
+                username,
+                user_id,
+                password,
+                offer,
+                target_user,
+            } => {
                 let target = match target_user {
                     Some(t) => t.clone(),
-                    None => "".to_string()
+                    None => "".to_string(),
                 };
                 format!(
                     "{{\"type\":\"offer\",\"username\":\"{}\",\"user_id\":\"{}\",\"password\":\"{}\",\"offer\":\"{}\",\"target_user\":\"{}\"}}\n",
@@ -128,9 +108,14 @@ impl ClientMessage {
                     replace_special_character(offer),
                     replace_special_character(&target)
                 )
-            },
+            }
 
-            ClientMessage::Answer { username, user_id, answer, target_user } => format!(
+            ClientMessage::Answer {
+                username,
+                user_id,
+                answer,
+                target_user,
+            } => format!(
                 "{{\"type\":\"answer\",\"username\":\"{}\",\"user_id\":\"{}\",\"answer\":\"{}\",\"target_user\":\"{}\"}}\n",
                 replace_special_character(username),
                 replace_special_character(user_id),
@@ -138,22 +123,29 @@ impl ClientMessage {
                 replace_special_character(target_user)
             ),
 
-            ClientMessage::RequestOffer { username, target_user } => format!(
+            ClientMessage::RequestOffer {
+                username,
+                target_user,
+            } => format!(
                 "{{\"type\":\"request_offer\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
                 replace_special_character(username),
                 replace_special_character(target_user)
             ),
 
-            ClientMessage::CallEnd { username, target_user } => format!(
+            ClientMessage::CallEnd {
+                username,
+                target_user,
+            } => format!(
                 "{{\"type\":\"{}\",\"end_call\":\"\",\"target_user\":\"{}\"}}\n",
-                username,
-                target_user
+                username, target_user
             ),
-            ClientMessage::CallReject { username, target_user } => format!(
-                "{{\"type\":\"call_reject\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
+            ClientMessage::CallReject {
                 username,
-                target_user
-            )
+                target_user,
+            } => format!(
+                "{{\"type\":\"call_reject\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
+                username, target_user
+            ),
         }
     }
 
@@ -175,12 +167,12 @@ impl ClientMessage {
 
             "get_users" => Some(ClientMessage::GetUsers {}),
 
-            "offer" => Some(ClientMessage::Offer { 
-                username: parsed_objects.get("username")?.as_str(), 
-                user_id: parsed_objects.get("user_id")?.as_str(), 
-                password: parsed_objects.get("password")?.as_str(), 
+            "offer" => Some(ClientMessage::Offer {
+                username: parsed_objects.get("username")?.as_str(),
+                user_id: parsed_objects.get("user_id")?.as_str(),
+                password: parsed_objects.get("password")?.as_str(),
                 offer: parsed_objects.get("offer")?.as_str(),
-                target_user: parsed_objects.get("target_user").map(|v| v.as_str())
+                target_user: parsed_objects.get("target_user").map(|v| v.as_str()),
             }),
 
             "answer" => Some(ClientMessage::Answer {
@@ -194,12 +186,12 @@ impl ClientMessage {
                 username: parsed_objects.get("username")?.as_str(),
                 target_user: parsed_objects.get("target_user")?.as_str(),
             }),
-            "call_end" => Some(ClientMessage::CallEnd { 
+            "call_end" => Some(ClientMessage::CallEnd {
                 username: parsed_objects.get("username")?.as_str(),
-                target_user: parsed_objects.get("target_user")?.as_str(), 
+                target_user: parsed_objects.get("target_user")?.as_str(),
             }),
-            "call_reject" => Some(ClientMessage::CallReject { 
-                username: parsed_objects.get("username")?.as_str() , 
+            "call_reject" => Some(ClientMessage::CallReject {
+                username: parsed_objects.get("username")?.as_str(),
                 target_user: parsed_objects.get("target_user")?.as_str(),
             }),
             _ => None,
@@ -211,63 +203,90 @@ impl ServerMessage {
     pub fn to_json_line(&self) -> String {
         match self {
             ServerMessage::LoginOk { username } => {
-                format!("{{\"type\":\"login_ok\",\"username\":\"{}\"}}\n", replace_special_character(username))
+                format!(
+                    "{{\"type\":\"login_ok\",\"username\":\"{}\"}}\n",
+                    replace_special_character(username)
+                )
             }
 
             ServerMessage::LogoutOk => "{\"type\":\"logout_ok\"}\n".to_string(),
 
             ServerMessage::LoginError { reason } => {
-                format!("{{\"type\":\"login_error\",\"reason\":\"{}\"}}\n", replace_special_character(reason))
+                format!(
+                    "{{\"type\":\"login_error\",\"reason\":\"{}\"}}\n",
+                    replace_special_character(reason)
+                )
             }
 
             ServerMessage::UserList { users } => {
                 let users_json_array = vec_to_json_array(users);
-                
+
                 let users_escaped = users_json_array.replace("\"", "\\\"");
-                
-                format!("{{\"type\":\"user_list\",\"users\":\"{}\"}}\n", users_escaped)
+
+                format!(
+                    "{{\"type\":\"user_list\",\"users\":\"{}\"}}\n",
+                    users_escaped
+                )
             }
 
             ServerMessage::UserJoined { username } => {
-                format!("{{\"type\":\"user_joined\",\"username\":\"{}\"}}\n", replace_special_character(username))
+                format!(
+                    "{{\"type\":\"user_joined\",\"username\":\"{}\"}}\n",
+                    replace_special_character(username)
+                )
             }
 
             ServerMessage::UserLeft { username } => {
-                format!("{{\"type\":\"user_left\",\"username\":\"{}\"}}\n", replace_special_character(username))
+                format!(
+                    "{{\"type\":\"user_left\",\"username\":\"{}\"}}\n",
+                    replace_special_character(username)
+                )
             }
 
             ServerMessage::OfferForwarded { from_user, offer } => {
-                format!("{{\"type\":\"offer_forwarded\",\"from_user\":\"{}\",\"offer\":\"{}\"}}\n", 
-                    replace_special_character(from_user), 
-                    replace_special_character(offer))
+                format!(
+                    "{{\"type\":\"offer_forwarded\",\"from_user\":\"{}\",\"offer\":\"{}\"}}\n",
+                    replace_special_character(from_user),
+                    replace_special_character(offer)
+                )
             }
 
             ServerMessage::OfferAvailable { from_user, offer } => {
-                format!("{{\"type\":\"offer_available\",\"from_user\":\"{}\",\"offer\":\"{}\"}}\n", 
-                    replace_special_character(from_user), 
-                    replace_special_character(offer))
+                format!(
+                    "{{\"type\":\"offer_available\",\"from_user\":\"{}\",\"offer\":\"{}\"}}\n",
+                    replace_special_character(from_user),
+                    replace_special_character(offer)
+                )
             }
 
             ServerMessage::AnswerForwarded { from_user, answer } => {
-                format!("{{\"type\":\"answer_forwarded\",\"from_user\":\"{}\",\"answer\":\"{}\"}}\n", 
-                    replace_special_character(from_user), 
-                    replace_special_character(answer))
+                format!(
+                    "{{\"type\":\"answer_forwarded\",\"from_user\":\"{}\",\"answer\":\"{}\"}}\n",
+                    replace_special_character(from_user),
+                    replace_special_character(answer)
+                )
             }
-            ServerMessage::CallEnded {from_user } => {
-            format!("{{\"type\":\"call_end\",\"from_user\":\"{}\",\"and_user\":\"\"}}\n",
-            from_user)
+            ServerMessage::CallEnded { from_user } => {
+                format!(
+                    "{{\"type\":\"call_end\",\"from_user\":\"{}\",\"and_user\":\"\"}}\n",
+                    from_user
+                )
             }
-            
+
             ServerMessage::CallRejected { from_user } => {
-                format!("{{\"type\":\"call_rejected\",\"from_user\":\"{}\"}}\n",
-                from_user)
-            },
+                format!(
+                    "{{\"type\":\"call_rejected\",\"from_user\":\"{}\"}}\n",
+                    from_user
+                )
+            }
 
             ServerMessage::Error { reason } => {
-                format!("{{\"type\":\"error\",\"reason\":\"{}\"}}\n", replace_special_character(reason))
-            },
-
-         }
+                format!(
+                    "{{\"type\":\"error\",\"reason\":\"{}\"}}\n",
+                    replace_special_character(reason)
+                )
+            }
+        }
     }
 
     pub fn from_json(json: &str) -> Option<Self> {
@@ -287,13 +306,13 @@ impl ServerMessage {
 
             "logout_ok" => Some(ServerMessage::LogoutOk),
 
-            "user_list" | "User_list" => { 
+            "user_list" | "User_list" => {
                 // AHORA SÍ: .as_str() funcionará porque enviamos un string
-                let raw_users = parsed_objects.get("users")?.as_str(); 
+                let raw_users = parsed_objects.get("users")?.as_str();
                 Some(ServerMessage::UserList {
                     users: parse_string_array(&raw_users),
                 })
-            },
+            }
 
             "user_joined" => Some(ServerMessage::UserJoined {
                 username: parsed_objects.get("username")?.as_str(),
@@ -361,11 +380,12 @@ pub fn vec_to_json_array(vec_string: &Vec<String>) -> String {
 fn parse_string_array(json_array: &str) -> Vec<String> {
     let trimmed = json_array.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
-        let content = &trimmed[1..trimmed.len()-1];
+        let content = &trimmed[1..trimmed.len() - 1];
         if content.is_empty() {
             return Vec::new();
         }
-        content.split(',')
+        content
+            .split(',')
             .map(|s| s.trim().trim_matches('"').replace("\\\"", "\"").to_string())
             .filter(|s| !s.is_empty())
             .collect()

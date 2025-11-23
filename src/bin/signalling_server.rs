@@ -1,7 +1,7 @@
 use room_rtc::config::*;
 use room_rtc::server_users::ServerUserData;
 use room_rtc::signalling_error::SignallingServerError;
-use room_rtc::signalling_protocol::{ClientMessage, ServerMessage, vec_to_json_array};
+use room_rtc::signalling_protocol::{ClientMessage, ServerMessage};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
@@ -34,13 +34,15 @@ fn main() -> Result<(), SignallingServerError> {
 
     let file_path = &server_info.users_db;
     let login = ServerUserData::new(file_path).unwrap();
-    
+
     let active_clients: Arc<Mutex<ServerUserData>> = Arc::new(Mutex::new(login));
-    
-    let connected_clients: Arc<Mutex<HashMap<String, std::net::TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
-    
-    // persistir ofertas 
-    let stored_offers: Arc<Mutex<HashMap<String, StoredOffer>>> = Arc::new(Mutex::new(HashMap::new()));
+
+    let connected_clients: Arc<Mutex<HashMap<String, std::net::TcpStream>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    // persistir ofertas
+    let stored_offers: Arc<Mutex<HashMap<String, StoredOffer>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     println!("[SERVER] Listening for connections...\n");
 
@@ -51,7 +53,7 @@ fn main() -> Result<(), SignallingServerError> {
                 let clients = Arc::clone(&active_clients);
                 let connections = Arc::clone(&connected_clients);
                 let offers = Arc::clone(&stored_offers);
-                
+
                 std::thread::spawn(move || {
                     let _ = handle_client(s, clients, connections, offers);
                 });
@@ -82,50 +84,52 @@ fn handle_client(
         match reader.read_line(&mut line) {
             // Si da 0 es porque se cierra el socket -> se que se desconecta el usuario
             Ok(0) => {
-            
                 eprintln!("[SERVER] Client disconnected (socket closed)");
-                
+
                 if let Some(user) = &current_user {
                     // Sacar del mapa de conexiones
                     let mut clients_map = connected_clients.lock().unwrap();
                     clients_map.remove(user);
-                    
+
                     // Avisar a todos los demás que este usuario se fue
-                    let msg_left = ServerMessage::UserLeft { username: user.clone() };
+                    let msg_left = ServerMessage::UserLeft {
+                        username: user.clone(),
+                    };
                     let msg_json = msg_left.to_json_line();
-                    
+
                     for (_, other_stream) in clients_map.iter_mut() {
                         let _ = other_stream.write_all(msg_json.as_bytes());
                         let _ = other_stream.flush();
                     }
                     eprintln!("[SERVER] Removed {} and notified others", user);
-                    
+
                     // Desconectar el client
                     let mut clients = active_clients.lock().unwrap();
                     let _ = clients.desconectar(user);
                 }
-                
+
                 break;
             }
             Ok(_) => {
                 eprintln!("[DEBUG SERVER] Received: {}", line.trim());
                 match ClientMessage::from_json(&line) {
-                    
                     Some(ClientMessage::Login { username, password }) => {
                         let mut clients = active_clients.lock().unwrap();
-                        if let Ok(_) = clients.verificar_login(&username, &password) {
+                        if clients.verificar_login(&username, &password).is_ok() {
                             // Marcar como conectado en la BD
-                            clients.conectar(&username); 
+                            clients.conectar(&username);
                             let clients_list: Vec<String>;
                             eprintln!("[SERVER] User '{}' logged in", username);
 
                             {
                                 let mut clients_map = connected_clients.lock().unwrap();
-                                
+
                                 // Server avisa a los ya conectados que entró uno nuevo (avisa a todos los Observers)
-                                let msg_joined = ServerMessage::UserJoined { username: username.clone() };
+                                let msg_joined = ServerMessage::UserJoined {
+                                    username: username.clone(),
+                                };
                                 let msg_json = msg_joined.to_json_line();
-                                
+
                                 for (other_user, other_stream) in clients_map.iter_mut() {
                                     if other_user != &username {
                                         let _ = other_stream.write_all(msg_json.as_bytes());
@@ -139,26 +143,27 @@ fn handle_client(
                                 }
                                 clients_list = clients_map.keys().cloned().collect();
                             }
-                            
+
                             current_user = Some(username.clone());
 
                             // Avisar a la UI que el login fue exitoso
-                            // Enviamos primero LoginOk para que UI cambie de vista al Lobby 
+                            // Enviamos primero LoginOk para que UI cambie de vista al Lobby
                             // para después cuando reciba la lista de conectados, lo pueda mostrar correctamente
-                            let response = ServerMessage::LoginOk{username};
+                            let response = ServerMessage::LoginOk { username };
                             let response_json = response.to_json_line();
                             stream_write.write_all(response_json.as_bytes())?;
                             stream_write.flush()?; //me aseguro que se escriba todo
                             eprintln!("[SERVER] Sent LoginOk\n");
-                            
+
                             // Le enviamos la lista una vez que entra, ya que la primera vez
                             // el usuario todavia no estaba adentro
-                            let user_list = ServerMessage::UserList {users: clients_list};
+                            let user_list = ServerMessage::UserList {
+                                users: clients_list,
+                            };
                             let list_json = user_list.to_json_line();
                             stream_write.write_all(list_json.as_bytes())?;
                             stream_write.flush()?;
-                            eprintln!("[SERVER] Sent Initial UserList to new user");                   
-
+                            eprintln!("[SERVER] Sent Initial UserList to new user");
                         } else {
                             let response = ServerMessage::LoginError {
                                 reason: "Datos invalidos o usuario ya conectado".to_string(),
@@ -170,26 +175,28 @@ fn handle_client(
                         }
                     }
 
-                    Some(ClientMessage::Logout {username}) => {
+                    Some(ClientMessage::Logout { username }) => {
                         {
                             let mut clients = active_clients.lock().unwrap();
                             let _ = clients.desconectar(&username);
                         }
 
                         eprintln!("[SERVER] User {} logged out", &username);
-                        
+
                         // Enviar confirmación
                         let response = ServerMessage::LogoutOk;
                         let response_json = response.to_json_line();
                         stream_write.write_all(response_json.as_bytes())?;
                         stream_write.flush()?;
-                        
+
                         // Sacar la conexión de los conectados y notificar salida
                         {
                             let mut clients_map = connected_clients.lock().unwrap();
                             clients_map.remove(&username);
-                            
-                            let msg_left = ServerMessage::UserLeft {username: username.clone()};
+
+                            let msg_left = ServerMessage::UserLeft {
+                                username: username.clone(),
+                            };
                             let msg_json = msg_left.to_json_line();
                             for (_, other_stream) in clients_map.iter_mut() {
                                 let _ = other_stream.write_all(msg_json.as_bytes());
@@ -202,9 +209,9 @@ fn handle_client(
                     }
 
                     Some(ClientMessage::GetUsers {}) => {
-                        // lockeamos para leerlo y evitar inconsistencias 
+                        // lockeamos para leerlo y evitar inconsistencias
                         let clients_guard = connected_clients.lock().unwrap();
-                        
+
                         let users_vec: Vec<String> = clients_guard.keys().cloned().collect();
                         drop(clients_guard);
 
@@ -216,9 +223,15 @@ fn handle_client(
                     }
 
                     //quiero llamar a alguien
-                    Some(ClientMessage::Offer { username, user_id: _, password: _, offer, target_user }) => {
+                    Some(ClientMessage::Offer {
+                        username,
+                        user_id: _,
+                        password: _,
+                        offer,
+                        target_user,
+                    }) => {
                         eprintln!("[SERVER] OFFER from {}", username);
-                        
+
                         // Almacenar el offer recibido
                         {
                             let mut offers_map = stored_offers.lock().unwrap();
@@ -228,11 +241,11 @@ fn handle_client(
                             };
                             offers_map.insert(username.clone(), stored);
                         }
-                        
+
                         // Reenviar el offer al client al que me quiero conectar
                         if let Some(target) = target_user {
                             let mut clients_map = connected_clients.lock().unwrap();
-                            
+
                             if let Some(target_stream) = clients_map.get_mut(&target) {
                                 let response = ServerMessage::OfferForwarded {
                                     from_user: username.clone(),
@@ -246,13 +259,21 @@ fn handle_client(
                             }
                         }
                     }
-                    
+
                     // mi respuesta al offer
-                    Some(ClientMessage::Answer { username, user_id: _, answer, target_user }) => {
-                        eprintln!("[SERVER] ANSWER from {} -> target: {}", username, target_user);
-                        
+                    Some(ClientMessage::Answer {
+                        username,
+                        user_id: _,
+                        answer,
+                        target_user,
+                    }) => {
+                        eprintln!(
+                            "[SERVER] ANSWER from {} -> target: {}",
+                            username, target_user
+                        );
+
                         let mut clients_map = connected_clients.lock().unwrap();
-                        //  Creo mensaje del answer al client que envió el offer 
+                        //  Creo mensaje del answer al client que envió el offer
                         if let Some(target_stream) = clients_map.get_mut(&target_user) {
                             let response = ServerMessage::AnswerForwarded {
                                 from_user: username.clone(),
@@ -263,9 +284,12 @@ fn handle_client(
                             eprintln!("[SERVER] Forwarded ANSWER to {}", target_user);
                         }
                     }
-                    
+
                     //aceptar o rechazar llamada
-                    Some(ClientMessage::RequestOffer { username: _, target_user }) => {
+                    Some(ClientMessage::RequestOffer {
+                        username: _,
+                        target_user,
+                    }) => {
                         let offers_map = stored_offers.lock().unwrap();
                         if let Some(stored) = offers_map.get(&target_user) {
                             let response = ServerMessage::OfferAvailable {
@@ -283,30 +307,37 @@ fn handle_client(
                         }
                     }
 
-                    //aviso al server q termino la llamada: lo triggerea cualquiera de los dos 
-                    Some(ClientMessage::CallEnd { username,target_user }) => {
-                        eprintln!("[SERVER] CallEnd by: {} to: {}", username,target_user);
+                    //aviso al server q termino la llamada: lo triggerea cualquiera de los dos
+                    Some(ClientMessage::CallEnd {
+                        username,
+                        target_user,
+                    }) => {
+                        eprintln!("[SERVER] CallEnd by: {} to: {}", username, target_user);
 
-                        let mut clients_map = connected_clients.lock().unwrap();
+                        let clients_map = connected_clients.lock().unwrap();
                         if let Some(mut target_stream) = clients_map.get(&target_user) {
-                            let response = ServerMessage::CallEnded { 
-                                from_user: username.clone()
+                            let response = ServerMessage::CallEnded {
+                                from_user: username.clone(),
                             };
                             let _ = target_stream.write_all(response.to_json_line().as_bytes());
                             let _ = target_stream.flush();
                             eprintln!("[SERVER] Forwarded CallEnded to {}", target_user);
-                        }
-                        else {
+                        } else {
                             eprintln!("[SERVER] Target not found for CallEnded");
                         }
-
                     }
 
-                    // Mensaje para avisar al client que inició la llamada 
+                    // Mensaje para avisar al client que inició la llamada
                     // target_user: Al que se le rechazó la llamada (el client que no inició la llamada)
-                    Some(ClientMessage::CallReject { username, target_user }) => {
-                        eprintln!("[SERVER] CallReject from {} -> target: {}", username, target_user);
-                        
+                    Some(ClientMessage::CallReject {
+                        username,
+                        target_user,
+                    }) => {
+                        eprintln!(
+                            "[SERVER] CallReject from {} -> target: {}",
+                            username, target_user
+                        );
+
                         let mut clients_map = connected_clients.lock().unwrap();
                         if let Some(target_stream) = clients_map.get_mut(&target_user) {
                             // Notificamos al client que llamó que fue rechazado
@@ -319,7 +350,7 @@ fn handle_client(
                         } else {
                             eprintln!("[SERVER] Target {} not found for CallReject", target_user);
                         }
-                    },
+                    }
 
                     None => {
                         //no deberia pasar, se recibe un mensaje que no se reconoce

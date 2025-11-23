@@ -1,13 +1,13 @@
-use std::io::Write;
-use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 use crate::signalling_protocol::ClientMessage;
 use crate::vista::cambio::CambioVista;
+use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
+use std::io::Write;
 
 pub struct VistaLogin {
     pub username: String,
     pub password: String,
     pub error_msg: Option<String>,
-    pub auth_pending: bool, 
+    pub auth_pending: bool,
 }
 
 impl Default for VistaLogin {
@@ -27,7 +27,6 @@ impl VistaLogin {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context, tcp: &mut std::net::TcpStream) -> CambioVista {
-        
         egui::CentralPanel::default().show(ctx, |ui| {
             // Centro el frame dentro del panel
             ui.with_layout(
@@ -42,7 +41,11 @@ impl VistaLogin {
                             ui.set_height(220.0);
 
                             ui.vertical_centered(|ui| {
-                                ui.heading(RichText::new("RoomRTC Login").color(Color32::WHITE).strong());
+                                ui.heading(
+                                    RichText::new("RoomRTC Login")
+                                        .color(Color32::WHITE)
+                                        .strong(),
+                                );
                                 ui.add_space(20.0);
 
                                 // Campo usuario
@@ -58,9 +61,7 @@ impl VistaLogin {
 
                                 // Campo contraseña
                                 ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new("Password:").color(Color32::WHITE),
-                                    );
+                                    ui.label(RichText::new("Password:").color(Color32::WHITE));
                                     ui.add_sized(
                                         Vec2::new(160.0, 22.0),
                                         TextEdit::singleline(&mut self.password).password(true),
@@ -79,31 +80,36 @@ impl VistaLogin {
 
                                 if self.auth_pending {
                                     ui.spinner();
-                                    ui.label(RichText::new("Conectando al servidor...").color(Color32::LIGHT_GRAY));
-                                } else {
-                                    if ui.button("Iniciar Sesion").clicked() {
-                                        if self.username.is_empty() || self.password.is_empty() {
-                                            self.error_msg = Some("Complete todos los campos".into());
-                                        } else {
-                                            // Crear mensaje
-                                            let login_msg = ClientMessage::Login {
-                                                username: self.username.clone(),
-                                                password: self.password.clone(),
-                                            };
-                                            let json_msg = login_msg.to_json_line();
+                                    ui.label(
+                                        RichText::new("Conectando al servidor...")
+                                            .color(Color32::LIGHT_GRAY),
+                                    );
+                                } else if ui.button("Iniciar Sesion").clicked() {
+                                    if self.username.is_empty() || self.password.is_empty() {
+                                        self.error_msg = Some("Complete todos los campos".into());
+                                    } else {
+                                        // Crear mensaje
+                                        let login_msg = ClientMessage::Login {
+                                            username: self.username.clone(),
+                                            password: self.password.clone(),
+                                        };
+                                        let json_msg = login_msg.to_json_line();
 
-                                            eprintln!("[CLIENT] Enviando login para: {}", self.username);
+                                        eprintln!(
+                                            "[CLIENT] Enviando login para: {}",
+                                            self.username
+                                        );
 
-                                            match tcp.write_all(json_msg.as_bytes()) {
-                                                Ok(_) => {
-                                                    let _ = tcp.flush();
-                                                    self.auth_pending = true;
-                                                    self.error_msg = None;
-                                                }
-                                                Err(e) => {
-                                                    self.error_msg = Some(format!("Error de red: {}", e));
-                                                    eprintln!("[ERROR] Write failed: {}", e);
-                                                }
+                                        match tcp.write_all(json_msg.as_bytes()) {
+                                            Ok(_) => {
+                                                let _ = tcp.flush();
+                                                self.auth_pending = true;
+                                                self.error_msg = None;
+                                            }
+                                            Err(e) => {
+                                                self.error_msg =
+                                                    Some(format!("Error de red: {}", e));
+                                                eprintln!("[ERROR] Write failed: {}", e);
                                             }
                                         }
                                     }
@@ -113,7 +119,7 @@ impl VistaLogin {
                 },
             );
         });
-        
+
         // Siempre retornamos None porque el cambio lo fuerza AppUI desde fuera
         CambioVista::None
     }

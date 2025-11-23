@@ -7,12 +7,11 @@
 // a=rtpmap:0 PCMU/8000
 // a=candidate: 196.168.0.1 80000
 
-
 use crate::config::SdpHandshakeParameters;
 use crate::sdp_errors::SdpError;
 use crate::signalling_protocol::{ClientMessage, ServerMessage};
 use std::fs;
-use std::io::{Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -361,7 +360,6 @@ impl fmt::Display for Attribute {
     }
 }
 
-
 #[derive(Debug, Default, PartialEq, PartialOrd, Clone)]
 pub struct Origin {
     pub username: String,
@@ -425,7 +423,6 @@ impl fmt::Display for Origin {
     }
 }
 
-
 #[derive(Debug, Default, PartialEq, PartialOrd, Clone)]
 pub struct Time {
     start: usize,
@@ -480,38 +477,36 @@ fn create_sdp_offer(local_adder: &str, file_path: &str) -> Result<SessionDescrip
     Ok(session_description)
 }
 
-
 pub fn sdp_handshake(
     in_call: Arc<AtomicBool>,
     handshake_params: SdpHandshakeParameters,
     username: String,
     target_user: String,
-    writer: &mut TcpStream, // Escribo al server 
-    reader_rx: Receiver<ServerMessage> // Recibo mensajes SDP 
+    writer: &mut TcpStream,             // Escribo al server
+    reader_rx: Receiver<ServerMessage>, // Recibo mensajes SDP
 ) -> Result<(Vec<String>, Vec<String>, Vec<String>), SdpError> {
-    
     println!("[SDP] Initialize handshake with {}", target_user);
 
-    // determinar el rol  
+    // determinar el rol
     let mut remote_offer_received: Option<SessionDescription> = None;
     let mut remote_username = target_user.clone();
 
-    if let Ok(msg) = reader_rx.try_recv() {
-         if let ServerMessage::OfferForwarded { from_user, offer } = msg {
-             println!("[SDP] Offer recieved from: {})", from_user);
-             remote_offer_received = Some(SessionDescription::parse(&offer)?);
-             remote_username = from_user;
-         }
+    if let Ok(msg) = reader_rx.try_recv()
+        && let ServerMessage::OfferForwarded { from_user, offer } = msg
+    {
+        println!("[SDP] Offer recieved from: {})", from_user);
+        remote_offer_received = Some(SessionDescription::parse(&offer)?);
+        remote_username = from_user;
     }
 
     if let Some(remote_offer) = remote_offer_received {
-        
         // Generar Answer
         println!("[SDP] Generating answer...");
         let my_session = SessionDescription::create(&handshake_params.local_adder)?;
-        let my_answer_desc = my_session.generate_compatible_session(&remote_offer)
-             .ok_or(SdpError::IncompatibleSession)?;
-        
+        let my_answer_desc = my_session
+            .generate_compatible_session(&remote_offer)
+            .ok_or(SdpError::IncompatibleSession)?;
+
         let answer_str = format!("{}", my_answer_desc);
 
         // enviar Answer
@@ -521,26 +516,29 @@ pub fn sdp_handshake(
             answer: answer_str,
             target_user: remote_username,
         };
-        
-        writer.write_all(msg.to_json_line().as_bytes()).map_err(|_| SdpError::OfferFileWriteError)?;
+
+        writer
+            .write_all(msg.to_json_line().as_bytes())
+            .map_err(|_| SdpError::OfferFileWriteError)?;
         writer.flush().ok();
         println!("[SDP] Answer was sent.");
 
         // info para ICE
-        let my_ice = Attribute::get_ice_candidate(&my_answer_desc.media.attributes).unwrap_or_default();
-        let remote_ice = Attribute::get_ice_candidate(&remote_offer.media.attributes).unwrap_or_default();
+        let my_ice =
+            Attribute::get_ice_candidate(&my_answer_desc.media.attributes).unwrap_or_default();
+        let remote_ice =
+            Attribute::get_ice_candidate(&remote_offer.media.attributes).unwrap_or_default();
         let codecs = vec!["H264".to_string()];
 
-        return Ok((my_ice, remote_ice, codecs));
-
+        Ok((my_ice, remote_ice, codecs))
     } else {
-  
         println!("[SDP] Calling to: {})", target_user);
 
         // Genero offer
-        let my_offer_desc = create_sdp_offer(&handshake_params.local_adder, &handshake_params.offer_path)?;
+        let my_offer_desc =
+            create_sdp_offer(&handshake_params.local_adder, &handshake_params.offer_path)?;
         let my_offer_str = fs::read_to_string(&handshake_params.offer_path)
-             .map_err(|_| SdpError::Other(String::from("Read Offer error")))?;
+            .map_err(|_| SdpError::Other(String::from("Read Offer error")))?;
 
         // Envio offer al servidor
         let msg = ClientMessage::Offer {
@@ -551,7 +549,9 @@ pub fn sdp_handshake(
             target_user: Some(target_user.clone()),
         };
 
-        writer.write_all(msg.to_json_line().as_bytes()).map_err(|_| SdpError::OfferFileWriteError)?;
+        writer
+            .write_all(msg.to_json_line().as_bytes())
+            .map_err(|_| SdpError::OfferFileWriteError)?;
         writer.flush().ok();
         println!("[SDP] Offer sent. Waiting answer...");
 
@@ -567,24 +567,27 @@ pub fn sdp_handshake(
                 return Err(SdpError::Other("Timeout while waiting to answer".into()));
             }
 
-            // Bloquear esperando mensaje del canal con timeout 
+            // Bloquear esperando mensaje del canal con timeout
             match reader_rx.recv_timeout(Duration::from_millis(500)) {
                 Ok(ServerMessage::AnswerForwarded { from_user, answer }) => {
                     if from_user == target_user {
                         println!("[SDP] Answer recieved");
                         let remote_answer = SessionDescription::parse(&answer)?;
-                        
-                        let my_ice = Attribute::get_ice_candidate(&my_offer_desc.media.attributes).unwrap_or_default();
-                        let remote_ice = Attribute::get_ice_candidate(&remote_answer.media.attributes).unwrap_or_default();
-                        
+
+                        let my_ice = Attribute::get_ice_candidate(&my_offer_desc.media.attributes)
+                            .unwrap_or_default();
+                        let remote_ice =
+                            Attribute::get_ice_candidate(&remote_answer.media.attributes)
+                                .unwrap_or_default();
+
                         return Ok((my_ice, remote_ice, vec!["H264".to_string()]));
                     }
-                },
+                }
                 Ok(ServerMessage::Error { reason }) => {
                     println!("[SDP] Error recieved from server: {}", reason);
-                },
-                Err(_) => continue, 
-                _ => {} 
+                }
+                Err(_) => continue,
+                _ => {}
             }
         }
     }

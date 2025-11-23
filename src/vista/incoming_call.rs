@@ -1,5 +1,5 @@
-use eframe::egui::{self, Align, Color32, Frame, Layout, RichText, Vec2};
 use crate::{camera::Camera, vista::cambio::CambioVista};
+use eframe::egui::{self, Color32, Frame, RichText, Vec2};
 use std::sync::{Arc, Mutex};
 
 pub struct VistaIncomingCall {
@@ -29,25 +29,57 @@ impl VistaIncomingCall {
             frame.show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(50.0);
-                    
-                    ui.label(RichText::new("📞 Llamada Entrante").color(Color32::LIGHT_BLUE).size(24.0).strong());
+
+                    ui.label(
+                        RichText::new("📞 Llamada Entrante")
+                            .color(Color32::LIGHT_BLUE)
+                            .size(24.0)
+                            .strong(),
+                    );
                     ui.add_space(20.0);
 
-                    ui.label(RichText::new(&self.caller_name).color(Color32::WHITE).size(32.0).strong());
-                    
+                    ui.label(
+                        RichText::new(&self.caller_name)
+                            .color(Color32::WHITE)
+                            .size(32.0)
+                            .strong(),
+                    );
+
                     ui.add_space(50.0);
 
                     ui.horizontal(|ui| {
                         let width = ui.available_width() / 2.0 - 10.0;
-                        
-                        if ui.add_sized(Vec2::new(width, 50.0), egui::Button::new(RichText::new("Rechazar").color(Color32::WHITE).size(18.0)).fill(Color32::DARK_RED)).clicked() {
-                            cambio = CambioVista::CallRejected { target_user: self.caller_name.clone() };
+
+                        if ui
+                            .add_sized(
+                                Vec2::new(width, 50.0),
+                                egui::Button::new(
+                                    RichText::new("Rechazar").color(Color32::WHITE).size(18.0),
+                                )
+                                .fill(Color32::DARK_RED),
+                            )
+                            .clicked()
+                        {
+                            cambio = CambioVista::CallRejected {
+                                target_user: self.caller_name.clone(),
+                            };
                         }
 
                         ui.add_space(20.0);
 
-                        if ui.add_sized(Vec2::new(width, 50.0), egui::Button::new(RichText::new("Aceptar").color(Color32::BLACK).size(18.0)).fill(Color32::GREEN)).clicked() {
-                            cambio = CambioVista::CallAccepted { target_user: self.caller_name.clone() };
+                        if ui
+                            .add_sized(
+                                Vec2::new(width, 50.0),
+                                egui::Button::new(
+                                    RichText::new("Aceptar").color(Color32::BLACK).size(18.0),
+                                )
+                                .fill(Color32::GREEN),
+                            )
+                            .clicked()
+                        {
+                            cambio = CambioVista::CallAccepted {
+                                target_user: self.caller_name.clone(),
+                            };
                         }
                     });
                 });

@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use eframe::egui::NumExt;
-
 #[derive(Debug, Clone)]
 pub enum JsonStruct {
     Str(String),
@@ -15,7 +13,7 @@ impl JsonStruct {
             JsonStruct::Str(s) => json_replace_character_back(s),
             _ => {
                 eprintln!("Not a JsonStruct::Str");
-                return String::new();
+                String::new()
             }
         }
     }
@@ -25,7 +23,7 @@ impl JsonStruct {
             JsonStruct::Arr(arr) => arr.iter().map(|v| v.as_str()).collect(),
             _ => {
                 eprintln!("Not a JsonStruct::Arr");
-                return Vec::new();
+                Vec::new()
             }
         }
     }
@@ -35,18 +33,18 @@ impl JsonStruct {
             JsonStruct::Obj(o) => o.clone(),
             _ => {
                 eprintln!("Not a JsonStruct::Obj");
-                return HashMap::new();
+                HashMap::new()
             }
         }
     }
 }
 
-pub fn json_replace_character_back(s: &str)  -> String {
+pub fn json_replace_character_back(s: &str) -> String {
     s.replace("\\n", "\n")
-     .replace("\\r", "\r")
-     .replace("\\t", "\t")
-     .replace("\\\"", "\"")
-     .replace("\\\\", "\\")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace("\\\"", "\"")
+        .replace("\\\\", "\\")
 }
 
 pub fn json_split_fields(json: &str) -> Vec<String> {
@@ -104,7 +102,7 @@ pub fn json_split_fields(json: &str) -> Vec<String> {
 }
 
 pub fn json_clasify(json: &str) -> JsonStruct {
-    let mut s = json.trim();
+    let s = json.trim();
 
     if s.starts_with('{') {
         JsonStruct::Obj(json_parse_obj(s))
@@ -120,8 +118,8 @@ pub fn json_parse_str(json: &str) -> String {
 }
 
 pub fn json_parse_arr(json: &str) -> Vec<JsonStruct> {
-    let mut content = json.trim();
-    let mut content = &content[1..content.len() - 1];
+    let content = json.trim();
+    let content = &content[1..content.len() - 1];
 
     let fields = json_split_fields(content);
     fields
@@ -133,10 +131,10 @@ pub fn json_parse_arr(json: &str) -> Vec<JsonStruct> {
 pub fn json_parse_obj(json: &str) -> HashMap<String, JsonStruct> {
     let mut hashmap = HashMap::new();
 
-    let mut s = json.trim();
-    let mut content = &s[1..s.len() - 1];
+    let s = json.trim();
+    let content = &s[1..s.len() - 1];
 
-    let mut fields = json_split_fields(content);
+    let fields = json_split_fields(content);
 
     for field in fields {
         let mut key_value = field.trim().splitn(2, ":");

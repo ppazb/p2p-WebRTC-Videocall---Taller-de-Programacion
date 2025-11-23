@@ -17,10 +17,10 @@ impl VistaCallEnd {
         Self {}
     }
     pub fn ui(
-        &mut self, 
-        ctx: &egui::Context, 
-        camara: &Option<Arc<Mutex<Camera>>>, 
-        _tcp: &mut std::net::TcpStream
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        _tcp: &mut std::net::TcpStream,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
@@ -48,7 +48,9 @@ impl VistaCallEnd {
 
                 if ui.button("Volver al Lobby").clicked() {
                     // Enviamos string vacío para indicar "Mismo usuario"
-                    cambio = CambioVista::ToLobby { username: String::new() };
+                    cambio = CambioVista::ToLobby {
+                        username: String::new(),
+                    };
                 }
             });
         });

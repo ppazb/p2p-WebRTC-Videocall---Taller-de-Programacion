@@ -28,7 +28,7 @@ impl VistaLlamada {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
-        _tcp: &mut std::net::TcpStream
+        _tcp: &mut std::net::TcpStream,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
@@ -38,7 +38,7 @@ impl VistaLlamada {
             .default_width(340.0)
             .frame(
                 Frame::default()
-                    .inner_margin(Margin::same(0)) 
+                    .inner_margin(Margin::same(0))
                     .outer_margin(Margin::same(0)),
             )
             .show(ctx, |ui| {

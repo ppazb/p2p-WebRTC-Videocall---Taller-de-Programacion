@@ -43,10 +43,5 @@ fn main() -> eframe::Result<()> {
         }
     };
 
-
-    eframe::run_native(
-        "RoomRTC",
-        native_options,
-        Box::new(|_cc| Ok(Box::new(app))),
-    )
+    eframe::run_native("RoomRTC", native_options, Box::new(|_cc| Ok(Box::new(app))))
 }
