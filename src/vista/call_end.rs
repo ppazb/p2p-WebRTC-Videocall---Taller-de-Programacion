@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use eframe::egui;
 
 use crate::{camera::Camera, vista::cambio::CambioVista};
@@ -14,25 +16,30 @@ impl VistaCallEnd {
     pub fn new() -> Self {
         Self {}
     }
-
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Camera>) -> CambioVista {
-        let mut cambio;
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        _tcp: &mut std::net::TcpStream,
+    ) -> CambioVista {
+        let mut cambio = CambioVista::None;
 
         egui::TopBottomPanel::top("menu_bar")
             .exact_height(50.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.heading("Llamada en Curso");
+                    ui.heading("Llamada Finalizada");
                     ui.separator();
 
                     ui.add_space(ui.available_width() - 100.0);
                 });
             });
 
-        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
+        let _ = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add_space(ui.available_height() / 2.0 - 40.0);
+            // Centramos verticalmente el contenido restante
+            ui.add_space(ui.available_height() / 2.0 - 60.0);
 
             ui.vertical_centered(|ui| {
                 ui.heading("La llamada ha finalizado.");
@@ -40,7 +47,10 @@ impl VistaCallEnd {
                 ui.add_space(20.0);
 
                 if ui.button("Volver al Lobby").clicked() {
-                    cambio = CambioVista::ToLobby;
+                    // Enviamos string vacío para indicar "Mismo usuario"
+                    cambio = CambioVista::ToLobby {
+                        username: String::new(),
+                    };
                 }
             });
         });

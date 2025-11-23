@@ -2,8 +2,8 @@ extern crate opencv;
 extern crate openh264;
 use crate::video_processing_errors::VideoProcessingErrors;
 use opencv::videoio::{self, VideoCapture, VideoCaptureTrait, VideoCaptureTraitConst};
-const CAMARA_WIDTH: f64 = 1280.0;
-const CAMARA_HEIGHT: f64 = 720.0;
+pub const CAMARA_WIDTH: f64 = 1280.0;
+pub const CAMARA_HEIGHT: f64 = 720.0;
 const CAMARA_FPS: f64 = 30.0;
 
 // creo una captura de video y se configuran las propiedades

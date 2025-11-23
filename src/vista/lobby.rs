@@ -1,8 +1,9 @@
 use crate::{camera::Camera, vista::cambio::CambioVista};
-use eframe::egui::{self, Align, Color32, Frame, Layout, RichText};
+use eframe::egui::{self, Color32, Frame, RichText};
+use std::sync::{Arc, Mutex};
 
 pub struct VistaLobby {
-    //no_camera_img: Option<ColorImage>,
+    pub users_list: Vec<String>,
 }
 
 impl Default for VistaLobby {
@@ -14,21 +15,26 @@ impl Default for VistaLobby {
 impl VistaLobby {
     pub fn new() -> Self {
         Self {
-            //no_camera_img: crate::vista::Vista::no_camera_texture(),
+            users_list: Vec::new(),
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Camera>) -> CambioVista {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        tcp: &mut std::net::TcpStream,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::TopBottomPanel::top("menu_bar")
             .exact_height(50.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.heading("Usuarios Conectados");
+                    ui.heading("Lobby - Usuarios Conectados");
                     ui.separator();
 
-                    ui.add_space(ui.available_width() - 100.0);
+                    ui.add_space(ui.available_width() - 120.0);
 
                     if ui.button("Cerrar Sesión").clicked() {
                         cambio = CambioVista::ToLogin;
@@ -40,29 +46,55 @@ impl VistaLobby {
             return cambio;
         }
 
-        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
+        crate::vista::Vista::camera_preview_side_panel(ctx, camara);
 
-        // Tarjeta de usuario
         egui::CentralPanel::default().show(ctx, |ui| {
             Frame::new()
                 .fill(Color32::DARK_GRAY)
                 .corner_radius(6.0)
-                .inner_margin(egui::Margin::same(8))
+                .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
-                    ui.set_height(30.0);
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        ui.label(
-                            RichText::new("Llamada de Prueba")
-                                .strong()
-                                .color(Color32::WHITE),
-                        );
+                    ui.heading(
+                        RichText::new("Selecciona un usuario para llamar:").color(Color32::WHITE),
+                    );
+                    ui.separator();
+                    ui.add_space(10.0);
 
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.button("Iniciar llamada").clicked() {
-                                cambio = CambioVista::ToCallStart;
+                    egui::ScrollArea::vertical()
+                        .max_height(ui.available_height() - 50.0)
+                        .show(ui, |ui| {
+                            if self.users_list.is_empty() {
+                                ui.label(
+                                    RichText::new(
+                                        "No hay otros usuarios conectados en este momento.",
+                                    )
+                                    .italics(),
+                                );
+                            } else {
+                                for user in &self.users_list {
+                                    // Generamos una fila por usuario
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new(format!("👤 {}", user))
+                                                .strong()
+                                                .size(16.0),
+                                        );
+
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui.button("📞 Llamar".to_string()).clicked() {
+                                                    cambio = CambioVista::ToCallStart {
+                                                        username: user.clone(),
+                                                    };
+                                                }
+                                            },
+                                        );
+                                    });
+                                    ui.separator();
+                                }
                             }
                         });
-                    });
                 });
         });
 

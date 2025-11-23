@@ -2,6 +2,7 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum SdpError {
+    ConnectionError,
     ParseError,
     ParseIntError(std::num::ParseIntError),
     InvalidOriginFormat,
@@ -27,6 +28,7 @@ impl From<std::num::ParseIntError> for SdpError {
 impl fmt::Display for SdpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ConnectionError => write!(f, "Error: \"Connection error\""),
             Self::ParseError => write!(f, "Error: \"Parse error .sdp\""),
             Self::ParseIntError(e) => write!(f, "Error: \"Parse int error .sdp: {}\"", e),
             Self::InvalidOriginFormat => write!(f, "Error: \"Formato o (origin) inválido\""),

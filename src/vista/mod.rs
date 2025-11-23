@@ -1,10 +1,13 @@
-use eframe::egui::{self, Color32, ColorImage, Frame, Margin, TextureHandle, Ui, Vec2};
+use std::sync::{Arc, Mutex};
+
+use eframe::egui::{self, Color32, ColorImage, Frame, Margin, Ui, Vec2};
 
 use crate::{
     camera::Camera,
     vista::{
         call_end::VistaCallEnd, call_start::VistaCallStart, cambio::CambioVista,
-        llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin,
+        incoming_call::VistaIncomingCall, llamada::VistaLlamada, lobby::VistaLobby,
+        login::VistaLogin,
     },
 };
 use opencv::{
@@ -15,6 +18,7 @@ use opencv::{
 pub mod call_end;
 pub mod call_start;
 pub mod cambio;
+pub mod incoming_call;
 pub mod llamada;
 pub mod lobby;
 pub mod login;
@@ -25,16 +29,23 @@ pub enum Vista {
     VistaCallStart(VistaCallStart),
     VistaLlamada(VistaLlamada),
     VistaCallEnd(VistaCallEnd),
+    VistaIncomingCall(VistaIncomingCall),
 }
 
 impl Vista {
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Camera>) -> CambioVista {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        tcp: &mut std::net::TcpStream,
+    ) -> CambioVista {
         match self {
-            Vista::VistaLogin(view) => view.ui(ctx),
-            Vista::VistaLobby(view) => view.ui(ctx, camara),
-            Vista::VistaLlamada(view) => view.ui(ctx),
+            Vista::VistaLogin(view) => view.ui(ctx, tcp),
+            Vista::VistaLobby(view) => view.ui(ctx, camara, tcp),
+            Vista::VistaLlamada(view) => view.ui(ctx, camara, tcp),
             Vista::VistaCallStart(view) => view.ui(ctx, camara),
-            Vista::VistaCallEnd(view) => view.ui(ctx, camara),
+            Vista::VistaCallEnd(view) => view.ui(ctx, camara, tcp),
+            Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tcp),
         }
     }
 
@@ -69,7 +80,10 @@ impl Vista {
         Some(image)
     }
 
-    fn camera_preview_side_panel(ctx: &egui::Context, camera: &Option<Camera>) -> CambioVista {
+    pub fn camera_preview_side_panel(
+        ctx: &egui::Context,
+        camera: &Option<Arc<Mutex<Camera>>>,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::SidePanel::right("preview")
@@ -78,8 +92,8 @@ impl Vista {
             .default_width(340.0)
             .frame(
                 Frame::default()
-                    .inner_margin(Margin::same(0)) // elimina márgenes internos
-                    .outer_margin(Margin::same(0)), // elimina espacio externo
+                    .inner_margin(Margin::same(0))
+                    .outer_margin(Margin::same(0)),
             )
             .show(ctx, |ui| {
                 // Dibuja una línea vertical al borde izquierdo del panel
@@ -103,8 +117,10 @@ impl Vista {
                     let top_space = (ui.available_height() - 240.0 - 10.0).max(0.0) / 2.0;
                     ui.add_space(top_space);
 
-                    if let Some(cam) = &camera {
-                        if cam.is_active() {
+                    if let Some(cam) = camera {
+                        if let Ok(cam) = cam.lock()
+                            && cam.is_active()
+                        {
                             let frame = cam.get_last_frame();
 
                             let imagen;
@@ -115,13 +131,11 @@ impl Vista {
                             }
 
                             if let Some(img) = imagen {
-                                //img = Self::apply_rounded_mask(&img, 40.0);
                                 let textura = ctx.load_texture(
                                     "cam_local",
                                     img,
                                     egui::TextureOptions::LINEAR,
                                 );
-                                //Self::show_rounded_image(ui, textura, egui::vec2(320.0, 240.0));
                                 ui.image((textura.id(), egui::vec2(320.0, 240.0)));
                             };
 
@@ -195,7 +209,7 @@ impl Vista {
         out
     }
 
-    fn _show_rounded_image(ui: &mut Ui, tex: TextureHandle, size: Vec2) {
+    fn _show_rounded_image(ui: &mut Ui, tex: eframe::egui::TextureHandle, size: Vec2) {
         let (rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
         let rounding = egui::CornerRadius::same(20);
         let painter = ui.painter();

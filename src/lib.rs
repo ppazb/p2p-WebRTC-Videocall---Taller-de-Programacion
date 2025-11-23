@@ -20,4 +20,11 @@ pub mod client_errors;
 
 pub mod app;
 pub mod camera;
+pub mod config;
+pub mod signalling_error;
+pub mod signalling_protocol;
 pub mod vista;
+
+pub mod json_parser;
+pub mod server_users;
+pub mod server_users_errors;
