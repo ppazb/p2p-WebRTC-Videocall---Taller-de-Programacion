@@ -284,7 +284,7 @@ impl Client {
                     // Intento enviar frame a la interfaz
                     // El envío puede fallar si ya hay un frame en el syncchannel que no se mostró todavía
                     // Esto evita también que se acumulen frames con la app minimizada
-                    eprintln!("VIDEO HANDLE: UI tiene un frame sin leer!");
+                    //eprintln!("VIDEO HANDLE: UI tiene un frame sin leer!");
                 }
             }
         } else {

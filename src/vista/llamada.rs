@@ -10,9 +10,7 @@ use opencv::prelude::*;
 use crate::{camera::Camera, vista::cambio::CambioVista};
 
 pub struct VistaLlamada {
-    //cam_enable: bool,
     rx_remoto: Option<Receiver<Mat>>,
-    //tex_local: Option<TextureHandle>,
     tex_remoto: Option<TextureHandle>,
     in_call: Arc<AtomicBool>,
 }
@@ -21,27 +19,29 @@ impl VistaLlamada {
     pub fn new(rx_remoto: Option<Receiver<Mat>>, in_call: Arc<AtomicBool>) -> Self {
         Self {
             rx_remoto,
-            //tex_local: None,
             tex_remoto: None,
             in_call,
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        _tcp: &mut std::net::TcpStream
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
-        // Panel lateral modificado (finalizar llamada)
         egui::SidePanel::right("preview")
             .resizable(false)
             .show_separator_line(false)
             .default_width(340.0)
             .frame(
                 Frame::default()
-                    .inner_margin(Margin::same(0)) // elimina márgenes internos
-                    .outer_margin(Margin::same(0)), // elimina espacio externo
+                    .inner_margin(Margin::same(0)) 
+                    .outer_margin(Margin::same(0)),
             )
             .show(ctx, |ui| {
-                // Dibuja una línea vertical al borde izquierdo del panel
                 let rect = ui.max_rect();
                 let stroke_color = ui.visuals().widgets.noninteractive.bg_stroke.color;
                 ui.painter().line_segment(
@@ -55,7 +55,6 @@ impl VistaLlamada {
                     },
                 );
 
-                // Vista previa de cámara + controles
                 ui.vertical_centered(|ui| {
                     ui.set_width(ui.available_width());
 
@@ -76,13 +75,11 @@ impl VistaLlamada {
                             }
 
                             if let Some(img) = imagen {
-                                //img = Self::apply_rounded_mask(&img, 40.0);
                                 let textura = ctx.load_texture(
                                     "cam_local",
                                     img,
                                     egui::TextureOptions::LINEAR,
                                 );
-                                //Self::show_rounded_image(ui, textura, egui::vec2(320.0, 240.0));
                                 ui.image((textura.id(), egui::vec2(320.0, 240.0)));
                             };
 
@@ -92,7 +89,6 @@ impl VistaLlamada {
                                 cambio = CambioVista::CamDisable;
                             }
                         } else {
-                            // Placeholder para cámara apagada
                             let imagen = crate::vista::Vista::no_camera_texture();
 
                             if let Some(img) = imagen {
@@ -185,7 +181,6 @@ impl VistaLlamada {
             }
         } else {
             // Si no, salteo el frame
-            //eprintln!("LLAMADA: frame no recibido en este update!");
         }
     }
 
