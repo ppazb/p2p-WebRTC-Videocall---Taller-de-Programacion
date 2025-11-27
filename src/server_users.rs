@@ -11,18 +11,26 @@ pub struct ServerUserData {
     users: HashMap<String, ServerUser>,
 }
 
+/// Struct para representar el usuario en el servidor, contiene datos que perduran como datos volatiles como el estado de conexion
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct ServerUser {
+pub struct ServerUser {
     username: String,
     password: String,
     status: UserStatus,
 }
 
+/// Struct utilizado de forma temporal para parsear los datos perdurables de los usuarios
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct UserLoginData {
+    username: String,
+    password: String,
+}
+
+///Estado de conexion del usuario relevantes al login
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum UserStatus {
     Conectado,
     Desconectado,
-    Ocupado,
 }
 
 ///Recibo un path a un Json y a partir de eso genero mi UserLoginData
@@ -32,16 +40,23 @@ impl ServerUserData {
         let lectura = fs::read_to_string(file_path).map_err(|_| LoginErrors::FileNotFound)?;
 
         // Parseo Json a un vector de usuaruios
-        let lista_usuarios: Vec<ServerUser> =
+        let lista_usuarios: Vec<UserLoginData> =
             serde_json::from_str(&lectura).map_err(|_| LoginErrors::FileIncompatible)?;
 
         // Genero un hashmap con los usarios donde la clave es el nonmbre de usuario
         let mut users = HashMap::new();
         for user in lista_usuarios {
-            // TODO : checkearfsi clone es necesario
-            users.insert(user.username.clone(), user);
+            users.insert(
+                user.username.clone(),
+                ServerUser {
+                    username: user.username,
+                    password: user.password,
+                    status: UserStatus::Desconectado,
+                },
+                );
         }
 
+        eprintln!("[SERVER USERS] Loaded {} users from {}", users.len(), file_path);
         Ok(Self {
             file_path: file_path.to_string(),
             users,
@@ -50,6 +65,7 @@ impl ServerUserData {
 
     ///devuelve una lista de todos los usuarios registrados en forma de string
     pub fn get_listado_usuarios(&self) -> Vec<String> {
+        eprintln!("[SERVER USERS] Returning list of {} users", self.users.len());
         self.users.keys().cloned().collect()
     }
 
@@ -58,9 +74,12 @@ impl ServerUserData {
         let user = self.users.get(username).ok_or(LoginErrors::UserNotFound)?;
 
         if user.password != password {
+            eprintln!("[SERVER USERS] failed login for '{}': incorrect password", username);
             return Err(LoginErrors::IncorrectPassword);
+
         }
 
+        eprintln!("[SERVER USERS] successful login for '{}'", username);
         Ok(())
     }
 
@@ -73,10 +92,13 @@ impl ServerUserData {
 
         //si el usuario ya esta conectado, error
         if user.status == UserStatus::Conectado {
+            eprintln!("[SERVER USERS] User '{}' failed to login: Multiple logins not allowed", username);
             return Err(LoginErrors::OneUserMultipleLogins);
+            
         }
 
         user.status = UserStatus::Conectado;
+        eprintln!("[SERVER USERS] User '{}' connected", username);
         Ok(())
     }
 
@@ -88,17 +110,7 @@ impl ServerUserData {
             .ok_or(LoginErrors::UserNotFound)?;
 
         user.status = UserStatus::Desconectado;
-        Ok(())
-    }
-
-    /// a partir de un nombred de usuario, cambio su estado a ocupado
-    pub fn ocupado(&mut self, username: &str) -> Result<(), LoginErrors> {
-        let user = self
-            .users
-            .get_mut(username)
-            .ok_or(LoginErrors::UserNotFound)?;
-
-        user.status = UserStatus::Ocupado;
+        eprintln!("[SERVER USERS] User '{}' disconnected", username);
         Ok(())
     }
 
@@ -113,12 +125,14 @@ impl ServerUserData {
 
         //escribo en el archivo
         fs::write(&self.file_path, json).map_err(|_| LoginErrors::FileNotFound)?;
+        eprintln!("[SERVER USERS] Changes saved to {}, {} total users", self.file_path, self.users.len());
         Ok(())
     }
 
     pub fn add_user(&mut self, username: &str, password: &str) -> Result<(), LoginErrors> {
         // Si usuario ya existe, error
         if self.users.contains_key(username) {
+            eprintln!("[SERVER USERS] Failed to add user '{}': username already exists", username);
             return Err(LoginErrors::UsernameAlreadyExists);
         }
 
@@ -134,7 +148,17 @@ impl ServerUserData {
 
         // Guardar en el archivo
         self.guardar_cambios()?;
+        eprintln!("[SERVER USERS] User '{}' added", username);
 
         Ok(())
+    }
+
+}
+
+
+impl ServerUser {
+
+    pub fn get_username(&self) -> String {
+        self.username.clone()
     }
 }

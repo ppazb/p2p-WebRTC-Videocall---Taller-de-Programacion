@@ -46,6 +46,11 @@ pub enum ClientMessage {
         username: String,
         target_user: String,
     },
+
+    CallStarted{
+        username: String,
+        target_user: String,
+    }
 }
 
 /// Mensajes que envía el servidor al cliente
@@ -69,6 +74,8 @@ pub enum ServerMessage {
 
     AnswerForwarded { from_user: String, answer: String },
 
+    CalledUserBusy ,
+
     CallEnded { from_user: String },
     CallRejected { from_user: String },
 
@@ -88,6 +95,14 @@ impl ClientMessage {
             }
 
             ClientMessage::GetUsers {} => "{\"type\":\"get_users\"}\n".to_string(),
+
+            ClientMessage::CallStarted { username, target_user } => {
+                format!(
+                    "{{\"type\":\"call_started\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
+                    replace_special_character(username),
+                    replace_special_character(target_user)
+                )
+            }
 
             ClientMessage::Offer {
                 username,
@@ -194,6 +209,10 @@ impl ClientMessage {
                 username: parsed_objects.get("username")?.as_str(),
                 target_user: parsed_objects.get("target_user")?.as_str(),
             }),
+            "call_started" => Some(ClientMessage::CallStarted {
+                username: parsed_objects.get("username")?.as_str(),
+                target_user: parsed_objects.get("target_user")?.as_str(),
+            }),
             _ => None,
         }
     }
@@ -207,6 +226,10 @@ impl ServerMessage {
                     "{{\"type\":\"login_ok\",\"username\":\"{}\"}}\n",
                     replace_special_character(username)
                 )
+            }
+
+            ServerMessage::CalledUserBusy => {
+                "{\"type\":\"called_user_is_busy\"}\n".to_string()
             }
 
             ServerMessage::LogoutOk => "{\"type\":\"logout_ok\"}\n".to_string(),
@@ -299,6 +322,8 @@ impl ServerMessage {
             "login_ok" => Some(ServerMessage::LoginOk {
                 username: parsed_objects.get("username")?.as_str(),
             }),
+
+            "called_user_busy" => Some(ServerMessage::CalledUserBusy),
 
             "login_error" => Some(ServerMessage::LoginError {
                 reason: parsed_objects.get("reason")?.as_str(),

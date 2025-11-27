@@ -6,7 +6,7 @@ use crate::{
     camera::Camera,
     vista::{
         call_end::VistaCallEnd, call_start::VistaCallStart, cambio::CambioVista,
-        incoming_call::VistaIncomingCall, llamada::VistaLlamada, lobby::VistaLobby,
+        incoming_call::VistaIncomingCall, called_user_busy::VistaCalledUserBusy, llamada::VistaLlamada, lobby::VistaLobby,
         login::VistaLogin,
     },
 };
@@ -19,6 +19,7 @@ pub mod call_end;
 pub mod call_start;
 pub mod cambio;
 pub mod incoming_call;
+pub mod called_user_busy;
 pub mod llamada;
 pub mod lobby;
 pub mod login;
@@ -30,6 +31,7 @@ pub enum Vista {
     VistaLlamada(VistaLlamada),
     VistaCallEnd(VistaCallEnd),
     VistaIncomingCall(VistaIncomingCall),
+    VistaCalledUserBusy(VistaCalledUserBusy),
 }
 
 impl Vista {
@@ -46,6 +48,7 @@ impl Vista {
             Vista::VistaCallStart(view) => view.ui(ctx, camara),
             Vista::VistaCallEnd(view) => view.ui(ctx, camara, tcp),
             Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tcp),
+            Vista::VistaCalledUserBusy(view) => view.ui(ctx, camara),
         }
     }
 
