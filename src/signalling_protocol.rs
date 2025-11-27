@@ -151,8 +151,9 @@ impl ClientMessage {
                 username,
                 target_user,
             } => format!(
-                "{{\"type\":\"{}\",\"end_call\":\"\",\"target_user\":\"{}\"}}\n",
-                username, target_user
+                "{{\"type\":\"call_end\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
+                replace_special_character(username),
+                replace_special_character(target_user)
             ),
             ClientMessage::CallReject {
                 username,
@@ -229,7 +230,7 @@ impl ServerMessage {
             }
 
             ServerMessage::CalledUserBusy => {
-                "{\"type\":\"called_user_is_busy\"}\n".to_string()
+                "{\"type\":\"called_user_busy\"}\n".to_string()
             }
 
             ServerMessage::LogoutOk => "{\"type\":\"logout_ok\"}\n".to_string(),

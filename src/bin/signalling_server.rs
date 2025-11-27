@@ -189,21 +189,35 @@ fn handle_client(
                             username, target_user
                         );
 
-                        //obtengo los dos active_clients y los clono
+                        // checkeo si alguno de los dos ya está ocupado
+                        let mut busy_map = busy_clients.lock().unwrap();
+                        if busy_map.contains_key(&target_user) || busy_map.contains_key(&username) {
+                            eprintln!(
+                                "[SERVER] Busy user. Notifying caller {}",
+                                username
+                            );
+                            let response = ServerMessage::CalledUserBusy;
+                            let _ = stream_write.write_all(response.to_json_line().as_bytes());
+                            let _ = stream_write.flush();
+                            continue;
+                        }
+
+                        // Si ambos están libres, agarro streams y los marco como ocupados.
                         let clients_map = connected_clients.lock().unwrap();
                         let user1 = clients_map.get(&username);
                         let user2 = clients_map.get(&target_user);
-                        
-                        //los guardo en ocupado
+
+                        // Guardar en ocupado solo si ambos existen en conexiones activas para 
+                        //asegurarnos que no se rompa nada 
                         if let (Some(user1), Some(user2)) = (user1, user2) {
-                            let mut busy_map = busy_clients.lock().unwrap();
-                            busy_map.insert(username.clone(), user1.try_clone().unwrap());
-                            busy_map.insert(target_user.clone(), user2.try_clone().unwrap());
+                            if let Ok(clone1) = user1.try_clone() {
+                                busy_map.insert(username.clone(), clone1);
+                            }
+                            if let Ok(clone2) = user2.try_clone() {
+                                busy_map.insert(target_user.clone(), clone2);
+                            }
                             eprintln!("[SERVER] Marked {} and {} as busy", username, target_user);
                         }
-                        
-                        
-                        
                     }
 
                     Some(ClientMessage::Logout { username }) => {
@@ -267,23 +281,6 @@ fn handle_client(
                     }) => {
                         eprintln!("[SERVER] OFFER from {}", username);
                         
-                        
-                        //primero veo si el usuario no esta ocupado
-                        // Ereestrucutrar sin el clone, se puede juntar con el if de abajo
-                        let target_ocupado_check = target_user.clone();
-                        if let Some(target_ocupado) = target_ocupado_check {
-                            let busy_map = busy_clients.lock().unwrap();
-                            if busy_map.contains_key(&target_ocupado) {
-                                // El target esta ocupado, enviar mensaje al q llamo
-                                let response = ServerMessage::CalledUserBusy;
-                                let _ = stream_write.write_all(response.to_json_line().as_bytes());
-                                let _ = stream_write.flush();
-                                eprintln!("[SERVER] Target {} is busy, notified caller", target_ocupado);
-                                continue; 
-
-                            }
-                        }
-
                         // Almacenar el offer recibido
                         {
                             let mut offers_map = stored_offers.lock().unwrap();
@@ -296,18 +293,28 @@ fn handle_client(
 
                         // Reenviar el offer al client al que me quiero conectar
                         if let Some(target) = target_user {
-                            let mut clients_map = connected_clients.lock().unwrap();
-
-                            if let Some(target_stream) = clients_map.get_mut(&target) {
-                                let response = ServerMessage::OfferForwarded {
-                                    from_user: username.clone(),
-                                    offer: offer.clone(),
-                                };
-                                let _ = target_stream.write_all(response.to_json_line().as_bytes());
-                                let _ = target_stream.flush();
-                                eprintln!("[SERVER] Forwarded OFFER to {}", target);
+                            let mut busy_map = busy_clients.lock().unwrap();
+                            if busy_map.contains_key(&target) {
+                                eprintln!(
+                                    "[SERVER] Target {} is busy. Notifying caller {}",
+                                    target, username
+                                );
+                                let response = ServerMessage::CalledUserBusy;
+                                let _ = stream_write.write_all(response.to_json_line().as_bytes());
+                                let _ = stream_write.flush();
                             } else {
-                                eprintln!("[SERVER] Target {} not found", target);
+                                let mut clients_map = connected_clients.lock().unwrap();
+                                if let Some(target_stream) = clients_map.get_mut(&target) {
+                                    let response = ServerMessage::OfferForwarded {
+                                        from_user: username.clone(),
+                                        offer: offer.clone(),
+                                    };
+                                    let _ = target_stream.write_all(response.to_json_line().as_bytes());
+                                    let _ = target_stream.flush();
+                                    eprintln!("[SERVER] Forwarded OFFER to {}", target);
+                                } else {
+                                    eprintln!("[SERVER] Target {} not found", target);
+                                }
                             }
                         }
                     }
@@ -323,6 +330,7 @@ fn handle_client(
                             "[SERVER] ANSWER from {} -> target: {}",
                             username, target_user
                         );
+                                  
 
                         let mut clients_map = connected_clients.lock().unwrap();
                         //  Creo mensaje del answer al client que envió el offer

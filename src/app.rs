@@ -121,7 +121,8 @@ impl AppUI {
                                     ServerMessage::CallRejected { .. } => {
                                         let _ = tx.send(AppEvent::SdpMessage(msg));
                                     }
-                                    ServerMessage::CalledUserBusy { .. } => {
+                                    // Fixed: CalledUserBusy is a unit variant; match without `{ .. }`
+                                    ServerMessage::CalledUserBusy => {
                                         let _ = tx.send(AppEvent::CalledUserBusy);
                                     }
                                     _ => {}

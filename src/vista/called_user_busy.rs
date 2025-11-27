@@ -44,7 +44,7 @@ impl VistaCalledUserBusy {
 
                             ui.label(
                                 RichText::new(
-                                    "El usuario {} está ocupado.")
+                                    "El usuario está ocupado.")
                                 .strong()
                                 .size(18.0)
                                 .color(Color32::WHITE),
