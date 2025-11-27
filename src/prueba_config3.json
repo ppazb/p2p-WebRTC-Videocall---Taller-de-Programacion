@@ -1,0 +1,10 @@
+{
+    "sdp_handshake": {
+        "local_adder": "192.168.0.65:8082",
+        "server_adder": "192.168.0.65:8000", 
+        "codecs": ["VP8", "H264"],
+        "ice_candidates": ["192.168.0.65:8021", "192.168.0.65:8022", "192.168.0.65:8023"],
+        "offer_path": "src/offer.sdp"
+    }
+}
+

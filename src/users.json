@@ -1,12 +1,18 @@
 [
   {
     "username": "usuario1",
-    "password": "1234",
-    "status": "Desconectado"
+    "password": "1234"
   },
   {
     "username": "admin",
-    "password": "admin",
-    "status": "Desconectado"
+    "password": "admin"
+  },
+  {
+    "username": "admin2",
+    "password": "admin2"
+  },
+  {
+    "username": "admin3",
+    "password": "admin3"
   }
 ]
