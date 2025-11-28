@@ -12,7 +12,7 @@ pub struct AppParameters {
 impl AppParameters {
     fn from_json(obj: &HashMap<String, JsonStruct>) -> Self {
         AppParameters {
-            general_info: GeneralAppInfo::from_json(&obj["general_info"].as_obj()), 
+            general_info: GeneralAppInfo::from_json(&obj["general_info"].as_obj()),
             sdp_handshake: SdpHandshakeParameters::from_json(&obj["sdp_handshake"].as_obj()),
         }
     }
@@ -20,13 +20,13 @@ impl AppParameters {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct GeneralAppInfo {
-    pub server_adder: String
+    pub server_adder: String,
 }
 
 impl GeneralAppInfo {
     fn from_json(obj: &HashMap<String, JsonStruct>) -> Self {
         GeneralAppInfo {
-            server_adder: obj["server_adder"].as_str()
+            server_adder: obj["server_adder"].as_str(),
         }
     }
 }

@@ -1,4 +1,7 @@
-use std::{net::TcpStream, sync::{Arc, Mutex}};
+use std::{
+    net::TcpStream,
+    sync::{Arc, Mutex},
+};
 
 use eframe::egui::{self, Color32, ColorImage, Frame, Margin, Ui, Vec2};
 use rustls::StreamOwned;
@@ -6,9 +9,9 @@ use rustls::StreamOwned;
 use crate::{
     camera::Camera,
     vista::{
-        call_end::VistaCallEnd, call_start::VistaCallStart, cambio::CambioVista,
-        incoming_call::VistaIncomingCall, called_user_busy::VistaCalledUserBusy, llamada::VistaLlamada, lobby::VistaLobby,
-        login::VistaLogin,
+        call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy,
+        cambio::CambioVista, incoming_call::VistaIncomingCall, llamada::VistaLlamada,
+        lobby::VistaLobby, login::VistaLogin,
     },
 };
 use opencv::{
@@ -18,9 +21,9 @@ use opencv::{
 
 pub mod call_end;
 pub mod call_start;
+pub mod called_user_busy;
 pub mod cambio;
 pub mod incoming_call;
-pub mod called_user_busy;
 pub mod llamada;
 pub mod lobby;
 pub mod login;

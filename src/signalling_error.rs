@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::tls_error::TlsError;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum SignallingServerError {

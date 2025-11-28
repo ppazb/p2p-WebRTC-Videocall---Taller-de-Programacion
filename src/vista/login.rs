@@ -2,7 +2,11 @@ use crate::signalling_protocol::{ClientMessage, write_all_nonblocking};
 use crate::vista::cambio::CambioVista;
 use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
 use rustls::StreamOwned;
-use std::{io::Write, net::TcpStream, sync::{Arc, atomic::AtomicBool}};
+use std::{
+    io::Write,
+    net::TcpStream,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 pub struct VistaLogin {
     pub username: String,
@@ -27,7 +31,11 @@ impl VistaLogin {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>) -> CambioVista {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
+    ) -> CambioVista {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Centro el frame dentro del panel
             ui.with_layout(
@@ -101,7 +109,6 @@ impl VistaLogin {
                                             self.username
                                         );
 
-                                        
                                         self.auth_pending = true;
                                         self.error_msg = None;
 

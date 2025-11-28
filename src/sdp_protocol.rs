@@ -484,7 +484,7 @@ pub fn sdp_handshake(
     handshake_params: SdpHandshakeParameters,
     username: String,
     target_user: String,
-    writer: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,             // Escribo al server
+    writer: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>, // Escribo al server
     reader_rx: Receiver<ServerMessage>, // Recibo mensajes SDP
 ) -> Result<(Vec<String>, Vec<String>, Vec<String>), SdpError> {
     println!("[SDP] Initialize handshake with {}", target_user);
@@ -521,10 +521,10 @@ pub fn sdp_handshake(
 
         let mut guard_write = match writer.lock() {
             Ok(gw) => gw,
-            Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into()))
+            Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into())),
         };
 
-        write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes()); 
+        write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
 
         // writer
         //     .write_all(msg.to_json_line().as_bytes())
@@ -560,11 +560,11 @@ pub fn sdp_handshake(
 
         let mut guard_write = match writer.lock() {
             Ok(gw) => gw,
-            Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into()))
+            Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into())),
         };
 
-        write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes()); 
-        drop(guard_write); 
+        write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+        drop(guard_write);
 
         // writer
         //     .write_all(msg.to_json_line().as_bytes())

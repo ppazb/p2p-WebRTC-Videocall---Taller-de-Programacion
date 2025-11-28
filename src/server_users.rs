@@ -53,10 +53,14 @@ impl ServerUserData {
                     password: user.password,
                     status: UserStatus::Desconectado,
                 },
-                );
+            );
         }
 
-        eprintln!("[SERVER USERS] Loaded {} users from {}", users.len(), file_path);
+        eprintln!(
+            "[SERVER USERS] Loaded {} users from {}",
+            users.len(),
+            file_path
+        );
         Ok(Self {
             file_path: file_path.to_string(),
             users,
@@ -65,7 +69,10 @@ impl ServerUserData {
 
     ///devuelve una lista de todos los usuarios registrados en forma de string
     pub fn get_listado_usuarios(&self) -> Vec<String> {
-        eprintln!("[SERVER USERS] Returning list of {} users", self.users.len());
+        eprintln!(
+            "[SERVER USERS] Returning list of {} users",
+            self.users.len()
+        );
         self.users.keys().cloned().collect()
     }
 
@@ -74,9 +81,11 @@ impl ServerUserData {
         let user = self.users.get(username).ok_or(LoginErrors::UserNotFound)?;
 
         if user.password != password {
-            eprintln!("[SERVER USERS] failed login for '{}': incorrect password", username);
+            eprintln!(
+                "[SERVER USERS] failed login for '{}': incorrect password",
+                username
+            );
             return Err(LoginErrors::IncorrectPassword);
-
         }
 
         eprintln!("[SERVER USERS] successful login for '{}'", username);
@@ -92,9 +101,11 @@ impl ServerUserData {
 
         //si el usuario ya esta conectado, error
         if user.status == UserStatus::Conectado {
-            eprintln!("[SERVER USERS] User '{}' failed to login: Multiple logins not allowed", username);
+            eprintln!(
+                "[SERVER USERS] User '{}' failed to login: Multiple logins not allowed",
+                username
+            );
             return Err(LoginErrors::OneUserMultipleLogins);
-            
         }
 
         user.status = UserStatus::Conectado;
@@ -125,14 +136,21 @@ impl ServerUserData {
 
         //escribo en el archivo
         fs::write(&self.file_path, json).map_err(|_| LoginErrors::FileNotFound)?;
-        eprintln!("[SERVER USERS] Changes saved to {}, {} total users", self.file_path, self.users.len());
+        eprintln!(
+            "[SERVER USERS] Changes saved to {}, {} total users",
+            self.file_path,
+            self.users.len()
+        );
         Ok(())
     }
 
     pub fn add_user(&mut self, username: &str, password: &str) -> Result<(), LoginErrors> {
         // Si usuario ya existe, error
         if self.users.contains_key(username) {
-            eprintln!("[SERVER USERS] Failed to add user '{}': username already exists", username);
+            eprintln!(
+                "[SERVER USERS] Failed to add user '{}': username already exists",
+                username
+            );
             return Err(LoginErrors::UsernameAlreadyExists);
         }
 
@@ -152,12 +170,9 @@ impl ServerUserData {
 
         Ok(())
     }
-
 }
 
-
 impl ServerUser {
-
     pub fn get_username(&self) -> String {
         self.username.clone()
     }

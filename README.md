@@ -1,12 +1,16 @@
 # Taller de Programacion - Grupo Sobrevivir Taller
 
-En este presente trabajo desarrollamos una versión del Stack WebRTC en el lenguaje Rust, de manera tal que sea posible la realización de videoconferencia entre dos usuarios en distintos dispositivos. 
+En este presente trabajo desarrollamos una versión del Stack WebRTC en el lenguaje Rust, de manera tal que sea posible la realización de videoconferencia entre pares de usuarios. 
 
-Los componentes para esta instancia son: 
+Los componentes son: 
 
 - SDP (Session Description Protocol)
 - ICE (Interactive Connectivity Establishment)
+- Servidor STUN
+- Comunicación encriptada con el Signalling Server (TLS)
 - Transmisión de Video (Encodeo y Desencodeo)
+- SRTP (Secure Real-time Transport Protocol)
+- DTLS (Datagram Transport Layer Security)
 - Interfaz UI de la Aplicación
 
 ## Integrantes
@@ -21,27 +25,16 @@ Los componentes para esta instancia son:
 
 A continuacion se detallan los pasos para compilar y ejecutar el programa. 
 
-En la terminal de cada dispositivo: 
+Para levantar el Signalling Server: 
 
 ```
-cargo run --bin room_rtc  <IP:Puerto local> <IP:Puerto peer>
-
-Dispotivo 1: 
-cargo run --bin room_rtc 127.0.0.1:4000 127.0.0.2:5000
-
-Dispositivo 2: 
-cargo run --bin room_rtc 127.0.0.2:5000 127.0.0.1:4000
+cargo run --bin signalling_server  path_config_file
 ```
-En caso de probar en un mismo dispositivo abriendo dos terminales: 
+
+Para levantar el Client en una terminal: 
 
 ```
-cargo run --bin room_rtc  <IP:Puerto local> <IP:Otro Puerto local>
-
-Terminal 1: 
-cargo run --bin room_rtc 127.0.0.1:4000 127.0.0.1:5000
-
-Terminal 2: 
-cargo run --bin room_rtc 127.0.0.1:5000 127.0.0.1:4000
+cargo run --bin room_rtc  path_config_file
 ```
 ## TLS Certificates y Keys 
 

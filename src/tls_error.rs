@@ -7,7 +7,7 @@ pub enum TlsError {
     IpParseError,
     ClientConnectionError,
     ServerConfigError,
-    HandshakeError, 
+    HandshakeError,
 }
 
 impl fmt::Display for TlsError {
