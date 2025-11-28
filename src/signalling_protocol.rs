@@ -1,3 +1,5 @@
+use std::io::{self, ErrorKind, Write};
+
 use serde::{Deserialize, Serialize};
 
 use crate::json_parser::json_clasify;
@@ -418,4 +420,25 @@ fn parse_string_array(json_array: &str) -> Vec<String> {
     } else {
         Vec::new()
     }
+}
+
+pub fn write_all_nonblocking<W: Write>(writer: &mut W, mut data: &[u8]) -> io::Result<()> {
+
+    while !data.is_empty() {
+        match writer.write(data) {
+            Ok(0) => {
+                return Err(io::Error::new(
+                    ErrorKind::WriteZero,
+                    "no se pudo escribir en el stream",
+                ));
+            }
+            Ok(n) => data = &data[n..], // avanzamos los bytes ya enviados
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue; 
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    writer.flush() 
 }

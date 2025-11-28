@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{net::TcpStream, sync::{Arc, Mutex}};
 
 use eframe::egui::{self, Color32, ColorImage, Frame, Margin, Ui, Vec2};
+use rustls::StreamOwned;
 
 use crate::{
     camera::Camera,
@@ -39,15 +40,15 @@ impl Vista {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
-        tcp: &mut std::net::TcpStream,
+        tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         match self {
-            Vista::VistaLogin(view) => view.ui(ctx, tcp),
-            Vista::VistaLobby(view) => view.ui(ctx, camara, tcp),
-            Vista::VistaLlamada(view) => view.ui(ctx, camara, tcp),
+            Vista::VistaLogin(view) => view.ui(ctx, tls_tcp),
+            Vista::VistaLobby(view) => view.ui(ctx, camara, tls_tcp),
+            Vista::VistaLlamada(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaCallStart(view) => view.ui(ctx, camara),
-            Vista::VistaCallEnd(view) => view.ui(ctx, camara, tcp),
-            Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tcp),
+            Vista::VistaCallEnd(view) => view.ui(ctx, camara, tls_tcp),
+            Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaCalledUserBusy(view) => view.ui(ctx, camara),
         }
     }

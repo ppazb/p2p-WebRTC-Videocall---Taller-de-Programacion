@@ -43,3 +43,26 @@ cargo run --bin room_rtc 127.0.0.1:4000 127.0.0.1:5000
 Terminal 2: 
 cargo run --bin room_rtc 127.0.0.1:5000 127.0.0.1:4000
 ```
+## TLS Certificates y Keys 
+
+### Creación de Certificates y Keys
+```
+openssl x509 -in cert.pem -outform DER -out cert.der                 
+openssl pkcs8 -topk8 -inform PEM -outform DER -in key.pem -out key.der -nocrypt
+
+openssl req \
+  -x509 \           
+  -newkey rsa:2048 \                                                           
+  -keyout key.pem \
+  -out cert.pem \
+  -days 365 \
+  -nodes \
+  -subj "/CN=localhost" \
+  -addext "basicConstraints=CA:FALSE" \
+  -addext "keyUsage=digitalSignature, keyEncipherment" \
+  -addext "extendedKeyUsage=serverAuth" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+
+```
+

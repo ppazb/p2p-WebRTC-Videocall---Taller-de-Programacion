@@ -87,10 +87,10 @@ impl Client {
         let tx_remoto = self.tx_remoto.clone();
         let in_call = Arc::clone(&self.in_call);
 
-        if self.perform_dtls_handshake().is_err() {
-            println!("NO FUNCO DTLS");
-            return Err(ClientErrors::SocketNotInitialized);
-        }
+        // if self.perform_dtls_handshake().is_err() {
+        //     println!("NO FUNCO DTLS");
+        //     return Err(ClientErrors::SocketNotInitialized);
+        // }
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             Self::reciver(&socket_recev, &tx_remoto, &in_call)
         });

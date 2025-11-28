@@ -1,11 +1,12 @@
-use std::sync::{
+use std::{net::TcpStream, sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
     mpsc::Receiver,
-};
+}};
 
 use eframe::egui::{self, Frame, Margin, TextureHandle, Vec2};
 use opencv::prelude::*;
+use rustls::StreamOwned;
 
 use crate::{camera::Camera, vista::cambio::CambioVista};
 
@@ -28,7 +29,7 @@ impl VistaLlamada {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
-        _tcp: &mut std::net::TcpStream,
+        tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 

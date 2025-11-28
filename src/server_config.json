@@ -1,4 +1,4 @@
 {
-    "server_adder": "192.168.0.65:8000",
+    "server_adder": "localhost:8000",
     "users_db": "src/users.json"
 }

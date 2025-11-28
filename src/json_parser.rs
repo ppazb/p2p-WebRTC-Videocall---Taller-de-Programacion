@@ -63,7 +63,7 @@ pub fn json_split_fields(json: &str) -> Vec<String> {
                 current_field.push(character);
             }
 
-            '{' if !is_str => {
+            '}' if !is_str => {
                 depth_obj -= 1;
                 current_field.push(character);
             }

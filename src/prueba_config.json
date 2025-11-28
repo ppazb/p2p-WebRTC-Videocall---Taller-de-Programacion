@@ -1,10 +1,13 @@
 {
+    "general_info": {
+        "server_adder": "localhost"
+    },
+
     "sdp_handshake": {
-        "local_adder": "192.168.0.65:8080",
-        "server_adder": "192.168.0.65:8000", 
+        "local_adder": "localhost:8089",
+        "server_adder": "localhost:8000", 
         "codecs": ["VP8", "H264"],
-        "ice_candidates": ["192.168.0.65:8002", "192.168.0.65:8003", "192.168.0.65:8004"],
+        "ice_candidates": ["192.168.0.109:8002", "192.168.0.109:8003", "192.168.0.109:8004"],
         "offer_path": "src/offer.sdp"
     }
 }
-

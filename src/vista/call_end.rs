@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{net::TcpStream, sync::{Arc, Mutex}};
 
 use eframe::egui;
+use rustls::StreamOwned;
 
 use crate::{camera::Camera, vista::cambio::CambioVista};
 
@@ -20,7 +21,7 @@ impl VistaCallEnd {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
-        _tcp: &mut std::net::TcpStream,
+        tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
