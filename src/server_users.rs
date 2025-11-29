@@ -88,6 +88,15 @@ impl ServerUserData {
             return Err(LoginErrors::IncorrectPassword);
         }
 
+        //si esta ya conectado error
+        if user.status == UserStatus::Conectado {
+            eprintln!(
+                "[SERVER USERS] User '{}' failed to login: Multiple logins not allowed",
+                username
+            );
+            return Err(LoginErrors::OneUserMultipleLogins);
+        }
+
         eprintln!("[SERVER USERS] successful login for '{}'", username);
         Ok(())
     }
