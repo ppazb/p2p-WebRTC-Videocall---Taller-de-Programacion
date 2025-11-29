@@ -175,6 +175,81 @@ fn handle_client(
                         }
                     }
 
+                    Some(ClientMessage::SignUp { username, password }) => {
+                        // Tomo la lista de clientes
+                        let mut clients = active_clients.lock().unwrap();
+
+                        match clients.verificar_signup(&username, &password) {
+                            Ok(()) => {
+                                // Agrego el usuario al archivo json
+                                clients.add_user(&username, &password);
+                                // Como las credenciales son válidas, genero la sesión inmediatamente después
+
+                                // ----- Reuso bloque de login -----
+                                clients.conectar(&username);
+                                let clients_list: Vec<String>;
+                                eprintln!("[SERVER] User '{}' logged in", username);
+                                {
+                                    let mut clients_map = connected_clients.lock().unwrap();
+
+                                    // Server avisa a los ya conectados que entró uno nuevo (avisa a todos los Observers)
+                                    let msg_joined = ServerMessage::UserJoined {
+                                        username: username.clone(),
+                                    };
+                                    let msg_json = msg_joined.to_json_line();
+
+                                    for (other_user, other_stream) in clients_map.iter_mut() {
+                                        if other_user != &username {
+                                            let _ = other_stream.write_all(msg_json.as_bytes());
+                                            let _ = other_stream.flush();
+                                        }
+                                    }
+
+                                    // Guardar la conexión de este usuario
+                                    if let Ok(write_clone) = stream_write.try_clone() {
+                                        clients_map.insert(username.clone(), write_clone);
+                                    }
+                                    clients_list = clients_map.keys().cloned().collect();
+                                }
+
+                                current_user = Some(username.clone());
+
+                                // Avisar a la UI que el login fue exitoso
+                                // Enviamos primero LoginOk para que UI cambie de vista al Lobby
+                                // para después cuando reciba la lista de conectados, lo pueda mostrar correctamente
+                                let response = ServerMessage::LoginOk { username };
+                                let response_json = response.to_json_line();
+                                stream_write.write_all(response_json.as_bytes())?;
+                                stream_write.flush()?; //me aseguro que se escriba todo
+                                eprintln!("[SERVER] Sent LoginOk\n");
+
+                                // Le enviamos la lista una vez que entra, ya que la primera vez
+                                // el usuario todavia no estaba adentro
+                                let user_list = ServerMessage::UserList {
+                                    users: clients_list,
+                                };
+                                let list_json = user_list.to_json_line();
+                                stream_write.write_all(list_json.as_bytes())?;
+                                stream_write.flush()?;
+                                eprintln!("[SERVER] Sent Initial UserList to new user");
+
+                                // ----- Reuso bloque de login -----
+                            },
+                            Err(e) => {
+                                // Creo un mensaje para la app con la razón del error
+                                let response = ServerMessage::SignUpError {
+                                    reason: e.to_string(),
+                                };
+                                let response_json = response.to_json_line();
+
+                                // Envío mensaje a la app por TCP
+                                stream_write.write_all(response_json.as_bytes())?;
+                                stream_write.flush()?;
+                                eprintln!("[SERVER] Signup failed for '{}'", username);
+                            },
+                        }
+                    }
+
                     Some(ClientMessage::Logout { username }) => {
                         {
                             let mut clients = active_clients.lock().unwrap();

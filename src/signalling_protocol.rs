@@ -11,6 +11,11 @@ pub enum ClientMessage {
         password: String,
     },
 
+    SignUp {
+        username: String,
+        password: String,
+    },
+
     Logout {
         username: String,
     },
@@ -55,6 +60,10 @@ pub enum ServerMessage {
 
     LoginError { reason: String },
 
+    SignUpOk { username: String },
+
+    SignUpError { reason: String },
+
     LogoutOk,
 
     UserList { users: Vec<String> },
@@ -80,6 +89,11 @@ impl ClientMessage {
         match self {
             ClientMessage::Login { username, password } => format!(
                 "{{\"type\":\"login\",\"username\":\"{}\",\"password\":\"{}\"}}\n",
+                username, password
+            ),
+
+            ClientMessage::SignUp { username, password } => format!(
+                "{{\"type\":\"signup\",\"username\":\"{}\",\"password\":\"{}\"}}\n",
                 username, password
             ),
 
@@ -161,6 +175,11 @@ impl ClientMessage {
                 password: parsed_objects.get("password")?.as_str(),
             }),
 
+            "signup" => Some(ClientMessage::SignUp { 
+                username: parsed_objects.get("username")?.as_str(), 
+                password: parsed_objects.get("password")?.as_str(), 
+            }),
+
             "logout" => Some(ClientMessage::Logout {
                 username: parsed_objects.get("username")?.as_str(),
             }),
@@ -214,6 +233,20 @@ impl ServerMessage {
             ServerMessage::LoginError { reason } => {
                 format!(
                     "{{\"type\":\"login_error\",\"reason\":\"{}\"}}\n",
+                    replace_special_character(reason)
+                )
+            }
+
+            ServerMessage::SignUpOk { username} => {
+                format!(
+                    "{{\"type\":\"signup_ok\",\"username\":\"{}\"}}\n",
+                    replace_special_character(username)
+                )
+            }
+
+            ServerMessage::SignUpError { reason } => {
+                format!(
+                    "{{\"type\":\"signup_error\",\"reason\":\"{}\"}}\n",
                     replace_special_character(reason)
                 )
             }
@@ -305,6 +338,14 @@ impl ServerMessage {
             }),
 
             "logout_ok" => Some(ServerMessage::LogoutOk),
+
+            "signup_ok" => Some(ServerMessage::SignUpOk {
+                username: parsed_objects.get("username")?.as_str(),
+            }),
+
+            "signup_error" => Some(ServerMessage::SignUpError {
+                reason: parsed_objects.get("reason")?.as_str(),
+            }),
 
             "user_list" | "User_list" => {
                 // AHORA SÍ: .as_str() funcionará porque enviamos un string

@@ -17,6 +17,7 @@ use crate::vista::call_end::VistaCallEnd;
 use crate::vista::call_start::VistaCallStart;
 use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::lobby::VistaLobby;
+use crate::vista::sign_up::VistaSignUp;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
 use eframe::egui;
 use opencv::core::Mat;
@@ -24,6 +25,8 @@ use opencv::core::Mat;
 pub enum AppEvent {
     LoginSuccess(String),
     LoginError(String),
+    SignUpSuccess(String),
+    SignUpError(String),
     UserListUpdated(Vec<String>),
     NewUser(String),
     UserLeft(String),
@@ -95,6 +98,12 @@ impl AppUI {
                                     ServerMessage::LoginError { reason } => {
                                         let _ = tx.send(AppEvent::LoginError(reason));
                                     }
+                                    ServerMessage::SignUpOk { username } => {
+                                        let _ = tx.send(AppEvent::SignUpSuccess(username));
+                                    }
+                                    ServerMessage::SignUpError { reason } => {
+                                        let _ = tx.send(AppEvent::SignUpError(reason));
+                                    }
                                     ServerMessage::UserList { users } => {
                                         let _ = tx.send(AppEvent::UserListUpdated(users));
                                     }
@@ -153,6 +162,7 @@ impl AppUI {
             None
         }
     }
+
     // Función para la transición de vistas
     fn cambiar_vista(&mut self, cambio: CambioVista) {
         match cambio {
@@ -172,6 +182,10 @@ impl AppUI {
                 self.target_username = None;
                 self.pending_offer = None;
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new());
+            }
+            CambioVista::ToSignUp => {
+                // Solo se llega desde login, cambio la vista
+                self.vista_actual = Vista::VistaSignUp(VistaSignUp::new());
             }
             CambioVista::ToLobby { username } => {
                 if !username.is_empty() {
@@ -405,6 +419,19 @@ impl eframe::App for AppUI {
                         login.auth_pending = false;
                     }
                 }
+                AppEvent::SignUpSuccess(username) => {
+                    self.cambiar_vista(CambioVista::ToLobby { username });
+                }
+                AppEvent::SignUpError(reason) => {
+                    if let Vista::VistaSignUp(sign_up) = &mut self.vista_actual {
+                        // Vacío los campos y notifico el error
+                        sign_up.username = "".to_string();
+                        sign_up.password = "".to_string();
+                        sign_up.error_msg = Some(reason);
+                        sign_up.auth_pending = false;
+                    }
+                }
+
                 AppEvent::UserListUpdated(users) => {
                     if let Vista::VistaLobby(lobby) = &mut self.vista_actual {
                         lobby.users_list = users
@@ -467,7 +494,7 @@ impl eframe::App for AppUI {
                 AppEvent::ConnectionLost => {
                     self.cambiar_vista(CambioVista::ToLogin);
                     if let Vista::VistaLogin(login) = &mut self.vista_actual {
-                        login.error_msg = Some("Conection lost".into());
+                        login.error_msg = Some("Se perdió la conexión al servidor.".into());
                     }
                 }
             }

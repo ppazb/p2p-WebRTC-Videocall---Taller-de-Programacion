@@ -8,6 +8,7 @@ pub enum LoginErrors {
     FileIncompatible,
     OneUserMultipleLogins,
     UsernameAlreadyExists,
+    InvalidFieldsOnSignUp,
 }
 
 impl fmt::Display for LoginErrors {
@@ -25,6 +26,7 @@ impl fmt::Display for LoginErrors {
                 write!(f, "Un usuario no puede iniciar sesión múltiples veces.")
             }
             LoginErrors::UsernameAlreadyExists => write!(f, "El nombre de usuario ya existe."),
+            LoginErrors::InvalidFieldsOnSignUp => write!(f, "Credenciales inválidas, intente nuevamente."),
         }
     }
 }

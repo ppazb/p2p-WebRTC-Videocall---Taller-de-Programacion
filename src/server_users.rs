@@ -64,6 +64,36 @@ impl ServerUserData {
         Ok(())
     }
 
+    /// Valida las credenciales ingresadas para registrar un nuevo usuario.
+    ///
+    /// Se definen condiciones de aceptación para el nuevo username y el password, como longitudes y caracteres permitidos.
+    /// Si alguna condición no se cumple, o si el usuario ya existe, se devuelve el correspondiente LoginError.
+    pub fn verificar_signup(&self, username: &str, password: &str) -> Result<(), LoginErrors> {
+        // Si usuario ya existe, error
+        if self.users.contains_key(username) {
+            return Err(LoginErrors::UsernameAlreadyExists);
+        }
+        
+        // Valido condiciones del usuario (5 a 32 caracteres)
+        if username.len() < 5 || username.len() > 32 {
+            return Err(LoginErrors::InvalidFieldsOnSignUp); // Longitud usuario inválida
+        }
+
+        // Valido que los dígitos sean solo alfanuméricos
+        for c in username.chars() {
+            if !c.is_ascii_alphanumeric() {
+                return Err(LoginErrors::InvalidFieldsOnSignUp); // Caracteres inválidos
+            }
+        }
+
+        // Valido longitud de contraseña
+        if password.len() < 5 || username.len() > 32 {
+            return Err(LoginErrors::InvalidFieldsOnSignUp); // Longitud contraseña inválida
+        }
+
+        Ok(())
+    }
+
     /// a partir de un nombre de usuario, cambio su estado a conectado
     pub fn conectar(&mut self, username: &str) -> Result<(), LoginErrors> {
         let user = self
@@ -122,7 +152,7 @@ impl ServerUserData {
             return Err(LoginErrors::UsernameAlreadyExists);
         }
 
-        // Cre0 el usuario
+        // Creo el usuario
         let user = ServerUser {
             username: username.to_string(),
             password: password.to_string(),
