@@ -43,6 +43,7 @@ pub struct AppUI {
     sdp_handshake_tx: Option<Sender<ServerMessage>>,
     pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
+    handles: Vec<JoinHandle<()>>, 
     pending_offer: Option<String>,
     app_params: AppParameters,
     cliente: Option<Client>,
@@ -64,7 +65,7 @@ impl Drop for AppUI {
             };
 
             let writer_arc = Arc::clone(writer);
-            std::thread::spawn(move || {
+            let write_handle = std::thread::spawn(move || {
                 let mut guard_write = match writer_arc.lock() {
                     Ok(gw) => gw,
                     Err(_) => return,
@@ -72,8 +73,10 @@ impl Drop for AppUI {
 
                 let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
             });
+            self.handles.push(write_handle);
         }
         self.liberar_recursos();
+        self.liberar_handles();
     }
 }
 
@@ -98,7 +101,7 @@ impl AppUI {
             let (tx, rx) = channel::<AppEvent>();
 
             // Thread para escuchar del servidor
-            std::thread::spawn(move || {
+            let read_handle = std::thread::spawn(move || {
                 loop {
                     // Setear un Buffer para leer
                     let mut buffer = [0u8; 4096];
@@ -184,6 +187,7 @@ impl AppUI {
                 in_call: Arc::new(AtomicBool::new(false)),
                 pedido_socket: None,
                 handshake_handle: None,
+                handles: Vec::new(),
                 client_handles: Ok(Vec::new()),
                 pending_offer: None,
                 app_params,
@@ -210,7 +214,7 @@ impl AppUI {
 
                     let writer_arc = Arc::clone(writer);
                     // Spawnear una thread aparte para escribir para no bloquear la UI
-                    std::thread::spawn(move || {
+                    let write_handle = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
                             Ok(gw) => gw,
                             Err(_) => return,
@@ -219,7 +223,8 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                }
+                    self.handles.push(write_handle); 
+                }; 
                 self.liberar_recursos();
                 self.current_username = None;
                 self.target_username = None;
@@ -234,7 +239,7 @@ impl AppUI {
                 if let Some(writer) = &mut self.server_writer {
                     let msg = ClientMessage::GetUsers {};
                     let writer_arc = Arc::clone(writer);
-                    std::thread::spawn(move || {
+                    let write_thread = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
                             Ok(gw) => gw,
                             Err(_) => return,
@@ -243,6 +248,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
+                    self.handles.push(write_thread); 
                 }
 
                 self.in_call.store(false, Ordering::Relaxed);
@@ -262,7 +268,7 @@ impl AppUI {
                 if let Some(writer) = &mut self.server_writer {
                     let msg = ClientMessage::GetUsers {};
                     let writer_arc = Arc::clone(writer);
-                    std::thread::spawn(move || {
+                    let write_handle = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
                             Ok(gw) => gw,
                             Err(_) => return,
@@ -271,6 +277,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
+                    self.handles.push(write_handle); 
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(username));
@@ -314,7 +321,7 @@ impl AppUI {
                     };
                     // let _ = writer.write_all(msg.to_json_line().as_bytes());
                     let writer_arc = Arc::clone(writer);
-                    std::thread::spawn(move || {
+                    let write_thread = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
                             Ok(gw) => gw,
                             Err(_) => return,
@@ -323,6 +330,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
+                    self.handles.push(write_thread);
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(target_user));
@@ -339,7 +347,7 @@ impl AppUI {
                         target_user: target_user.clone(),
                     };
                     let writer_arc = Arc::clone(writer);
-                    std::thread::spawn(move || {
+                    let write_handle = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
                             Ok(gw) => gw,
                             Err(_) => return,
@@ -348,6 +356,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
+                    self.handles.push(write_handle); 
                 }
                 self.pending_offer = None;
                 self.cambiar_vista(CambioVista::ToLobby {
@@ -375,7 +384,7 @@ impl AppUI {
                             target_user: target.clone(),
                         };
                         let writer_arc = Arc::clone(writer);
-                        std::thread::spawn(move || {
+                        let write_handle = std::thread::spawn(move || {
                             let mut guard_write = match writer_arc.lock() {
                                 Ok(gw) => gw,
                                 Err(_) => return,
@@ -386,6 +395,7 @@ impl AppUI {
                                 msg.to_json_line().as_bytes(),
                             );
                         });
+                        self.handles.push(write_handle);
                     }
                 }
                 self.liberar_recursos();
@@ -501,6 +511,13 @@ impl AppUI {
             }
         }
     }
+
+    fn liberar_handles(&mut self) {
+        for handle in self.handles.drain(..) {
+            let _ = handle.join(); 
+        }
+    }
+
     fn liberar_client_handles(&mut self) {
         if let Ok(handles) = &mut self.client_handles {
             while let Some(h) = handles.pop() {
