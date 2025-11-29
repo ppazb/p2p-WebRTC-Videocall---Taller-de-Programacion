@@ -121,10 +121,7 @@ impl AppUI {
                             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                                 continue;
                             }
-                            Ok(n) => {
-                                println!("[CLIENT] BUFFER: {:?}", &buffer[..n]);
-                                n
-                            }
+                            Ok(n) => n, 
                             Err(_) => {
                                 let _ = tx.send(AppEvent::ConnectionLost);
                                 break;
