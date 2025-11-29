@@ -1,7 +1,8 @@
-use crate::signalling_protocol::ClientMessage;
+use crate::signalling_protocol::{ClientMessage, write_all_nonblocking};
 use crate::vista::cambio::CambioVista;
 use eframe::egui::{self, Color32, Frame, RichText, TextEdit, Vec2};
-use std::io::Write;
+use rustls::StreamOwned;
+use std::{io::Write, net::TcpStream, sync::Arc};
 
 pub struct VistaLogin {
     pub username: String,
@@ -26,7 +27,11 @@ impl VistaLogin {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, tcp: &mut std::net::TcpStream) -> CambioVista {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
+    ) -> CambioVista {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Centro el frame dentro del panel
             ui.with_layout(
@@ -100,18 +105,29 @@ impl VistaLogin {
                                             self.username
                                         );
 
-                                        match tcp.write_all(json_msg.as_bytes()) {
-                                            Ok(_) => {
-                                                let _ = tcp.flush();
-                                                self.auth_pending = true;
-                                                self.error_msg = None;
+                                        self.auth_pending = true;
+                                        self.error_msg = None;
+
+                                        let tls = Arc::clone(tls_tcp);
+                                        std::thread::spawn(move || {
+                                            let mut guard_write = match tls.lock() {
+                                                Ok(gw) => {
+                                                    eprintln!(
+                                                        "[CLIENT DEBUG] Mutex lock OK, voy a escribir {} bytes",
+                                                        json_msg.len()
+                                                    );
+                                                    gw
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[CLIENT DEBUG] Mutex lock ERROR (poisoned): {e}");
+                                                    return;
+                                                }
+                                            };
+                                            if let Err(e) = write_all_nonblocking(&mut *guard_write, json_msg.as_bytes()) {
+                                                eprintln!("[CLIENT] Error de red al enviar GetUsers: {e}");
                                             }
-                                            Err(e) => {
-                                                self.error_msg =
-                                                    Some(format!("Error de red: {}", e));
-                                                eprintln!("[ERROR] Write failed: {}", e);
-                                            }
-                                        }
+                                            let _ = guard_write.flush();   
+                                        });
                                     }
                                 }
                             });

@@ -1,6 +1,10 @@
 use crate::{camera::Camera, vista::cambio::CambioVista};
 use eframe::egui::{self, Color32, Frame, RichText};
-use std::sync::{Arc, Mutex};
+use rustls::StreamOwned;
+use std::{
+    net::TcpStream,
+    sync::{Arc, Mutex},
+};
 
 pub struct VistaLobby {
     pub users_list: Vec<String>,
@@ -23,7 +27,7 @@ impl VistaLobby {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
-        tcp: &mut std::net::TcpStream,
+        _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 

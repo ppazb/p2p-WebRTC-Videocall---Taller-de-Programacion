@@ -7,9 +7,11 @@
 // a=rtpmap:0 PCMU/8000
 // a=candidate: 196.168.0.1 80000
 
+use rustls::StreamOwned;
+
 use crate::config::SdpHandshakeParameters;
 use crate::sdp_errors::SdpError;
-use crate::signalling_protocol::{ClientMessage, ServerMessage};
+use crate::signalling_protocol::{ClientMessage, ServerMessage, write_all_nonblocking};
 use std::fs;
 use std::io::Write;
 use std::net::TcpStream;
@@ -482,7 +484,7 @@ pub fn sdp_handshake(
     handshake_params: SdpHandshakeParameters,
     username: String,
     target_user: String,
-    writer: &mut TcpStream,             // Escribo al server
+    writer: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>, // Escribo al server
     reader_rx: Receiver<ServerMessage>, // Recibo mensajes SDP
 ) -> Result<(Vec<String>, Vec<String>, Vec<String>), SdpError> {
     println!("[SDP] Initialize handshake with {}", target_user);
@@ -517,11 +519,12 @@ pub fn sdp_handshake(
             target_user: remote_username,
         };
 
-        writer
-            .write_all(msg.to_json_line().as_bytes())
-            .map_err(|_| SdpError::OfferFileWriteError)?;
-        writer.flush().ok();
-        println!("[SDP] Answer was sent.");
+        let mut guard_write = match writer.lock() {
+            Ok(gw) => gw,
+            Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into())),
+        };
+
+        let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
 
         // info para ICE
         let my_ice =
@@ -549,13 +552,14 @@ pub fn sdp_handshake(
             target_user: Some(target_user.clone()),
         };
 
-        writer
-            .write_all(msg.to_json_line().as_bytes())
-            .map_err(|_| SdpError::OfferFileWriteError)?;
-        writer.flush().ok();
-        println!("[SDP] Offer sent. Waiting answer...");
+        let mut guard_write = match writer.lock() {
+            Ok(gw) => gw,
+            Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into())),
+        };
 
-        // Loop de espera para answer
+        let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+        drop(guard_write);
+
         let timeout = Duration::from_secs(30);
         let start = Instant::now();
 

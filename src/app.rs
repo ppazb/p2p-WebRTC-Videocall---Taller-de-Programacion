@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Write};
+use std::io::{ErrorKind, Read};
 use std::net::{TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -12,15 +12,17 @@ use crate::config::AppParameters;
 use crate::ice::{crear_conexion_ice, elegir_codec};
 use crate::sdp_errors::SdpError;
 use crate::sdp_protocol::sdp_handshake;
-use crate::signalling_protocol::{ClientMessage, ServerMessage};
+use crate::signalling_protocol::{ClientMessage, ServerMessage, write_all_nonblocking};
+use crate::tls_interface::client_tls_stream;
 use crate::vista::call_end::VistaCallEnd;
 use crate::vista::call_start::VistaCallStart;
-use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::called_user_busy::VistaCalledUserBusy;
+use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::lobby::VistaLobby;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
 use eframe::egui;
 use opencv::core::Mat;
+use rustls::StreamOwned;
 
 pub enum AppEvent {
     LoginSuccess(String),
@@ -30,14 +32,14 @@ pub enum AppEvent {
     UserLeft(String),
     SdpMessage(ServerMessage),
     ConnectionLost,
-    CalledUserBusy
+    CalledUserBusy,
 }
 
 pub struct AppUI {
     vista_actual: Vista,
     camara: Option<Arc<Mutex<Camera>>>,
     server_events_rx: Receiver<AppEvent>,
-    server_writer: Option<TcpStream>,
+    server_writer: Option<Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>>,
     sdp_handshake_tx: Option<Sender<ServerMessage>>,
     pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
@@ -60,7 +62,16 @@ impl Drop for AppUI {
             let msg = ClientMessage::Logout {
                 username: username.clone(),
             };
-            let _ = writer.write_all(msg.to_json_line().as_bytes());
+
+            let writer_arc = Arc::clone(writer);
+            std::thread::spawn(move || {
+                let mut guard_write = match writer_arc.lock() {
+                    Ok(gw) => gw,
+                    Err(_) => return,
+                };
+
+                let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+            });
         }
         self.liberar_recursos();
     }
@@ -69,69 +80,94 @@ impl Drop for AppUI {
 impl AppUI {
     pub fn new(app_params: AppParameters) -> Option<Self> {
         if let Ok(stream) = TcpStream::connect(&app_params.sdp_handshake.server_adder) {
-            stream.set_nonblocking(false).ok();
-            let read_stream = stream
-                .try_clone()
-                .expect("Failed to clone stream for reading");
-            let write_stream = stream
-                .try_clone()
-                .expect("Failed to clone stream for writing");
+            // Encriptar TcpStream
+            let tls_stream = match client_tls_stream(stream, &app_params.general_info.server_adder)
+            {
+                Ok(tls_s) => tls_s,
+                Err(_) => return None,
+            };
+
+            // Setear el TcpStream envuelto como non_blocking, no es lo ideal, pero para como manejamos el envío y recepción tomamos esta decisión
+            let _ = tls_stream.get_ref().set_nonblocking(true);
+            // Envuelvo en un Arc<Mutex<..>> para poder después clonar
+            let tls_arc = Arc::new(Mutex::new(tls_stream));
+            let read_tls = tls_arc.clone();
+            let write_tls = tls_arc.clone();
+            println!("[CLIENT] Starting encripted transmission\n");
+
             let (tx, rx) = channel::<AppEvent>();
 
             // Thread para escuchar del servidor
             std::thread::spawn(move || {
-                let mut reader = BufReader::new(read_stream);
                 loop {
-                    let mut line = String::new();
-                    match reader.read_line(&mut line) {
-                        Ok(0) => {
-                            let _ = tx.send(AppEvent::ConnectionLost);
-                            break;
-                        }
-                        Ok(_) => {
-                            if let Some(msg) = ServerMessage::from_json(&line) {
-                                match msg {
-                                    ServerMessage::LoginOk { username } => {
-                                        let _ = tx.send(AppEvent::LoginSuccess(username));
-                                    }
-                                    ServerMessage::LoginError { reason } => {
-                                        let _ = tx.send(AppEvent::LoginError(reason));
-                                    }
-                                    ServerMessage::UserList { users } => {
-                                        let _ = tx.send(AppEvent::UserListUpdated(users));
-                                    }
-                                    ServerMessage::UserJoined { username } => {
-                                        let _ = tx.send(AppEvent::NewUser(username));
-                                    }
-                                    ServerMessage::UserLeft { username } => {
-                                        let _ = tx.send(AppEvent::UserLeft(username));
-                                    }
-                                    ServerMessage::OfferForwarded { .. } => {
-                                        let _ = tx.send(AppEvent::SdpMessage(msg));
-                                    }
-                                    ServerMessage::AnswerForwarded { .. } => {
-                                        let _ = tx.send(AppEvent::SdpMessage(msg));
-                                    }
-                                    ServerMessage::OfferAvailable { .. } => {
-                                        let _ = tx.send(AppEvent::SdpMessage(msg));
-                                    }
-                                    ServerMessage::CallEnded { .. } => {
-                                        let _ = tx.send(AppEvent::SdpMessage(msg));
-                                    }
-                                    ServerMessage::CallRejected { .. } => {
-                                        let _ = tx.send(AppEvent::SdpMessage(msg));
-                                    }
-                                    // Fixed: CalledUserBusy is a unit variant; match without `{ .. }`
-                                    ServerMessage::CalledUserBusy => {
-                                        let _ = tx.send(AppEvent::CalledUserBusy);
-                                    }
-                                    _ => {}
-                                }
+                    // Setear un Buffer para leer
+                    let mut buffer = [0u8; 4096];
+                    // Lockear, leer y guardar la cantidad de bytes que se leyó
+                    let n = {
+                        let mut guard_read = match read_tls.lock() {
+                            Ok(gr) => gr,
+                            Err(_) => {
+                                let _ = tx.send(AppEvent::ConnectionLost);
+                                break;
+                            }
+                        };
+
+                        match guard_read.read(&mut buffer) {
+                            Ok(0) => {
+                                let _ = tx.send(AppEvent::ConnectionLost);
+                                break;
+                            }
+                            // Si está bloqueado seguir sin quedar bloqueada esperando
+                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                                continue;
+                            }
+                            Ok(n) => n, 
+                            Err(_) => {
+                                let _ = tx.send(AppEvent::ConnectionLost);
+                                break;
                             }
                         }
-                        Err(_) => {
-                            let _ = tx.send(AppEvent::ConnectionLost);
-                            break;
+                    };
+
+                    if let Ok(line) = String::from_utf8(buffer[..n].to_vec())
+                        && let Some(msg) = ServerMessage::from_json(&line)
+                    {
+                        match msg {
+                            ServerMessage::LoginOk { username } => {
+                                let _ = tx.send(AppEvent::LoginSuccess(username));
+                            }
+                            ServerMessage::LoginError { reason } => {
+                                let _ = tx.send(AppEvent::LoginError(reason));
+                            }
+                            ServerMessage::UserList { users } => {
+                                let _ = tx.send(AppEvent::UserListUpdated(users));
+                            }
+                            ServerMessage::UserJoined { username } => {
+                                let _ = tx.send(AppEvent::NewUser(username));
+                            }
+                            ServerMessage::UserLeft { username } => {
+                                let _ = tx.send(AppEvent::UserLeft(username));
+                            }
+                            ServerMessage::OfferForwarded { .. } => {
+                                let _ = tx.send(AppEvent::SdpMessage(msg));
+                            }
+                            ServerMessage::AnswerForwarded { .. } => {
+                                let _ = tx.send(AppEvent::SdpMessage(msg));
+                            }
+                            ServerMessage::OfferAvailable { .. } => {
+                                let _ = tx.send(AppEvent::SdpMessage(msg));
+                            }
+                            ServerMessage::CallEnded { .. } => {
+                                let _ = tx.send(AppEvent::SdpMessage(msg));
+                            }
+                            ServerMessage::CallRejected { .. } => {
+                                let _ = tx.send(AppEvent::SdpMessage(msg));
+                            }
+                            // Fixed: CalledUserBusy is a unit variant; match without `{ .. }`
+                            ServerMessage::CalledUserBusy => {
+                                let _ = tx.send(AppEvent::CalledUserBusy);
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -141,7 +177,7 @@ impl AppUI {
                 //Inicia en vista de login por deffault
                 vista_actual: Vista::VistaLogin(VistaLogin::new()),
                 server_events_rx: rx,
-                server_writer: Some(write_stream),
+                server_writer: Some(write_tls),
                 sdp_handshake_tx: None,
                 cliente: None,
                 rx_remoto: None,
@@ -171,7 +207,18 @@ impl AppUI {
                     let msg = ClientMessage::Logout {
                         username: username.clone(),
                     };
-                    let _ = writer.write_all(msg.to_json_line().as_bytes());
+
+                    let writer_arc = Arc::clone(writer);
+                    // Spawnear una thread aparte para escribir para no bloquear la UI
+                    std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
+                        };
+
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
                 }
                 self.liberar_recursos();
                 self.current_username = None;
@@ -186,8 +233,18 @@ impl AppUI {
 
                 if let Some(writer) = &mut self.server_writer {
                     let msg = ClientMessage::GetUsers {};
-                    let _ = writer.write_all(msg.to_json_line().as_bytes());
+                    let writer_arc = Arc::clone(writer);
+                    std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
+                        };
+
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
                 }
+
                 self.in_call.store(false, Ordering::Relaxed);
                 self.liberar_handshake_handle();
                 self.target_username = None;
@@ -204,7 +261,16 @@ impl AppUI {
 
                 if let Some(writer) = &mut self.server_writer {
                     let msg = ClientMessage::GetUsers {};
-                    let _ = writer.write_all(msg.to_json_line().as_bytes());
+                    let writer_arc = Arc::clone(writer);
+                    std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
+                        };
+
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(username));
@@ -240,12 +306,23 @@ impl AppUI {
                 }
 
                 //Aviso que ambos usuarios van a estar ocupados
-                if let (Some(writer), Some(me)) = (&mut self.server_writer, &self.current_username){
-                    let msg = ClientMessage::CallStarted { 
+                if let (Some(writer), Some(me)) = (&mut self.server_writer, &self.current_username)
+                {
+                    let msg = ClientMessage::CallStarted {
                         username: me.clone(),
-                        target_user: target_user.clone()
+                        target_user: target_user.clone(),
                     };
-                    let _ = writer.write_all(msg.to_json_line().as_bytes());
+                    // let _ = writer.write_all(msg.to_json_line().as_bytes());
+                    let writer_arc = Arc::clone(writer);
+                    std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
+                        };
+
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(target_user));
@@ -261,7 +338,16 @@ impl AppUI {
                         username: me.clone(),
                         target_user: target_user.clone(),
                     };
-                    let _ = writer.write_all(msg.to_json_line().as_bytes());
+                    let writer_arc = Arc::clone(writer);
+                    std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
+                        };
+
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
                 }
                 self.pending_offer = None;
                 self.cambiar_vista(CambioVista::ToLobby {
@@ -288,7 +374,18 @@ impl AppUI {
                             username: user.clone(),
                             target_user: target.clone(),
                         };
-                        let _ = writer.write_all(msg.to_json_line().as_bytes());
+                        let writer_arc = Arc::clone(writer);
+                        std::thread::spawn(move || {
+                            let mut guard_write = match writer_arc.lock() {
+                                Ok(gw) => gw,
+                                Err(_) => return,
+                            };
+
+                            let _ = write_all_nonblocking(
+                                &mut *guard_write,
+                                msg.to_json_line().as_bytes(),
+                            );
+                        });
                     }
                 }
                 self.liberar_recursos();
@@ -354,7 +451,7 @@ impl AppUI {
         self.sdp_handshake_tx = Some(sdp_tx);
 
         if let Some(writer) = &self.server_writer {
-            let mut writer_clone = writer.try_clone().expect("Failed to clone writer");
+            let mut writer_clone = writer.clone();
             let (tx_result, rx_result) = std::sync::mpsc::channel();
 
             let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
@@ -381,7 +478,10 @@ impl AppUI {
                     Err(e) => return Err(ClientErrors::IceError(e)),
                     Ok(s) => s,
                 };
-                let _ = tx_result.send(Ok(socket));
+                // let _ = tx_result.send(Ok(socket));
+                if let Err(e) = tx_result.send(Ok(socket)) {
+                    eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
+                };
                 Ok(())
             });
             self.pedido_socket = Some(rx_result);

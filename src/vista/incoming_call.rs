@@ -1,6 +1,10 @@
 use crate::{camera::Camera, vista::cambio::CambioVista};
 use eframe::egui::{self, Color32, Frame, RichText, Vec2};
-use std::sync::{Arc, Mutex};
+use rustls::StreamOwned;
+use std::{
+    net::TcpStream,
+    sync::{Arc, Mutex},
+};
 
 pub struct VistaIncomingCall {
     caller_name: String,
@@ -16,7 +20,7 @@ impl VistaIncomingCall {
         &mut self,
         ctx: &egui::Context,
         _camara: &Option<Arc<Mutex<Camera>>>,
-        _tcp: &mut std::net::TcpStream,
+        _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 

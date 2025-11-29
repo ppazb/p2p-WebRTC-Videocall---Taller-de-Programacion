@@ -4,13 +4,17 @@ use eframe::egui::{self, Color32, Frame, RichText};
 
 use crate::{camera::Camera, vista::cambio::CambioVista};
 
-pub struct VistaCalledUserBusy {
+pub struct VistaCalledUserBusy {}
+
+impl Default for VistaCalledUserBusy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VistaCalledUserBusy {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
     pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
         let mut cambio = CambioVista::None;
@@ -43,11 +47,10 @@ impl VistaCalledUserBusy {
                             ui.add_space(10.0);
 
                             ui.label(
-                                RichText::new(
-                                    "El usuario está ocupado.")
-                                .strong()
-                                .size(18.0)
-                                .color(Color32::WHITE),
+                                RichText::new("El usuario está ocupado.")
+                                    .strong()
+                                    .size(18.0)
+                                    .color(Color32::WHITE),
                             );
 
                             ui.add_space(30.0);

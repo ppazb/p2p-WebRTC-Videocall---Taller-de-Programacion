@@ -63,7 +63,7 @@ pub fn json_split_fields(json: &str) -> Vec<String> {
                 current_field.push(character);
             }
 
-            '{' if !is_str => {
+            '}' if !is_str => {
                 depth_obj -= 1;
                 current_field.push(character);
             }
@@ -160,7 +160,3 @@ pub fn json_parse_obj(json: &str) -> HashMap<String, JsonStruct> {
 
     hashmap
 }
-
-// pub fn from_map_to_app_config(map: &HashMap<String, String>) -> Option<AppParameters> {
-
-// }

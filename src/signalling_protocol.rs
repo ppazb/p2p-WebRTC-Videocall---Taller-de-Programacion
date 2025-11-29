@@ -1,3 +1,5 @@
+use std::io::{self, ErrorKind, Write};
+
 use serde::{Deserialize, Serialize};
 
 use crate::json_parser::json_clasify;
@@ -47,10 +49,10 @@ pub enum ClientMessage {
         target_user: String,
     },
 
-    CallStarted{
+    CallStarted {
         username: String,
         target_user: String,
-    }
+    },
 }
 
 /// Mensajes que envía el servidor al cliente
@@ -74,7 +76,7 @@ pub enum ServerMessage {
 
     AnswerForwarded { from_user: String, answer: String },
 
-    CalledUserBusy ,
+    CalledUserBusy,
 
     CallEnded { from_user: String },
     CallRejected { from_user: String },
@@ -96,7 +98,10 @@ impl ClientMessage {
 
             ClientMessage::GetUsers {} => "{\"type\":\"get_users\"}\n".to_string(),
 
-            ClientMessage::CallStarted { username, target_user } => {
+            ClientMessage::CallStarted {
+                username,
+                target_user,
+            } => {
                 format!(
                     "{{\"type\":\"call_started\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
                     replace_special_character(username),
@@ -229,9 +234,7 @@ impl ServerMessage {
                 )
             }
 
-            ServerMessage::CalledUserBusy => {
-                "{\"type\":\"called_user_busy\"}\n".to_string()
-            }
+            ServerMessage::CalledUserBusy => "{\"type\":\"called_user_busy\"}\n".to_string(),
 
             ServerMessage::LogoutOk => "{\"type\":\"logout_ok\"}\n".to_string(),
 
@@ -388,7 +391,7 @@ fn replace_special_character(s: &str) -> String {
         .replace('\t', "\\t")
 }
 
-pub fn vec_to_json_array(vec_string: &Vec<String>) -> String {
+pub fn vec_to_json_array(vec_string: &[String]) -> String {
     let mut output_str = String::from("[");
     for (i, str) in vec_string.iter().enumerate() {
         output_str.push('"');
@@ -418,4 +421,24 @@ fn parse_string_array(json_array: &str) -> Vec<String> {
     } else {
         Vec::new()
     }
+}
+
+pub fn write_all_nonblocking<W: Write>(writer: &mut W, mut data: &[u8]) -> io::Result<()> {
+    while !data.is_empty() {
+        match writer.write(data) {
+            Ok(0) => {
+                return Err(io::Error::new(
+                    ErrorKind::WriteZero,
+                    "no se pudo escribir en el stream",
+                ));
+            }
+            Ok(n) => data = &data[n..], // avanzamos los bytes ya enviados
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    writer.flush()
 }
