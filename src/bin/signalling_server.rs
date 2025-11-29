@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::io::{self, ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 #[derive(Debug, Clone)]
 struct StoredOffer {
@@ -61,6 +62,8 @@ fn main() -> Result<(), SignallingServerError> {
     let stored_offers: Arc<Mutex<HashMap<String, StoredOffer>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    let mut handles: Vec<JoinHandle<()>> = Vec::new(); 
+
     println!("[SERVER] Listening for connections...\n");
 
     for stream in listener.incoming() {
@@ -81,14 +84,19 @@ fn main() -> Result<(), SignallingServerError> {
                     Err(e) => return Err(SignallingServerError::TlsHandshakeError(e)),
                 };
 
-                std::thread::spawn(move || {
+                let client_handle = std::thread::spawn(move || {
                     let _ = handle_client(tls_stream, clients, connections, busy_clients, offers);
                 });
+                handles.push(client_handle); 
             }
             Err(e) => {
                 eprintln!("[ERROR] Connection error: {}", e);
             }
         }
+    }
+
+    for handle in handles {
+        let _ = handle.join(); 
     }
 
     Ok(())
