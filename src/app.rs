@@ -16,6 +16,7 @@ use crate::signalling_protocol::{ClientMessage, ServerMessage};
 use crate::vista::call_end::VistaCallEnd;
 use crate::vista::call_start::VistaCallStart;
 use crate::vista::incoming_call::VistaIncomingCall;
+use crate::vista::called_user_busy::VistaCalledUserBusy;
 use crate::vista::lobby::VistaLobby;
 use crate::vista::sign_up::VistaSignUp;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
@@ -32,6 +33,7 @@ pub enum AppEvent {
     UserLeft(String),
     SdpMessage(ServerMessage),
     ConnectionLost,
+    CalledUserBusy
 }
 
 pub struct AppUI {
@@ -128,6 +130,10 @@ impl AppUI {
                                     ServerMessage::CallRejected { .. } => {
                                         let _ = tx.send(AppEvent::SdpMessage(msg));
                                     }
+                                    // Fixed: CalledUserBusy is a unit variant; match without `{ .. }`
+                                    ServerMessage::CalledUserBusy => {
+                                        let _ = tx.send(AppEvent::CalledUserBusy);
+                                    }
                                     _ => {}
                                 }
                             }
@@ -209,6 +215,12 @@ impl AppUI {
                 self.target_username = Some(username.clone());
                 self.crear_camara();
                 self.iniciar_pedido_cliente();
+
+                if let Some(writer) = &mut self.server_writer {
+                    let msg = ClientMessage::GetUsers {};
+                    let _ = writer.write_all(msg.to_json_line().as_bytes());
+                }
+
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(username));
             }
 
@@ -216,6 +228,11 @@ impl AppUI {
             CambioVista::ToIncomingCall { caller } => {
                 self.target_username = Some(caller.clone());
                 self.vista_actual = Vista::VistaIncomingCall(VistaIncomingCall::new(caller));
+            }
+
+            CambioVista::CalledUserBusy => {
+                eprintln!("[CLIENT] Called user was busy");
+                self.vista_actual = Vista::VistaCalledUserBusy(VistaCalledUserBusy::new());
             }
 
             // acepto la llamada -> nueva vista
@@ -234,6 +251,15 @@ impl AppUI {
                         offer: offer.clone(),
                     };
                     let _ = tx.send(msg);
+                }
+
+                //Aviso que ambos usuarios van a estar ocupados
+                if let (Some(writer), Some(me)) = (&mut self.server_writer, &self.current_username){
+                    let msg = ClientMessage::CallStarted { 
+                        username: me.clone(),
+                        target_user: target_user.clone()
+                    };
+                    let _ = writer.write_all(msg.to_json_line().as_bytes());
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(target_user));
@@ -447,6 +473,11 @@ impl eframe::App for AppUI {
                         lobby.users_list.push(user);
                     }
                 }
+
+                AppEvent::CalledUserBusy => {
+                    self.cambiar_vista(CambioVista::CalledUserBusy);
+                }
+
                 AppEvent::UserLeft(user) => {
                     if let Vista::VistaLobby(lobby) = &mut self.vista_actual {
                         lobby.users_list.retain(|u| u != &user);

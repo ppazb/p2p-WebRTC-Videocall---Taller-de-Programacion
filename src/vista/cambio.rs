@@ -7,6 +7,7 @@ pub enum CambioVista {
     ToCallStart { username: String },
 
     ToIncomingCall { caller: String },
+    CalledUserBusy,
     CallAccepted { target_user: String },
     CallRejected { target_user: String },
 

@@ -24,6 +24,7 @@ pub enum ClientErrors {
     IceError(IceErrors),
     DtlsError(CertificateError),
     SocketNotInitialized,
+    StatsCouldtGets,
 }
 
 impl From<io::Error> for ClientErrors {
@@ -77,6 +78,7 @@ impl fmt::Display for ClientErrors {
             Self::IceError(ice_error) => writeln!(f, "{}", ice_error),
             Self::DtlsError(dtls_error) => writeln!(f, "{}", dtls_error),
             Self::SocketNotInitialized => writeln!(f, "El cliente no tiene socket"),
+            Self::StatsCouldtGets => writeln!(f, "No se pudo obtener las estadisticas"),
         }
     }
 }
