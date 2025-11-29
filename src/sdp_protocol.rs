@@ -524,13 +524,7 @@ pub fn sdp_handshake(
             Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into())),
         };
 
-        write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
-
-        // writer
-        //     .write_all(msg.to_json_line().as_bytes())
-        //     .map_err(|_| SdpError::OfferFileWriteError)?;
-        // writer.flush().ok();
-        // println!("[SDP] Answer was sent.");
+        let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
 
         // info para ICE
         let my_ice =
@@ -563,16 +557,9 @@ pub fn sdp_handshake(
             Err(_) => return Err(SdpError::Other("[SDP TLS] Guard Lock error".into())),
         };
 
-        write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+        let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
         drop(guard_write);
 
-        // writer
-        //     .write_all(msg.to_json_line().as_bytes())
-        //     .map_err(|_| SdpError::OfferFileWriteError)?;
-        // writer.flush().ok();
-        // println!("[SDP] Offer sent. Waiting answer...");
-
-        // Loop de espera para answer
         let timeout = Duration::from_secs(30);
         let start = Instant::now();
 

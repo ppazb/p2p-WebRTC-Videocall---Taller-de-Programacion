@@ -71,8 +71,6 @@ impl SignallingServerParameters {
 pub fn get_config_app(config_file_path: &str) -> Result<AppParameters, Box<dyn std::error::Error>> {
     let config = fs::read_to_string(config_file_path)?;
     println!("\n[DEBUG] READ TO STRING de un archivo JSON: {:?}", config);
-    // println!("[DEBUG] READ TO STRING de un archivo JSON: {:?}", config);
-    // let session_info: AppParameters = serde_json::from_str(&config)?;
     let config_clasification = json_clasify(&config);
     let config_objects = config_clasification.as_obj();
     let app_params_struct = AppParameters::from_json(&config_objects);

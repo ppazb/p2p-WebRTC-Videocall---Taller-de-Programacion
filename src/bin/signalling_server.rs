@@ -104,30 +104,19 @@ fn handle_client(
     stored_offers: Arc<Mutex<HashMap<String, StoredOffer>>>,
 ) -> std::io::Result<()> {
     stream.get_ref().set_nonblocking(true)?;
-    let mut tls_stream = Arc::new(Mutex::new(stream));
-    let mut read_tls = tls_stream.clone();
-    let mut write_tls = tls_stream.clone();
-    //    let read_stream = stream.try_clone()?;
-    //     let mut stream_write = stream;
-    //     let mut reader = BufReader::new(read_stream);
+    let tls_stream = Arc::new(Mutex::new(stream));
+    let read_tls = tls_stream.clone();
+    let write_tls = tls_stream.clone();
+
     let mut current_user: Option<String> = None;
 
     let mut buffer = [0u8; 4096];
     // Loop infinito: leer múltiples mensajes del mismo cliente
     loop {
-        // let mut line = String::new();
-        // match reader.read_line(&mut line) {
-        // Si da 0 es porque se cierra el socket -> se que se desconecta el usuario
-        // Ok(0) => {
-        // eprintln!("[SERVER] Client disconnected (socket closed)");
-
         let mut guard_read = match read_tls.lock() {
             Ok(rg) => rg,
             Err(e) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("TLS mutex poisoned: {e}"),
-                ));
+                return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
             }
         };
 
@@ -167,20 +156,16 @@ fn handle_client(
                     let msg_json = msg_left.to_json_line();
 
                     for (_, other_stream) in clients_map.iter_mut() {
-                        // let _ = other_stream.write_all(msg_json.as_bytes());
-                        // let _ = other_stream.flush();
-
-                        let mut tls_other_stream = match other_stream.lock() {
+                        let mut _tls_other_stream = match other_stream.lock() {
                             Ok(mut tls_s) => {
                                 let _ = write_all_nonblocking(&mut *tls_s, msg_json.as_bytes());
-                                let _ = tls_s.flush();
+                                tls_s.flush()?;
                             }
 
                             Err(e) => {
-                                return Err(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("TLS mutex poisoned: {e}"),
-                                ));
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
                             }
                         };
                     }
@@ -196,13 +181,10 @@ fn handle_client(
 
         println!("[SERVER] Before utf-8 Conversion: {:?} bytes", &n);
 
-        let mut line = match String::from_utf8(buffer[..n].to_vec()) {
+        let line = match String::from_utf8(buffer[..n].to_vec()) {
             Ok(l) => l,
             Err(e) => {
-                return Err(io::Error::new(
-                    ErrorKind::Other,
-                    format!("Bytes to String error: {e}"),
-                ));
+                return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
             }
         };
 
@@ -213,7 +195,7 @@ fn handle_client(
                 let mut clients = active_clients.lock().unwrap();
                 if clients.verificar_login(&username, &password).is_ok() {
                     // Marcar como conectado en la BD
-                    clients.conectar(&username);
+                    let _ = clients.conectar(&username);
                     let clients_list: Vec<String>;
                     eprintln!("[SERVER] User '{}' logged in", username);
 
@@ -227,14 +209,9 @@ fn handle_client(
                         let msg_json = msg_joined.to_json_line();
 
                         for (other_user, other_stream) in clients_map.iter_mut() {
-                            // if other_user != &username {
-                            //     let _ = other_stream.write_all(msg_json.as_bytes());
-                            //     let _ = other_stream.flush();
-                            // }
-
                             println!("[SERVER] loop other user: {:?}", &other_user);
 
-                            let mut tls_other_stream = match other_stream.lock() {
+                            let _tls_other_stream = match other_stream.lock() {
                                 Ok(mut tls_s) => {
                                     if other_user != &username {
                                         eprintln!("\n\n[SERVER] Login Success");
@@ -246,10 +223,9 @@ fn handle_client(
                                     tls_s
                                 }
                                 Err(e) => {
-                                    return Err(std::io::Error::new(
-                                        std::io::ErrorKind::Other,
-                                        format!("TLS mutex poisoned: {e}"),
-                                    ));
+                                    return Err(std::io::Error::other(format!(
+                                        "TLS mutex poisoned: {e}"
+                                    )));
                                 }
                             };
                         }
@@ -269,16 +245,12 @@ fn handle_client(
                     let mut tls_write = match write_tls.lock() {
                         Ok(s) => s,
                         Err(e) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("TLS mutex poisoned: {e}"),
-                            ));
+                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                         }
                     };
                     println!("\n\n[SERVER] Login Success");
                     let response = ServerMessage::LoginOk { username };
                     let response_json = response.to_json_line();
-                    // stream_write.write_all(response_json.as_bytes())?;
                     // stream_write.flush()?; //me aseguro que se escriba todo
                     let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                     tls_write.flush()?;
@@ -290,8 +262,6 @@ fn handle_client(
                         users: clients_list,
                     };
                     let list_json = user_list.to_json_line();
-                    // stream_write.write_all(list_json.as_bytes())?;
-                    // stream_write.flush()?;
                     let _ = write_all_nonblocking(&mut *tls_write, list_json.as_bytes());
                     tls_write.flush()?;
                     println!("[SERVER] Sent Initial UserList to new user");
@@ -304,14 +274,10 @@ fn handle_client(
                     let mut tls_write = match write_tls.lock() {
                         Ok(s) => s,
                         Err(e) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("TLS mutex poisoned: {e}"),
-                            ));
+                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                         }
                     };
-                    // stream_write.write_all(response_json.as_bytes())?;
-                    // stream_write.flush()?;
+
                     let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                     tls_write.flush()?;
                     println!("[SERVER] Login failed for '{}'", username);
@@ -332,17 +298,12 @@ fn handle_client(
                     let mut tls_write = match write_tls.lock() {
                         Ok(s) => s,
                         Err(e) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("TLS mutex poisoned: {e}"),
-                            ));
+                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                         }
                     };
                     let _ =
                         write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
                     tls_write.flush()?;
-                    // let _ = stream_write.write_all(response.to_json_line().as_bytes());
-                    // let _ = stream_write.flush();
                     continue;
                 }
 
@@ -354,12 +315,6 @@ fn handle_client(
                 // Guardar en ocupado solo si ambos existen en conexiones activas para
                 //asegurarnos que no se rompa nada
                 if let (Some(user1), Some(user2)) = (user1, user2) {
-                    // if let Ok(clone1) = user1.try_clone() {
-                    //     busy_map.insert(username.clone(), clone1);
-                    // }
-                    // if let Ok(clone2) = user2.try_clone() {
-                    //     busy_map.insert(target_user.clone(), clone2);
-                    // }
                     busy_map.insert(username.clone(), user1.clone());
                     busy_map.insert(target_user.clone(), user2.clone());
                     eprintln!("[SERVER] Marked {} and {} as busy", username, target_user);
@@ -377,16 +332,11 @@ fn handle_client(
                 // Enviar confirmación
                 let response = ServerMessage::LogoutOk;
                 let response_json = response.to_json_line();
-                // stream_write.write_all(response_json.as_bytes())?;
-                // stream_write.flush()?;
 
                 let mut tls_write = match write_tls.lock() {
                     Ok(s) => s,
                     Err(e) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("TLS mutex poisoned: {e}"),
-                        ));
+                        return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                     }
                 };
 
@@ -407,20 +357,16 @@ fn handle_client(
                     };
                     let msg_json = msg_left.to_json_line();
                     for (_, other_stream) in clients_map.iter_mut() {
-                        // let _ = other_stream.write_all(msg_json.as_bytes());
-                        // let _ = other_stream.flush();
-
-                        let tls_write = match other_stream.lock() {
+                        let _tls_write = match other_stream.lock() {
                             Ok(mut s) => {
                                 let _ = write_all_nonblocking(&mut *s, msg_json.as_bytes());
                                 let _ = s.flush();
                                 s
                             }
                             Err(e) => {
-                                return Err(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("TLS mutex poisoned: {e}"),
-                                ));
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
                             }
                         };
                     }
@@ -439,16 +385,11 @@ fn handle_client(
 
                 let response = ServerMessage::UserList { users: users_vec };
                 let response_json = response.to_json_line();
-                // stream_write.write_all(response_json.as_bytes())?;
-                // stream_write.flush()?;
 
                 let mut tls_write = match write_tls.lock() {
                     Ok(s) => s,
                     Err(e) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("TLS mutex poisoned: {e}"),
-                        ));
+                        return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                     }
                 };
 
@@ -479,7 +420,7 @@ fn handle_client(
 
                 // Reenviar el offer al client al que me quiero conectar
                 if let Some(target) = target_user {
-                    let mut busy_map = busy_clients.lock().unwrap();
+                    let busy_map = busy_clients.lock().unwrap();
                     if busy_map.contains_key(&target) {
                         eprintln!(
                             "[SERVER] Target {} is busy. Notifying caller {}",
@@ -490,10 +431,9 @@ fn handle_client(
                         let mut tls_write = match write_tls.lock() {
                             Ok(s) => s,
                             Err(e) => {
-                                return Err(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("TLS mutex poisoned: {e}"),
-                                ));
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
                             }
                         };
 
@@ -502,9 +442,6 @@ fn handle_client(
                             response.to_json_line().as_bytes(),
                         );
                         tls_write.flush()?;
-
-                        // let _ = stream_write.write_all(response.to_json_line().as_bytes());
-                        // let _ = stream_write.flush();
                     } else {
                         let mut clients_map = connected_clients.lock().unwrap();
                         if let Some(target_stream) = clients_map.get_mut(&target) {
@@ -516,14 +453,12 @@ fn handle_client(
                             let mut tls_write = match target_stream.lock() {
                                 Ok(s) => s,
                                 Err(e) => {
-                                    return Err(std::io::Error::new(
-                                        std::io::ErrorKind::Other,
-                                        format!("TLS mutex poisoned: {e}"),
-                                    ));
+                                    return Err(std::io::Error::other(format!(
+                                        "TLS mutex poisoned: {e}"
+                                    )));
                                 }
                             };
-                            // let _ = target_stream.write_all(response.to_json_line().as_bytes());
-                            // let _ = target_stream.flush();
+
                             let _ = write_all_nonblocking(
                                 &mut *tls_write,
                                 response.to_json_line().as_bytes(),
@@ -560,15 +495,10 @@ fn handle_client(
                     let mut tls_write = match target_stream.lock() {
                         Ok(s) => s,
                         Err(e) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("TLS mutex poisoned: {e}"),
-                            ));
+                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                         }
                     };
 
-                    // let _ = target_stream.write_all(response.to_json_line().as_bytes());
-                    // let _ = target_stream.flush();
                     match write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes())
                     {
                         Ok(()) => {
@@ -585,7 +515,7 @@ fn handle_client(
                             eprintln!("[SERVER] ERROR sending ANSWER to {}: {}", target_user, e);
                         }
                     }
-                    let _ = tls_write.flush();
+                    tls_write.flush()?;
                     eprintln!("[SERVER] Forwarded ANSWER to {}", target_user);
                 } else {
                     eprintln!(
@@ -605,10 +535,7 @@ fn handle_client(
                 let mut tls_write = match write_tls.lock() {
                     Ok(s) => s,
                     Err(e) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("TLS mutex poisoned: {e}"),
-                        ));
+                        return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                     }
                 };
 
@@ -619,15 +546,12 @@ fn handle_client(
                     };
                     let response_json = response.to_json_line();
 
-                    // stream_write.write_all(response_json.as_bytes())?;
-                    // stream_write.flush()?;
                     let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                     tls_write.flush()?;
                 } else {
                     let response = ServerMessage::Error {
                         reason: format!("No offer available from {}", target_user),
                     };
-                    // let _ = stream_write.write_all(response.to_json_line().as_bytes());
                     let _ =
                         write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
                 }
@@ -647,7 +571,7 @@ fn handle_client(
                 }
 
                 let clients_map = connected_clients.lock().unwrap();
-                if let Some(mut target_stream) = clients_map.get(&target_user) {
+                if let Some(target_stream) = clients_map.get(&target_user) {
                     //Ese usuario tambien va a dejar de estar ocupado
                     {
                         let mut busy_map = busy_clients.lock().unwrap();
@@ -657,22 +581,17 @@ fn handle_client(
                     let response = ServerMessage::CallEnded {
                         from_user: username.clone(),
                     };
-                    // let _ = target_stream.write_all(response.to_json_line().as_bytes());
-                    // let _ = target_stream.flush();
 
                     let mut tls_write = match target_stream.lock() {
                         Ok(s) => s,
                         Err(e) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("TLS mutex poisoned: {e}"),
-                            ));
+                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                         }
                     };
 
                     let _ =
                         write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
-                    let _ = tls_write.flush();
+                    tls_write.flush()?;
                     eprintln!("[SERVER] Forwarded CallEnded to {}", target_user);
                 } else {
                     eprintln!("[SERVER] Target not found for CallEnded");
@@ -696,16 +615,11 @@ fn handle_client(
                     let response = ServerMessage::CallRejected {
                         from_user: username.clone(),
                     };
-                    // let _ = target_stream.write_all(response.to_json_line().as_bytes());
-                    // let _ = target_stream.flush();
 
                     let mut tls_write = match target_stream.lock() {
                         Ok(s) => s,
                         Err(e) => {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("TLS mutex poisoned: {e}"),
-                            ));
+                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                         }
                     };
 
@@ -728,14 +642,10 @@ fn handle_client(
                 let mut tls_write = match write_tls.lock() {
                     Ok(s) => s,
                     Err(e) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("TLS mutex poisoned: {e}"),
-                        ));
+                        return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
                     }
                 };
                 let response_json = response.to_json_line();
-                // let _ = stream_write.write_all(response_json.as_bytes());
 
                 let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                 let _ = tls_write.flush();

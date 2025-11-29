@@ -160,7 +160,3 @@ pub fn json_parse_obj(json: &str) -> HashMap<String, JsonStruct> {
 
     hashmap
 }
-
-// pub fn from_map_to_app_config(map: &HashMap<String, String>) -> Option<AppParameters> {
-
-// }

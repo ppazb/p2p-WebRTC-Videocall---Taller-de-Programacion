@@ -6,6 +6,12 @@ use crate::{camera::Camera, vista::cambio::CambioVista};
 
 pub struct VistaCalledUserBusy {}
 
+impl Default for VistaCalledUserBusy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VistaCalledUserBusy {
     pub fn new() -> Self {
         Self {}

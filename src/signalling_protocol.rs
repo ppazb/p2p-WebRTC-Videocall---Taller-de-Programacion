@@ -391,7 +391,7 @@ fn replace_special_character(s: &str) -> String {
         .replace('\t', "\\t")
 }
 
-pub fn vec_to_json_array(vec_string: &Vec<String>) -> String {
+pub fn vec_to_json_array(vec_string: &[String]) -> String {
     let mut output_str = String::from("[");
     for (i, str) in vec_string.iter().enumerate() {
         output_str.push('"');

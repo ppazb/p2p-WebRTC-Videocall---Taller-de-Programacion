@@ -4,7 +4,7 @@
     },
 
     "sdp_handshake": {
-        "local_adder": "localhost:8089",
+        "local_adder": "localhost:8080",
         "server_adder": "localhost:8000", 
         "codecs": ["VP8", "H264"],
         "ice_candidates": ["192.168.0.109:8002", "192.168.0.109:8003", "192.168.0.109:8004"],

@@ -21,14 +21,13 @@ pub fn client_tls_stream(
 
     // Levanto el archivo key.pem para las llaves
     let key_file = fs::read("certs/key.der").map_err(|_| TlsError::PemfileError)?;
-    let key = rustls::pki_types::PrivateKeyDer::Pkcs8(rustls::pki_types::PrivatePkcs8KeyDer::from(
-        key_file,
-    ));
+    let _key = rustls::pki_types::PrivateKeyDer::Pkcs8(
+        rustls::pki_types::PrivatePkcs8KeyDer::from(key_file),
+    );
 
     let mut root_store = RootCertStore::empty();
-    let (_added, _ignored) = root_store.add_parsable_certificates(certs.into_iter());
+    let (_added, _ignored) = root_store.add_parsable_certificates(certs);
 
-    // Agrego mi certificado al sistema
     let config = ClientConfig::builder()
         .with_root_certificates(root_store)
         .with_no_client_auth();
@@ -39,23 +38,17 @@ pub fn client_tls_stream(
 
     println!("\n\n[DEBUG TLS] Server Adder: {:?}", &server_adder);
 
-    // let ipv4 = match server_adder.parse::<IpAddr>() {
-    //     Ok(ip) => ip,
-    //     Err(_) => return Err(TlsError::IpParseError)
-    // };
-
     let ipv4 = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
     println!("\n\n[DEBUG TLS] IPV4: {:?}", &ipv4);
 
-    let server_name = ServerName::try_from(ipv4).map_err(|_| TlsError::IpParseError)?;
+    let server_name = ServerName::from(ipv4);
     let connection = match ClientConnection::new(Arc::new(config), server_name) {
         Ok(connect) => connect,
         Err(_) => return Err(TlsError::ClientConnectionError),
     };
 
     let tls_stream = StreamOwned::new(connection, stream_to_encrip);
-    // tls_stream.conn.complete_io(&mut tls_stream.sock).map_err(|_| SdpError::Other(String::from("[TLS] Handshake failed")))?;
     println!("\n\n[DEBUG TLS] Handshake Finishing");
     Ok(tls_stream)
 }
@@ -67,16 +60,10 @@ pub fn server_tls_config() -> Result<Arc<ServerConfig>, TlsError> {
     let certs = vec![CertificateDer::from(cert_file)];
 
     let key_file = fs::read("certs/key.der").map_err(|_| TlsError::PemfileError)?;
-    // let mut keys_reader = BufReader::new(keys_pem);
-    //     println!("[DEBUG TLS] File Read");
 
     let key = rustls::pki_types::PrivateKeyDer::Pkcs8(rustls::pki_types::PrivatePkcs8KeyDer::from(
         key_file,
     ));
-
-    // let key = keys
-    //     .pop()
-    //     .ok_or_else(|| TlsError::AbsentPrivateKeyError)?;
 
     let server_config = ServerConfig::builder()
         .with_no_client_auth()
@@ -92,10 +79,6 @@ pub fn server_try_tls_handshake(
 ) -> Result<StreamOwned<ServerConnection, TcpStream>, TlsError> {
     let connection = ServerConnection::new(config).map_err(|_| TlsError::HandshakeError)?;
     let tls = StreamOwned::new(connection, stream);
-
-    // tls.conn
-    //     .complete_io(&mut tls.sock)
-    //     .map_err(|_| SdpError::Other(String::from("[TLS] handshake failed Server")))?;
 
     Ok(tls)
 }
