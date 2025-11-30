@@ -41,7 +41,7 @@ pub struct AppUI {
     server_events_rx: Receiver<AppEvent>,
     server_writer: Option<Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>>,
     sdp_handshake_tx: Option<Sender<ServerMessage>>,
-    pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
+    pedido_socket: Option<Receiver<Result<(UdpSocket, Vec<String>, Vec<String>), SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
     handles: Vec<JoinHandle<()>>, 
     pending_offer: Option<String>,
@@ -451,66 +451,65 @@ impl AppUI {
     }
 
     fn iniciar_pedido_cliente(&mut self) {
-        self.in_call.store(true, Ordering::SeqCst);
-        let handshake_params = self.app_params.sdp_handshake.clone();
-        let in_call = Arc::clone(&self.in_call);
-        let username = self.current_username.clone().unwrap_or_default();
-        let target_user = self.target_username.clone().unwrap_or_default();
+    self.in_call.store(true, Ordering::SeqCst);
+    let handshake_params = self.app_params.sdp_handshake.clone();
+    let in_call = Arc::clone(&self.in_call);
+    let username = self.current_username.clone().unwrap_or_default();
+    let target_user = self.target_username.clone().unwrap_or_default();
 
-        let (sdp_tx, sdp_rx) = channel::<ServerMessage>();
-        self.sdp_handshake_tx = Some(sdp_tx);
+    let (sdp_tx, sdp_rx) = channel::<ServerMessage>();
+    self.sdp_handshake_tx = Some(sdp_tx);
 
-        if let Some(writer) = &self.server_writer {
-            let mut writer_clone = writer.clone();
-            let (tx_result, rx_result) = std::sync::mpsc::channel();
+    if let Some(writer) = &self.server_writer {
+        let mut writer_clone = writer.clone();
+        let (tx_result, rx_result) = std::sync::mpsc::channel();
 
-            let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
-                eprintln!("[DEBUG THREAD] Starting sdp_handshake...");
-                let ice_info = match sdp_handshake(
-                    in_call,
-                    handshake_params,
-                    username,
-                    target_user,
-                    &mut writer_clone,
-                    sdp_rx,
-                ) {
-                    Err(e) => {
-                        let _ = tx_result.send(Err(e.clone()));
-                        return Err(ClientErrors::SdpError(e));
-                    }
-                    Ok(info) => info,
-                };
-                let _codec = match elegir_codec(&ice_info.2) {
-                    Err(e) => return Err(ClientErrors::IceError(e)),
-                    Ok(c) => c,
-                };
-                let socket = match crear_conexion_ice(&ice_info.0, &ice_info.1) {
-                    Err(e) => return Err(ClientErrors::IceError(e)),
-                    Ok(s) => s,
-                };
-                // let _ = tx_result.send(Ok(socket));
-                if let Err(e) = tx_result.send(Ok(socket)) {
-                    eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
-                };
-                Ok(())
-            });
-            self.pedido_socket = Some(rx_result);
-            self.handshake_handle = Some(handshake_handle);
-        }
+        let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
+            eprintln!("[DEBUG THREAD] Starting sdp_handshake...");
+            let (sockets, local_candidates, remote_ice, codecs) = match sdp_handshake(
+                in_call,
+                handshake_params,
+                username,
+                target_user,
+                &mut writer_clone,
+                sdp_rx,
+            ) {
+                Err(e) => {
+                    let _ = tx_result.send(Err(e.clone()));
+                    return Err(ClientErrors::SdpError(e));
+                }
+                Ok(info) => info,
+            };
+            let _codec = match elegir_codec(&codecs) {
+                Err(e) => return Err(ClientErrors::IceError(e)),
+                Ok(c) => c,
+            };
+            let socket = match crear_conexion_ice(sockets, &remote_ice) {
+                Err(e) => return Err(ClientErrors::IceError(e)),
+                Ok(s) => s,
+            };
+            if let Err(e) = tx_result.send(Ok((socket, local_candidates, remote_ice))) {
+                eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
+            };
+            Ok(())
+        });
+        self.pedido_socket = Some(rx_result);
+        self.handshake_handle = Some(handshake_handle);
     }
+}
 
     fn crear_cliente(&mut self, socket: UdpSocket) {
-        let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
-        self.rx_remoto = Some(rx_remoto);
-        if let Some(cam) = &self.camara {
-            let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
-            if let Ok(mut c) = cliente {
-                let _ = c.add_peer(socket);
-                self.client_handles = c.initialize_call();
-                self.cliente = Some(c);
-            }
+    let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
+    self.rx_remoto = Some(rx_remoto);
+    if let Some(cam) = &self.camara {
+        let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
+        if let Ok(mut c) = cliente {
+            let _ = c.add_peer(socket);
+            self.client_handles = c.initialize_call();
+            self.cliente = Some(c);
         }
     }
+}
 
     fn liberar_handles(&mut self) {
         for handle in self.handles.drain(..) {
@@ -629,9 +628,9 @@ impl eframe::App for AppUI {
                 let _ = h.join();
             }
             match result {
-                Ok(s) => {
+                Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-                    self.crear_cliente(s);
+                    self.crear_cliente(socket);
                     self.cambiar_vista(CambioVista::ToCall);
                 }
                 Err(_) => self.cambiar_vista(CambioVista::ToLobby {
