@@ -61,6 +61,19 @@ impl From<CertificateError> for ClientErrors {
         Self::DtlsError(err)
     }
 }
+
+impl From<SdpError> for ClientErrors {
+    fn from(error: SdpError) -> Self {
+        ClientErrors::SdpError(error)
+    }
+}
+
+impl From<IceErrors> for ClientErrors {
+    fn from(error: IceErrors) -> Self {
+        ClientErrors::IceError(error)
+    }
+}
+
 impl fmt::Display for ClientErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -14,6 +14,7 @@ pub mod video_processing_errors;
 
 pub mod ice;
 pub mod ice_errors;
+pub mod stun;
 
 pub mod client;
 pub mod client_errors;

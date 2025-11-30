@@ -238,7 +238,6 @@ impl Client {
     /// pasando los recursos necesarios para permitir el funcionamiento correcto
     /// la estructura esta pensada para ser escalable y agregar funcionalidad sea un proceso simple
     /// En caso de detectar el fin de la llamada comunica esta decision a la aplicacion para un correcto cierre.
-
     fn reciver(
         socket_recev: &UdpSocket,
         socket_rtcp_out: &UdpSocket,

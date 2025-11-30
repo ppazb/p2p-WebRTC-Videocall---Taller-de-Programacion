@@ -41,7 +41,7 @@ pub struct AppUI {
     server_events_rx: Receiver<AppEvent>,
     server_writer: Option<Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>>,
     sdp_handshake_tx: Option<Sender<ServerMessage>>,
-    pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
+    pedido_socket: Option<Receiver<Result<(UdpSocket, Vec<String>, Vec<String>), SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
     handles: Vec<JoinHandle<()>>,
     pending_offer: Option<String>,
@@ -101,7 +101,7 @@ impl AppUI {
             let (tx, rx) = channel::<AppEvent>();
 
             // Thread para escuchar del servidor
-            let read_handle = std::thread::spawn(move || {
+            let _read_handle = std::thread::spawn(move || {
                 loop {
                     // Setear un Buffer para leer
                     let mut buffer = [0u8; 4096];
@@ -466,7 +466,7 @@ impl AppUI {
 
             let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
                 eprintln!("[DEBUG THREAD] Starting sdp_handshake...");
-                let ice_info = match sdp_handshake(
+                let (sockets, local_candidates, remote_ice, codecs) = match sdp_handshake(
                     in_call,
                     handshake_params,
                     username,
@@ -480,16 +480,15 @@ impl AppUI {
                     }
                     Ok(info) => info,
                 };
-                let _codec = match elegir_codec(&ice_info.2) {
+                let _codec = match elegir_codec(&codecs) {
                     Err(e) => return Err(ClientErrors::IceError(e)),
                     Ok(c) => c,
                 };
-                let socket = match crear_conexion_ice(&ice_info.0, &ice_info.1) {
+                let socket = match crear_conexion_ice(sockets, &remote_ice) {
                     Err(e) => return Err(ClientErrors::IceError(e)),
                     Ok(s) => s,
                 };
-                // let _ = tx_result.send(Ok(socket));
-                if let Err(e) = tx_result.send(Ok(socket)) {
+                if let Err(e) = tx_result.send(Ok((socket, local_candidates, remote_ice))) {
                     eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
                 };
                 Ok(())
@@ -629,9 +628,9 @@ impl eframe::App for AppUI {
                 let _ = h.join();
             }
             match result {
-                Ok(s) => {
+                Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-                    self.crear_cliente(s);
+                    self.crear_cliente(socket);
                     self.cambiar_vista(CambioVista::ToCall);
                 }
                 Err(_) => self.cambiar_vista(CambioVista::ToLobby {
