@@ -1,25 +1,23 @@
-use std::net::{UdpSocket, Ipv4Addr, ToSocketAddrs};
-use std::time::Duration;
 use rand::random;
+use std::net::{Ipv4Addr, ToSocketAddrs, UdpSocket};
+use std::time::Duration;
 
 use crate::ice_errors::IceErrors;
 
 const STUN_MAGIC_COOKIE: u32 = 0x2112A442;
 
-
-
-pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors>{
+pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors> {
     eprintln!("[STUN] Consultando STUN server");
 
     socket.set_read_timeout(Some(Duration::from_secs(3)))?;
-    //para no tener que agregar mas 
+    //para no tener que agregar mas
     let mut addrs = "stun.l.google.com:19302".to_socket_addrs()?;
     let ipv4_addr = addrs
         .find(|addr| addr.is_ipv4())
         .expect("[STUN] No IPv4 STUN address found");
 
     socket.connect(ipv4_addr)?;
-    // binding request 
+    // binding request
     let mut req = Vec::with_capacity(20);
     req.extend_from_slice(&0x0001u16.to_be_bytes());
     req.extend_from_slice(&0u16.to_be_bytes()); // length 0
@@ -42,7 +40,7 @@ pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors>
     }
 
     // TBinding Response
-    if &buf[0..2] != [0x01, 0x01] {
+    if buf[0..2] != [0x01, 0x01] {
         return Err(IceErrors::StunError);
     }
 
@@ -52,24 +50,26 @@ pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors>
     }
 
     // tiene que coincidir el id
-    if &buf[8..20] != tx_id {
+    if buf[8..20] != tx_id {
         return Err(IceErrors::StunError);
     }
 
-    // XOR MAPPED ADDRESS 
+    // XOR MAPPED ADDRESS
     let msg_len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
     let mut offset = 20;
     let end = 20 + msg_len;
 
     while offset + 4 <= end {
-        let atype = u16::from_be_bytes([buf[offset], buf[offset+1]]);
-        let alen  = u16::from_be_bytes([buf[offset+2], buf[offset+3]]) as usize;
+        let atype = u16::from_be_bytes([buf[offset], buf[offset + 1]]);
+        let alen = u16::from_be_bytes([buf[offset + 2], buf[offset + 3]]) as usize;
         offset += 4;
 
-        if offset + alen > end { break; }
+        if offset + alen > end {
+            break;
+        }
 
         if atype == 0x0020 && alen >= 8 {
-            return parse_xor_address(&buf[offset..offset+alen]);
+            return parse_xor_address(&buf[offset..offset + alen]);
         }
 
         // padding 32bit
@@ -78,7 +78,6 @@ pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors>
 
     Err(IceErrors::StunError)
 }
-
 
 fn parse_xor_address(data: &[u8]) -> Result<(String, u16), IceErrors> {
     if data.len() < 8 || data[1] != 0x01 {
@@ -98,17 +97,13 @@ fn parse_xor_address(data: &[u8]) -> Result<(String, u16), IceErrors> {
     Ok((ip, port))
 }
 
-
 // LLevar a forma RFC 5245 para candidatos
 pub fn get_stun_candidate(socket: &UdpSocket) -> Result<String, IceErrors> {
     let cloned_socket = socket.try_clone().map_err(|_| IceErrors::StunError)?;
     let (public_ip, public_port) = get_stun_reflexive(cloned_socket)?;
-    
-    let candidate = format!(
-        "1 1 UDP 2130706431 {} {} typ srflx",
-        public_ip, public_port
-    );
-    
+
+    let candidate = format!("1 1 UDP 2130706431 {} {} typ srflx", public_ip, public_port);
+
     Ok(candidate)
 }
 
@@ -119,7 +114,6 @@ mod tests {
     use super::*;
     #[test]
     fn test_stun() {
-
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         match get_stun_reflexive(socket) {
             Ok((public_ip, public_port)) => {

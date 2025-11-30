@@ -126,7 +126,7 @@ impl VistaLogin {
                                             if let Err(e) = write_all_nonblocking(&mut *guard_write, json_msg.as_bytes()) {
                                                 eprintln!("[CLIENT] Error de red al enviar GetUsers: {e}");
                                             }
-                                            let _ = guard_write.flush();   
+                                            let _ = guard_write.flush();
                                         });
                                     }
                                 }

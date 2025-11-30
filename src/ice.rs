@@ -15,9 +15,15 @@ pub fn elegir_codec(codecs: &[String]) -> Result<String, IceErrors> {
     Err(IceErrors::NoValidCodec)
 }
 
-pub fn crear_conexion_ice(sockets: Vec<UdpSocket>, peer_candidates: &[String]) -> Result<UdpSocket, IceErrors> {
-    println!("[ICE] Trying to connect with {} peer candidates", peer_candidates.len());
-    
+pub fn crear_conexion_ice(
+    sockets: Vec<UdpSocket>,
+    peer_candidates: &[String],
+) -> Result<UdpSocket, IceErrors> {
+    println!(
+        "[ICE] Trying to connect with {} peer candidates",
+        peer_candidates.len()
+    );
+
     // obtengo las direcciones de los candidatos del otro
     // formato ejemplo: 1 1 UDP 2130706431 192.168.1.100 5000 typ host
     let peer_addresses: Vec<String> = peer_candidates
@@ -38,7 +44,7 @@ pub fn crear_conexion_ice(sockets: Vec<UdpSocket>, peer_candidates: &[String]) -
         return Err(IceErrors::FailedConnection);
     }
 
-    // itero los sockets y veo si alguno conecta 
+    // itero los sockets y veo si alguno conecta
     for socket in sockets {
         for peer_addr in &peer_addresses {
             println!("[ICE] Trying connection to {}", peer_addr);

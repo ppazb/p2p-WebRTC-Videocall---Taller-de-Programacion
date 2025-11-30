@@ -35,13 +35,13 @@ impl RtcpPacket {
 ///estructura para almacenar los datos para estadisticas, tiempo de delay, bytes perdidos
 #[derive(Debug, Clone, Default)]
 pub struct ReportBlock {
-    pub ssrc: u32,             
-    pub fraction_lost: u8,     
+    pub ssrc: u32,
+    pub fraction_lost: u8,
     pub cumulative_lost: u32,
-    pub ext_seq_num: u32,      
-    pub jitter: u32,           
+    pub ext_seq_num: u32,
+    pub jitter: u32,
     pub last_sr_timestamp: u32,
-    pub delay_since_last_sr: u32, 
+    pub delay_since_last_sr: u32,
 }
 
 impl ReportBlock {
@@ -56,7 +56,9 @@ impl ReportBlock {
     }
 
     fn from_bytes(data: &[u8]) -> Option<Self> {
-        if data.len() < 24 { return None; }
+        if data.len() < 24 {
+            return None;
+        }
         let ssrc = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
         let lost_pack = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
         let fraction_lost = (lost_pack >> 24) as u8;
@@ -106,7 +108,7 @@ impl SenderReport {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         let rc = (self.report_blocks.len() as u8) & 0x1F;
-        let v_p_rc = (2 << 6) | rc; 
+        let v_p_rc = (2 << 6) | rc;
         out.push(v_p_rc);
         out.push(RTCP_SR);
         let length_words = 6 + (self.report_blocks.len() as u16 * 6);
@@ -125,7 +127,9 @@ impl SenderReport {
     }
 
     pub fn from_bytes(data: &[u8]) -> Option<Self> {
-        if data.len() < 28 { return None; } 
+        if data.len() < 28 {
+            return None;
+        }
         let rc = data[0] & 0x1F;
         let ssrc = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
         let ntp_timestamp = u64::from_be_bytes(data[8..16].try_into().ok()?);
@@ -136,8 +140,10 @@ impl SenderReport {
         let mut report_blocks = Vec::new();
         let mut offset = 28;
         for _ in 0..rc {
-            if offset + 24 > data.len() { break; }
-            if let Some(rb) = ReportBlock::from_bytes(&data[offset..offset+24]) {
+            if offset + 24 > data.len() {
+                break;
+            }
+            if let Some(rb) = ReportBlock::from_bytes(&data[offset..offset + 24]) {
                 report_blocks.push(rb);
             }
             offset += 24;
@@ -162,7 +168,10 @@ pub struct ReceiverReport {
 
 impl ReceiverReport {
     pub fn new(ssrc: u32, report_blocks: Vec<ReportBlock>) -> Self {
-        Self { ssrc, report_blocks }
+        Self {
+            ssrc,
+            report_blocks,
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -183,20 +192,27 @@ impl ReceiverReport {
     }
 
     pub fn from_bytes(data: &[u8]) -> Option<Self> {
-        if data.len() < 8 { return None; }
+        if data.len() < 8 {
+            return None;
+        }
         let rc = data[0] & 0x1F;
         let ssrc = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
-        
+
         let mut report_blocks = Vec::new();
         let mut offset = 8;
         for _ in 0..rc {
-            if offset + 24 > data.len() { break; }
-            if let Some(rb) = ReportBlock::from_bytes(&data[offset..offset+24]) {
+            if offset + 24 > data.len() {
+                break;
+            }
+            if let Some(rb) = ReportBlock::from_bytes(&data[offset..offset + 24]) {
                 report_blocks.push(rb);
             }
             offset += 24;
         }
-        Some(Self { ssrc, report_blocks })
+        Some(Self {
+            ssrc,
+            report_blocks,
+        })
     }
 }
 
@@ -208,7 +224,10 @@ pub struct Bye {
 
 impl Bye {
     pub fn new(ssrc: u32, reason: Option<String>) -> Self {
-        Self { ssrcs: vec![ssrc], reason }
+        Self {
+            ssrcs: vec![ssrc],
+            reason,
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -220,7 +239,7 @@ impl Bye {
 
         let mut length_words = self.ssrcs.len() as u16;
         let mut reason_bytes = Vec::new();
-        
+
         if let Some(r) = &self.reason {
             let msg = r.as_bytes();
             let len = msg.len().min(255) as u8;
@@ -242,23 +261,32 @@ impl Bye {
     }
 
     pub fn from_bytes(data: &[u8]) -> Option<Self> {
-        if data.len() < 4 { return None; }
+        if data.len() < 4 {
+            return None;
+        }
         let sc = (data[0] & 0x1F) as usize;
         let mut offset = 4;
         let mut ssrcs = Vec::new();
         for _ in 0..sc {
-            if offset + 4 > data.len() { break; }
-            ssrcs.push(u32::from_be_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]));
+            if offset + 4 > data.len() {
+                break;
+            }
+            ssrcs.push(u32::from_be_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]));
             offset += 4;
         }
 
         let mut reason = None;
         if offset < data.len() {
             let len = data[offset] as usize;
-            if offset + 1 + len <= data.len() {
-                if let Ok(r) = String::from_utf8(data[offset+1..offset+1+len].to_vec()) {
-                    reason = Some(r);
-                }
+            if offset + 1 + len <= data.len()
+                && let Ok(r) = String::from_utf8(data[offset + 1..offset + 1 + len].to_vec())
+            {
+                reason = Some(r);
             }
         }
         Some(Self { ssrcs, reason })

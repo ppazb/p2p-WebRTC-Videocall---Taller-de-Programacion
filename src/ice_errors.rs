@@ -16,11 +16,9 @@ impl fmt::Display for IceErrors {
             ),
             Self::FailedConnection => writeln!(f, r#"Error: "La conexión ICE falló"#),
             Self::StunError => writeln!(f, r#"Error: "Error en STUN"#),
-            
         }
     }
 }
-
 
 impl From<std::io::Error> for IceErrors {
     fn from(err: std::io::Error) -> Self {
