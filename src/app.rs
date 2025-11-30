@@ -43,7 +43,7 @@ pub struct AppUI {
     sdp_handshake_tx: Option<Sender<ServerMessage>>,
     pedido_socket: Option<Receiver<Result<(UdpSocket, Vec<String>, Vec<String>), SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
-    handles: Vec<JoinHandle<()>>, 
+    handles: Vec<JoinHandle<()>>,
     pending_offer: Option<String>,
     app_params: AppParameters,
     cliente: Option<Client>,
@@ -101,7 +101,7 @@ impl AppUI {
             let (tx, rx) = channel::<AppEvent>();
 
             // Thread para escuchar del servidor
-            let read_handle = std::thread::spawn(move || {
+            let _read_handle = std::thread::spawn(move || {
                 loop {
                     // Setear un Buffer para leer
                     let mut buffer = [0u8; 4096];
@@ -124,7 +124,7 @@ impl AppUI {
                             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                                 continue;
                             }
-                            Ok(n) => n, 
+                            Ok(n) => n,
                             Err(_) => {
                                 let _ = tx.send(AppEvent::ConnectionLost);
                                 break;
@@ -223,8 +223,8 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_handle); 
-                }; 
+                    self.handles.push(write_handle);
+                };
                 self.liberar_recursos();
                 self.current_username = None;
                 self.target_username = None;
@@ -248,7 +248,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_thread); 
+                    self.handles.push(write_thread);
                 }
 
                 self.in_call.store(false, Ordering::Relaxed);
@@ -277,7 +277,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_handle); 
+                    self.handles.push(write_handle);
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(username));
@@ -356,7 +356,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_handle); 
+                    self.handles.push(write_handle);
                 }
                 self.pending_offer = None;
                 self.cambiar_vista(CambioVista::ToLobby {
@@ -451,69 +451,69 @@ impl AppUI {
     }
 
     fn iniciar_pedido_cliente(&mut self) {
-    self.in_call.store(true, Ordering::SeqCst);
-    let handshake_params = self.app_params.sdp_handshake.clone();
-    let in_call = Arc::clone(&self.in_call);
-    let username = self.current_username.clone().unwrap_or_default();
-    let target_user = self.target_username.clone().unwrap_or_default();
+        self.in_call.store(true, Ordering::SeqCst);
+        let handshake_params = self.app_params.sdp_handshake.clone();
+        let in_call = Arc::clone(&self.in_call);
+        let username = self.current_username.clone().unwrap_or_default();
+        let target_user = self.target_username.clone().unwrap_or_default();
 
-    let (sdp_tx, sdp_rx) = channel::<ServerMessage>();
-    self.sdp_handshake_tx = Some(sdp_tx);
+        let (sdp_tx, sdp_rx) = channel::<ServerMessage>();
+        self.sdp_handshake_tx = Some(sdp_tx);
 
-    if let Some(writer) = &self.server_writer {
-        let mut writer_clone = writer.clone();
-        let (tx_result, rx_result) = std::sync::mpsc::channel();
+        if let Some(writer) = &self.server_writer {
+            let mut writer_clone = writer.clone();
+            let (tx_result, rx_result) = std::sync::mpsc::channel();
 
-        let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
-            eprintln!("[DEBUG THREAD] Starting sdp_handshake...");
-            let (sockets, local_candidates, remote_ice, codecs) = match sdp_handshake(
-                in_call,
-                handshake_params,
-                username,
-                target_user,
-                &mut writer_clone,
-                sdp_rx,
-            ) {
-                Err(e) => {
-                    let _ = tx_result.send(Err(e.clone()));
-                    return Err(ClientErrors::SdpError(e));
-                }
-                Ok(info) => info,
-            };
-            let _codec = match elegir_codec(&codecs) {
-                Err(e) => return Err(ClientErrors::IceError(e)),
-                Ok(c) => c,
-            };
-            let socket = match crear_conexion_ice(sockets, &remote_ice) {
-                Err(e) => return Err(ClientErrors::IceError(e)),
-                Ok(s) => s,
-            };
-            if let Err(e) = tx_result.send(Ok((socket, local_candidates, remote_ice))) {
-                eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
-            };
-            Ok(())
-        });
-        self.pedido_socket = Some(rx_result);
-        self.handshake_handle = Some(handshake_handle);
-    }
-}
-
-    fn crear_cliente(&mut self, socket: UdpSocket) {
-    let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
-    self.rx_remoto = Some(rx_remoto);
-    if let Some(cam) = &self.camara {
-        let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
-        if let Ok(mut c) = cliente {
-            let _ = c.add_peer(socket);
-            self.client_handles = c.initialize_call();
-            self.cliente = Some(c);
+            let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
+                eprintln!("[DEBUG THREAD] Starting sdp_handshake...");
+                let (sockets, local_candidates, remote_ice, codecs) = match sdp_handshake(
+                    in_call,
+                    handshake_params,
+                    username,
+                    target_user,
+                    &mut writer_clone,
+                    sdp_rx,
+                ) {
+                    Err(e) => {
+                        let _ = tx_result.send(Err(e.clone()));
+                        return Err(ClientErrors::SdpError(e));
+                    }
+                    Ok(info) => info,
+                };
+                let _codec = match elegir_codec(&codecs) {
+                    Err(e) => return Err(ClientErrors::IceError(e)),
+                    Ok(c) => c,
+                };
+                let socket = match crear_conexion_ice(sockets, &remote_ice) {
+                    Err(e) => return Err(ClientErrors::IceError(e)),
+                    Ok(s) => s,
+                };
+                if let Err(e) = tx_result.send(Ok((socket, local_candidates, remote_ice))) {
+                    eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
+                };
+                Ok(())
+            });
+            self.pedido_socket = Some(rx_result);
+            self.handshake_handle = Some(handshake_handle);
         }
     }
-}
+
+    fn crear_cliente(&mut self, socket: UdpSocket) {
+        let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
+        self.rx_remoto = Some(rx_remoto);
+        if let Some(cam) = &self.camara {
+            let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
+            if let Ok(mut c) = cliente {
+                let _ = c.add_peer(socket);
+                self.client_handles = c.initialize_call();
+                self.cliente = Some(c);
+            }
+        }
+    }
 
     fn liberar_handles(&mut self) {
         for handle in self.handles.drain(..) {
-            let _ = handle.join(); 
+            let _ = handle.join();
         }
     }
 

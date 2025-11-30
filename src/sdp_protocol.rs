@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
-use std::{fmt, fs::File, vec};
+use std::{fmt, vec};
 
 const ORIGIN_COMPONENTS_NUMBER: usize = 6;
 const TIME_COMPONENTS_NUMBER: usize = 2;
@@ -113,9 +113,12 @@ impl SessionDescription {
     }
 
     // Crear sesion con candidatos pre existentes - para STUN
-    // el socket desde el q se consulta debe ser el mismo q luego se usa para 
+    // el socket desde el q se consulta debe ser el mismo q luego se usa para
     // que se mantenga el numerito de puerto
-    pub fn create_with_candidates(local_addr: &str,candidates: Vec<String>) -> Result<Self, SdpError> {
+    pub fn create_with_candidates(
+        local_addr: &str,
+        candidates: Vec<String>,
+    ) -> Result<Self, SdpError> {
         if let Some((ip, port)) = local_addr.split_once(':') {
             let version = 0;
             let session_name = "demo";
@@ -128,15 +131,16 @@ impl SessionDescription {
                 ip.to_string(),
             );
             let time_struct = Time::new(0, 0);
-            
-            //ahora en atributos agrego los candidatos 
-            let mut attributes = vec![
-                Attribute::Value("rtpmap".to_string(), "97 H264/90000".to_string()),
-            ];
+
+            //ahora en atributos agrego los candidatos
+            let mut attributes = vec![Attribute::Value(
+                "rtpmap".to_string(),
+                "97 H264/90000".to_string(),
+            )];
             for candidate in candidates {
                 attributes.push(Attribute::Value("candidate".to_string(), candidate));
             }
-            
+
             let media_description = MediaDescription::new(
                 "video".to_string(),
                 port.to_string(),
@@ -498,23 +502,30 @@ impl fmt::Display for Time {
 }
 
 // Add candidate gathering function
-pub fn gather_candidates(local_addrs: &Vec<String>) -> Result<(Vec<UdpSocket>, Vec<String>), SdpError> {
+pub fn gather_candidates(
+    local_addrs: &Vec<String>,
+) -> Result<(Vec<UdpSocket>, Vec<String>), SdpError> {
     let mut sockets = Vec::new();
     let mut candidates = Vec::new();
 
     // Gather host candidates (local addresses)
     for addr in local_addrs {
-        match UdpSocket::bind(&addr) {
+        match UdpSocket::bind(addr) {
             Ok(socket) => {
                 // Get local address
                 if let Ok(local_addr) = socket.local_addr() {
                     let candidate = format!(
                         "1 1 UDP 2130706431 {} {} typ host",
-                        local_addr.ip(), local_addr.port()
+                        local_addr.ip(),
+                        local_addr.port()
                     );
                     candidates.push(candidate);
                     sockets.push(socket);
-                    println!("[SDP] Created host candidate: {}:{}", local_addr.ip(), local_addr.port());
+                    println!(
+                        "[SDP] Created host candidate: {}:{}",
+                        local_addr.ip(),
+                        local_addr.port()
+                    );
                 }
             }
             Err(e) => {
@@ -523,8 +534,8 @@ pub fn gather_candidates(local_addrs: &Vec<String>) -> Result<(Vec<UdpSocket>, V
             }
         }
     }
-    /* 
-    // Conseguir un candidato STUN a partir del primer socket 
+    /*
+    // Conseguir un candidato STUN a partir del primer socket
     if let Some(socket) = sockets.first() {
         match get_stun_candidate(socket) {
             Ok(stun_candidate) => {
@@ -536,10 +547,14 @@ pub fn gather_candidates(local_addrs: &Vec<String>) -> Result<(Vec<UdpSocket>, V
             }
         }
     }
-    
+
     */
 
-    println!("[SDP] Gathered {} candidates on {} sockets", candidates.len(), sockets.len());
+    println!(
+        "[SDP] Gathered {} candidates on {} sockets",
+        candidates.len(),
+        sockets.len()
+    );
     Ok((sockets, candidates))
 }
 
@@ -553,11 +568,10 @@ pub fn sdp_handshake(
 ) -> Result<(Vec<UdpSocket>, Vec<String>, Vec<String>, Vec<String>), SdpError> {
     println!("[SDP] Initialize handshake with {}", target_user);
 
-    // Antes del offer ya tengo que tener los candidatos -> esto es pq para STUN se tiene 
+    // Antes del offer ya tengo que tener los candidatos -> esto es pq para STUN se tiene
     //que usar el mismo socket desde el que se envia el binding request o cambia el numerito
     let local_addrs = handshake_params.ice_candidates.clone();
-    
-    
+
     let (sockets, local_candidates) = gather_candidates(&local_addrs)?;
     println!("[SDP] Gathered {} candidates", local_candidates.len());
 
@@ -577,10 +591,10 @@ pub fn sdp_handshake(
         println!("[SDP] Generating answer...");
         //Ahora en vez de create uso create_with_candidates pq los tengo ya
         let my_session = SessionDescription::create_with_candidates(
-            &handshake_params.local_adder, 
-            local_candidates.clone()  
+            &handshake_params.local_adder,
+            local_candidates.clone(),
         )?;
-        
+
         let my_answer_desc = my_session
             .generate_compatible_session(&remote_offer)
             .ok_or(SdpError::IncompatibleSession)?;
@@ -603,19 +617,20 @@ pub fn sdp_handshake(
         let _ = write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
 
         // info para ICE
-        let remote_ice = Attribute::get_ice_candidate(&remote_offer.media.attributes).unwrap_or_default();
+        let remote_ice =
+            Attribute::get_ice_candidate(&remote_offer.media.attributes).unwrap_or_default();
         let codecs: Vec<String> = vec!["H264".to_string()];
 
-        Ok((sockets, local_candidates, remote_ice, codecs))  // Now local_candidates is still available
+        Ok((sockets, local_candidates, remote_ice, codecs)) // Now local_candidates is still available
     } else {
         println!("[SDP] Calling to: {}", target_user);
 
         // Genero offer
         let my_offer_desc = SessionDescription::create_with_candidates(
-            &handshake_params.local_adder, 
-            local_candidates.clone()
+            &handshake_params.local_adder,
+            local_candidates.clone(),
         )?;
-        
+
         let my_offer_str = format!("{}", my_offer_desc);
 
         // Envio offer al servidor
@@ -652,12 +667,13 @@ pub fn sdp_handshake(
                     if from_user == target_user {
                         println!("[SDP] Answer recieved");
                         let remote_answer = SessionDescription::parse(&answer)?;
-                        
-                        let remote_ice = Attribute::get_ice_candidate(&remote_answer.media.attributes)
-                            .unwrap_or_default();
+
+                        let remote_ice =
+                            Attribute::get_ice_candidate(&remote_answer.media.attributes)
+                                .unwrap_or_default();
                         let codecs = vec!["H264".to_string()];
 
-                        return Ok((sockets, local_candidates, remote_ice, codecs));  // Now local_candidates is still available
+                        return Ok((sockets, local_candidates, remote_ice, codecs)); // Now local_candidates is still available
                     }
                 }
                 Ok(ServerMessage::Error { reason }) => {
