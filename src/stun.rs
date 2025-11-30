@@ -1,4 +1,4 @@
-use std::net::{UdpSocket, Ipv4Addr};
+use std::net::{UdpSocket, Ipv4Addr, ToSocketAddrs};
 use std::time::Duration;
 use rand::random;
 
@@ -11,9 +11,14 @@ const STUN_MAGIC_COOKIE: u32 = 0x2112A442;
 pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors>{
     eprintln!("[STUN] Consultando STUN server");
 
-    socket.set_read_timeout(Some(Duration::from_secs(4)))?;
-    socket.connect("stun.l.google.com:19302")?;
+    socket.set_read_timeout(Some(Duration::from_secs(3)))?;
+    //para no tener que agregar mas 
+    let mut addrs = "stun.l.google.com:19302".to_socket_addrs()?;
+    let ipv4_addr = addrs
+        .find(|addr| addr.is_ipv4())
+        .expect("[STUN] No IPv4 STUN address found");
 
+    socket.connect(ipv4_addr)?;
     // binding request 
     let mut req = Vec::with_capacity(20);
     req.extend_from_slice(&0x0001u16.to_be_bytes());
@@ -67,7 +72,7 @@ pub fn get_stun_reflexive(socket: UdpSocket) -> Result<(String, u16), IceErrors>
             return parse_xor_address(&buf[offset..offset+alen]);
         }
 
-        // padding 32-bit
+        // padding 32bit
         offset += (alen + 3) & !3;
     }
 
@@ -94,6 +99,18 @@ fn parse_xor_address(data: &[u8]) -> Result<(String, u16), IceErrors> {
 }
 
 
+// LLevar a forma RFC 5245 para candidatos
+pub fn get_stun_candidate(socket: &UdpSocket) -> Result<String, IceErrors> {
+    let cloned_socket = socket.try_clone().map_err(|_| IceErrors::StunError)?;
+    let (public_ip, public_port) = get_stun_reflexive(cloned_socket)?;
+    
+    let candidate = format!(
+        "1 1 UDP 2130706431 {} {} typ srflx",
+        public_ip, public_port
+    );
+    
+    Ok(candidate)
+}
 
 ///test
 
