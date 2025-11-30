@@ -86,3 +86,60 @@ impl RtpPackage {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rtp_package_creation_indepent_payload() {
+        let payload_vec: Vec<u8> = Vec::new();
+        let rtp_package = RtpPackage::new(1, payload_vec);
+        assert_eq!(rtp_package.secuence_number, 1);
+    }
+    #[test]
+    fn rtp_package_tobytes_frombytes() {
+        let payload_vec: Vec<u8> = Vec::new();
+        let rtp_package = RtpPackage::new(1, payload_vec);
+        let bytes = RtpPackage::to_bytes(rtp_package);
+        let resultado = RtpPackage::from_bytes(&bytes).unwrap();
+
+        assert_eq!(resultado.secuence_number, 1);
+        assert_eq!(resultado.payload_type, 96);
+        assert_eq!(resultado.version, 2);
+    }
+    #[test]
+    fn tobytes_frombytes_consistency_data_empty() {
+        let payload_vec: Vec<u8> = Vec::new();
+        let rtp_package = RtpPackage::new(1, payload_vec);
+        let bytes = RtpPackage::to_bytes(rtp_package);
+        let resultado = RtpPackage::from_bytes(&bytes).unwrap();
+
+        assert!(resultado.payload.is_empty());
+    }
+    #[test]
+    fn tobytes_frombytes_consistency_data() {
+        let mut payload_vec: Vec<u8> = Vec::new();
+        payload_vec.push(1);
+        let rtp_package = RtpPackage::new(1, payload_vec);
+        let bytes = RtpPackage::to_bytes(rtp_package);
+        let resultado = RtpPackage::from_bytes(&bytes).unwrap();
+
+        assert!(!resultado.payload.is_empty());
+    }
+    #[test]
+    fn tobytes_frombytes_consistency_data_verification() {
+        let mut payload_vec: Vec<u8> = Vec::new();
+        payload_vec.push(1);
+        payload_vec.push(2);
+        payload_vec.push(3);
+        let rtp_package = RtpPackage::new(1, payload_vec);
+        let bytes = RtpPackage::to_bytes(rtp_package);
+        let mut resultado = RtpPackage::from_bytes(&bytes).unwrap();
+
+        assert!(!resultado.payload.is_empty());
+        assert_eq!(resultado.payload.pop().unwrap(), 3);
+        assert_eq!(resultado.payload.pop().unwrap(), 2);
+        assert_eq!(resultado.payload.pop().unwrap(), 1);
+    }
+}

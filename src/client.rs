@@ -214,7 +214,7 @@ impl Client {
             Self::send_message(socket_send, camera, &mut encoder, stats)?;
 
             if last_sender_report_time.elapsed() >= sender_report_interval {
-                let (packets, octets) = {
+                let (packets, bytes) = {
                     let s = stats.lock().map_err(|_e| ClientErrors::StatsCouldtGets)?;
                     (s.packets_sent, s.bytes_sent)
                 };
@@ -224,7 +224,7 @@ impl Client {
                     .as_micros() as u64;
                 let rtp_ts = (ntp / 1000) as u32;
 
-                let sender_report = SenderReport::new(1234, ntp, rtp_ts, packets, octets);
+                let sender_report = SenderReport::new(1234, ntp, rtp_ts, packets, bytes);
                 let packet = RtcpPacket::SenderReport(sender_report);
                 if let Err(e) = socket_send.send(&packet.to_bytes()) {
                     eprintln!("[RTCP] Error sending SR: {}", e);
@@ -468,16 +468,7 @@ impl Client {
                 0
             };
             let lost = expected.saturating_sub(client_stats.packets_received);
-
-            ReportBlock {
-                ssrc: 0,
-                fraction_lost: 0,
-                cumulative_lost: lost,
-                ext_seq_num: extended_max,
-                jitter: client_stats.jitter as u32,
-                last_sr_timestamp: 0,
-                delay_since_last_sr: 0,
-            }
+            ReportBlock::new(lost, extended_max, client_stats.jitter as u32)
         };
 
         let recieve_report = ReceiverReport::new(1234, vec![rb]);
