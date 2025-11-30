@@ -43,7 +43,7 @@ pub struct AppUI {
     sdp_handshake_tx: Option<Sender<ServerMessage>>,
     pedido_socket: Option<Receiver<Result<UdpSocket, SdpError>>>,
     handshake_handle: Option<JoinHandle<Result<(), ClientErrors>>>,
-    handles: Vec<JoinHandle<()>>, 
+    handles: Vec<JoinHandle<()>>,
     pending_offer: Option<String>,
     app_params: AppParameters,
     cliente: Option<Client>,
@@ -124,7 +124,7 @@ impl AppUI {
                             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                                 continue;
                             }
-                            Ok(n) => n, 
+                            Ok(n) => n,
                             Err(_) => {
                                 let _ = tx.send(AppEvent::ConnectionLost);
                                 break;
@@ -223,8 +223,8 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_handle); 
-                }; 
+                    self.handles.push(write_handle);
+                };
                 self.liberar_recursos();
                 self.current_username = None;
                 self.target_username = None;
@@ -248,7 +248,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_thread); 
+                    self.handles.push(write_thread);
                 }
 
                 self.in_call.store(false, Ordering::Relaxed);
@@ -277,7 +277,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_handle); 
+                    self.handles.push(write_handle);
                 }
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(username));
@@ -356,7 +356,7 @@ impl AppUI {
                         let _ =
                             write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
                     });
-                    self.handles.push(write_handle); 
+                    self.handles.push(write_handle);
                 }
                 self.pending_offer = None;
                 self.cambiar_vista(CambioVista::ToLobby {
@@ -514,7 +514,7 @@ impl AppUI {
 
     fn liberar_handles(&mut self) {
         for handle in self.handles.drain(..) {
-            let _ = handle.join(); 
+            let _ = handle.join();
         }
     }
 

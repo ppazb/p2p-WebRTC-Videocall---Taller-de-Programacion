@@ -5,7 +5,7 @@ use room_rtc::signalling_protocol::{ClientMessage, ServerMessage, write_all_nonb
 use room_rtc::tls_interface::{server_tls_config, server_try_tls_handshake};
 use rustls::{ServerConnection, StreamOwned};
 use std::collections::HashMap;
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -62,7 +62,7 @@ fn main() -> Result<(), SignallingServerError> {
     let stored_offers: Arc<Mutex<HashMap<String, StoredOffer>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
-    let mut handles: Vec<JoinHandle<()>> = Vec::new(); 
+    let mut handles: Vec<JoinHandle<()>> = Vec::new();
 
     println!("[SERVER] Listening for connections...\n");
 
@@ -87,7 +87,7 @@ fn main() -> Result<(), SignallingServerError> {
                 let client_handle = std::thread::spawn(move || {
                     let _ = handle_client(tls_stream, clients, connections, busy_clients, offers);
                 });
-                handles.push(client_handle); 
+                handles.push(client_handle);
             }
             Err(e) => {
                 eprintln!("[ERROR] Connection error: {}", e);
@@ -96,7 +96,7 @@ fn main() -> Result<(), SignallingServerError> {
     }
 
     for handle in handles {
-        let _ = handle.join(); 
+        let _ = handle.join();
     }
 
     Ok(())
@@ -164,7 +164,7 @@ fn handle_client(
                     let msg_json = msg_left.to_json_line();
 
                     for (_, other_stream) in clients_map.iter_mut() {
-                        let mut _tls_other_stream = match other_stream.lock() {
+                        match other_stream.lock() {
                             Ok(mut tls_s) => {
                                 let _ = write_all_nonblocking(&mut *tls_s, msg_json.as_bytes());
                                 tls_s.flush()?;
