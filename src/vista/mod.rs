@@ -11,7 +11,7 @@ use crate::{
     vista::{
         call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy,
         cambio::CambioVista, incoming_call::VistaIncomingCall, llamada::VistaLlamada,
-        lobby::VistaLobby, login::VistaLogin,
+        lobby::VistaLobby, login::VistaLogin, sign_up::VistaSignUp,
     },
 };
 use opencv::{
@@ -27,9 +27,11 @@ pub mod incoming_call;
 pub mod llamada;
 pub mod lobby;
 pub mod login;
+pub mod sign_up;
 
 pub enum Vista {
     VistaLogin(VistaLogin),
+    VistaSignUp(VistaSignUp),
     VistaLobby(VistaLobby),
     VistaCallStart(VistaCallStart),
     VistaLlamada(VistaLlamada),
@@ -47,6 +49,7 @@ impl Vista {
     ) -> CambioVista {
         match self {
             Vista::VistaLogin(view) => view.ui(ctx, tls_tcp),
+            Vista::VistaSignUp(view) => view.ui(ctx, tls_tcp),
             Vista::VistaLobby(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaLlamada(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaCallStart(view) => view.ui(ctx, camara),

@@ -99,6 +99,36 @@ impl ServerUserData {
         Ok(())
     }
 
+    /// Valida las credenciales ingresadas para registrar un nuevo usuario.
+    ///
+    /// Se definen condiciones de aceptación para el nuevo username y el password, como longitudes y caracteres permitidos.
+    /// Si alguna condición no se cumple, o si el usuario ya existe, se devuelve el correspondiente LoginError.
+    pub fn verificar_signup(&self, username: &str, password: &str) -> Result<(), LoginErrors> {
+        // Si usuario ya existe, error
+        if self.users.contains_key(username) {
+            return Err(LoginErrors::UsernameAlreadyExists);
+        }
+
+        // Valido condiciones del usuario (5 a 32 caracteres)
+        if username.len() < 5 || username.len() > 32 {
+            return Err(LoginErrors::InvalidFieldsOnSignUp); // Longitud usuario inválida
+        }
+
+        // Valido que los dígitos sean solo alfanuméricos
+        for c in username.chars() {
+            if !c.is_ascii_alphanumeric() {
+                return Err(LoginErrors::InvalidFieldsOnSignUp); // Caracteres inválidos
+            }
+        }
+
+        // Valido longitud de contraseña
+        if password.len() < 5 || username.len() > 32 {
+            return Err(LoginErrors::InvalidFieldsOnSignUp); // Longitud contraseña inválida
+        }
+
+        Ok(())
+    }
+
     /// a partir de un nombre de usuario, cambio su estado a conectado
     pub fn conectar(&mut self, username: &str) -> Result<(), LoginErrors> {
         let user = self
@@ -171,7 +201,7 @@ impl ServerUserData {
             return Err(LoginErrors::UsernameAlreadyExists);
         }
 
-        // Cre0 el usuario
+        // Creo el usuario
         let user = ServerUser {
             username: username.to_string(),
             password: password.to_string(),
@@ -195,21 +225,20 @@ impl ServerUser {
     }
 }
 
-
 fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
     let mut users = Vec::new();
     let str_json = json_str.trim();
 
     // manejo de caso vacio
     if str_json == "[]" {
-        return Ok(users); 
+        return Ok(users);
     }
 
     // saco []
     if !str_json.starts_with('[') || !str_json.ends_with(']') {
         return Err(LoginErrors::FileIncompatible);
     }
-    
+
     let inner_content = &str_json[1..str_json.len() - 1].trim();
     // otro manejo de caso vacio
     if inner_content.is_empty() {
@@ -237,8 +266,7 @@ fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
         for key_value in keys_values {
             let kv: Vec<&str> = key_value
                 .split(':')
-                .map(|s| s.trim()
-                .trim_matches('"'))
+                .map(|s| s.trim().trim_matches('"'))
                 .collect();
 
             if kv.len() != 2 {
@@ -261,7 +289,6 @@ fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
 
     Ok(users)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -340,11 +367,17 @@ mod tests {
 
         // conecto
         assert!(server_data.conectar("testuser").is_ok());
-        assert_eq!(server_data.users.get("testuser").unwrap().status,UserStatus::Conectado);
+        assert_eq!(
+            server_data.users.get("testuser").unwrap().status,
+            UserStatus::Conectado
+        );
 
         // desconecto
         assert!(server_data.desconectar("testuser").is_ok());
-        assert_eq!(server_data.users.get("testuser").unwrap().status,UserStatus::Desconectado);
+        assert_eq!(
+            server_data.users.get("testuser").unwrap().status,
+            UserStatus::Desconectado
+        );
     }
 
     #[test]

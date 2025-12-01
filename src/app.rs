@@ -19,6 +19,7 @@ use crate::vista::call_start::VistaCallStart;
 use crate::vista::called_user_busy::VistaCalledUserBusy;
 use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::lobby::VistaLobby;
+use crate::vista::sign_up::VistaSignUp;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
 use eframe::egui;
 use opencv::core::Mat;
@@ -27,6 +28,8 @@ use rustls::StreamOwned;
 pub enum AppEvent {
     LoginSuccess(String),
     LoginError(String),
+    SignUpSuccess(String),
+    SignUpError(String),
     UserListUpdated(Vec<String>),
     NewUser(String),
     UserLeft(String),
@@ -142,6 +145,12 @@ impl AppUI {
                             ServerMessage::LoginError { reason } => {
                                 let _ = tx.send(AppEvent::LoginError(reason));
                             }
+                            ServerMessage::SignUpOk { username } => {
+                                let _ = tx.send(AppEvent::SignUpSuccess(username));
+                            }
+                            ServerMessage::SignUpError { reason } => {
+                                let _ = tx.send(AppEvent::SignUpError(reason));
+                            }
                             ServerMessage::UserList { users } => {
                                 let _ = tx.send(AppEvent::UserListUpdated(users));
                             }
@@ -166,7 +175,6 @@ impl AppUI {
                             ServerMessage::CallRejected { .. } => {
                                 let _ = tx.send(AppEvent::SdpMessage(msg));
                             }
-                            // Fixed: CalledUserBusy is a unit variant; match without `{ .. }`
                             ServerMessage::CalledUserBusy => {
                                 let _ = tx.send(AppEvent::CalledUserBusy);
                             }
@@ -199,6 +207,7 @@ impl AppUI {
             None
         }
     }
+
     // Función para la transición de vistas
     fn cambiar_vista(&mut self, cambio: CambioVista) {
         match cambio {
@@ -230,6 +239,10 @@ impl AppUI {
                 self.target_username = None;
                 self.pending_offer = None;
                 self.vista_actual = Vista::VistaLogin(VistaLogin::new());
+            }
+            CambioVista::ToSignUp => {
+                // Solo se llega desde login, cambio la vista
+                self.vista_actual = Vista::VistaSignUp(VistaSignUp::new());
             }
             CambioVista::ToLobby { username } => {
                 if !username.is_empty() {
@@ -319,7 +332,6 @@ impl AppUI {
                         username: me.clone(),
                         target_user: target_user.clone(),
                     };
-                    // let _ = writer.write_all(msg.to_json_line().as_bytes());
                     let writer_arc = Arc::clone(writer);
                     let write_thread = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
@@ -366,10 +378,15 @@ impl AppUI {
 
             // Llamada aceptada
             CambioVista::ToCall => {
-                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
-                    self.rx_remoto.take(),
-                    Arc::clone(&self.in_call),
-                ))
+                if let Some(c) = &self.cliente {
+                    let stats = c.copy_stats();
+
+                    self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
+                        self.rx_remoto.take(),
+                        Arc::clone(&self.in_call),
+                        stats,
+                    ))
+                }
             }
 
             // finalizo llamada -> pantalla de fin de llamada con boton a volver al lobby
@@ -498,13 +515,16 @@ impl AppUI {
         }
     }
 
-    fn crear_cliente(&mut self, socket: UdpSocket) {
+    fn crear_cliente(&mut self, socket: UdpSocket, is_active: bool) {
         let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
         self.rx_remoto = Some(rx_remoto);
         if let Some(cam) = &self.camara {
             let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
+                
+                // Setear Rol DTLS (True = Caller/Cliente, False = Callee/Servidor)
+                c.set_rol(is_active);
                 self.client_handles = c.initialize_call();
                 self.cliente = Some(c);
             }
@@ -547,6 +567,19 @@ impl eframe::App for AppUI {
                         login.auth_pending = false;
                     }
                 }
+                AppEvent::SignUpSuccess(username) => {
+                    self.cambiar_vista(CambioVista::ToLobby { username });
+                }
+                AppEvent::SignUpError(reason) => {
+                    if let Vista::VistaSignUp(sign_up) = &mut self.vista_actual {
+                        // Vacío los campos y notifico el error
+                        sign_up.username = "".to_string();
+                        sign_up.password = "".to_string();
+                        sign_up.error_msg = Some(reason);
+                        sign_up.auth_pending = false;
+                    }
+                }
+
                 AppEvent::UserListUpdated(users) => {
                     if let Vista::VistaLobby(lobby) = &mut self.vista_actual {
                         lobby.users_list = users
@@ -630,7 +663,13 @@ impl eframe::App for AppUI {
             match result {
                 Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-                    self.crear_cliente(socket);
+                    
+                    // --- CORRECCIÓN AQUÍ: Determinar ROL ---
+                    // Si pending_offer es None -> Yo inicié la llamada -> SOY CALLER (True)
+                    // Si pending_offer es Some -> Me llamaron -> SOY CALLEE (False)
+                    let is_caller = self.pending_offer.is_none();
+                    
+                    self.crear_cliente(socket, is_caller);
                     self.cambiar_vista(CambioVista::ToCall);
                 }
                 Err(_) => self.cambiar_vista(CambioVista::ToLobby {

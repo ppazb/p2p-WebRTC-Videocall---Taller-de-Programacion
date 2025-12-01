@@ -327,6 +327,117 @@ fn handle_client(
                 }
             }
 
+            Some(ClientMessage::SignUp { username, password }) => {
+                // Tomo la lista de clientes
+                let mut clients = active_clients.lock().unwrap();
+
+                match clients.verificar_signup(&username, &password) {
+                    Ok(()) => {
+                        // Agrego el usuario al archivo json
+                        let _ = clients.add_user(&username, &password);
+                        // Como las credenciales son válidas, genero la sesión inmediatamente después
+
+                        // ----- Reuso bloque de login -----
+                        let _ = clients.conectar(&username);
+                        let clients_list: Vec<String>;
+                        eprintln!("[SERVER] User '{}' logged in", username);
+
+                        {
+                            let mut clients_map = connected_clients.lock().unwrap();
+
+                            // Server avisa a los ya conectados que entró uno nuevo (avisa a todos los Observers)
+                            let msg_joined = ServerMessage::UserJoined {
+                                username: username.clone(),
+                            };
+                            let msg_json = msg_joined.to_json_line();
+
+                            for (other_user, other_stream) in clients_map.iter_mut() {
+                                println!("[SERVER] loop other user: {:?}", &other_user);
+
+                                let _tls_other_stream = match other_stream.lock() {
+                                    Ok(mut tls_s) => {
+                                        if other_user != &username {
+                                            eprintln!("\n\n[SERVER] Login Success");
+                                            // let _ = tls_s.write_all(msg_json.as_bytes());
+                                            let _ = write_all_nonblocking(
+                                                &mut *tls_s,
+                                                msg_json.as_bytes(),
+                                            );
+                                            let _ = tls_s.flush();
+                                        }
+                                        tls_s
+                                    }
+                                    Err(e) => {
+                                        return Err(std::io::Error::other(format!(
+                                            "TLS mutex poisoned: {e}"
+                                        )));
+                                    }
+                                };
+                            }
+
+                            // Guardar la conexión de este usuario
+                            // if let Ok(write_clone) = stream_write.try_clone() {
+                            clients_map.insert(username.clone(), write_tls.clone());
+                            // }
+                            clients_list = clients_map.keys().cloned().collect();
+                        }
+
+                        current_user = Some(username.clone());
+
+                        // Avisar a la UI que el login fue exitoso
+                        // Enviamos primero LoginOk para que UI cambie de vista al Lobby
+                        // para después cuando reciba la lista de conectados, lo pueda mostrar correctamente
+                        let mut tls_write = match write_tls.lock() {
+                            Ok(s) => s,
+                            Err(e) => {
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
+                            }
+                        };
+                        println!("\n\n[SERVER] Login Success");
+                        let response = ServerMessage::LoginOk { username };
+                        let response_json = response.to_json_line();
+                        // stream_write.flush()?; //me aseguro que se escriba todo
+                        let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
+                        tls_write.flush()?;
+                        println!("[SERVER] Sent LoginOk\n");
+
+                        // Le enviamos la lista una vez que entra, ya que la primera vez
+                        // el usuario todavia no estaba adentro
+                        let user_list = ServerMessage::UserList {
+                            users: clients_list,
+                        };
+                        let list_json = user_list.to_json_line();
+                        let _ = write_all_nonblocking(&mut *tls_write, list_json.as_bytes());
+                        tls_write.flush()?;
+                        println!("[SERVER] Sent Initial UserList to new user");
+                        // ----- Reuso bloque de login -----
+                    }
+                    Err(e) => {
+                        // Creo un mensaje para la app con la razón del error
+                        let response = ServerMessage::SignUpError {
+                            reason: e.to_string(),
+                        };
+                        let response_json = response.to_json_line();
+
+                        // Envío mensaje a la app por TLS
+                        let mut tls_write = match write_tls.lock() {
+                            Ok(s) => s,
+                            Err(e) => {
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
+                            }
+                        };
+
+                        let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
+                        tls_write.flush()?;
+                        println!("[SERVER] Login failed for '{}'", username);
+                    }
+                }
+            }
+
             Some(ClientMessage::Logout { username }) => {
                 {
                     let mut clients = active_clients.lock().unwrap();

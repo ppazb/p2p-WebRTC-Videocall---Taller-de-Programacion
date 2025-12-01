@@ -2,6 +2,7 @@
 pub enum CambioVista {
     None,
     ToLogin,
+    ToSignUp,
     ToLobby { username: String },
     ToCallStart { username: String },
 
