@@ -9,6 +9,8 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use room_rtc::log_s;
+
 
 #[derive(Debug, Clone)]
 struct StoredOffer {
@@ -17,6 +19,7 @@ struct StoredOffer {
 }
 
 fn main() -> Result<(), SignallingServerError> {
+    room_rtc::log::setup_panic_hook();
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: {} <config_file>", args[0]);
@@ -30,7 +33,7 @@ fn main() -> Result<(), SignallingServerError> {
             return Err(SignallingServerError::ConfigInfoError);
         }
     };
-    println!("\n\n[SERVER] Starting on {}", server_info.server_adder);
+    log_s!("\n\n[SERVER] Starting on {}", server_info.server_adder);
 
     let server_config = match server_tls_config() {
         Ok(arc_server_config) => arc_server_config,
@@ -71,6 +74,7 @@ fn main() -> Result<(), SignallingServerError> {
         match stream {
             Ok(s) => {
                 println!("\n\n[SERVER] New connection received");
+                log_s!("\n\n[SERVER] New connection received");
                 let clients = Arc::clone(&active_clients);
                 let connections = Arc::clone(&connected_clients);
                 let busy_clients = Arc::clone(&busy_clients);
@@ -90,7 +94,7 @@ fn main() -> Result<(), SignallingServerError> {
                 handles.push(client_handle);
             }
             Err(e) => {
-                eprintln!("[ERROR] Connection error: {}", e);
+                log_s!("[ERROR] Connection error: {}", e);
             }
         }
     }
@@ -98,6 +102,7 @@ fn main() -> Result<(), SignallingServerError> {
     for handle in handles {
         let _ = handle.join();
     }
+    room_rtc::log::flush_server();
 
     Ok(())
 }
@@ -144,7 +149,7 @@ fn handle_client(
         drop(guard_read);
 
         if n == 0 {
-            println!("[SERVER] Client disconnected (socket closed)");
+            log_s!("[SERVER] Client disconnected (socket closed)");
 
             if let Some(user) = &current_user {
                 {
@@ -177,7 +182,7 @@ fn handle_client(
                             }
                         };
                     }
-                    eprintln!("[SERVER] Removed {} and notified others", user);
+                    log_s!("[SERVER] Removed {} and notified others", user);
                 }
                 // Desconectar el client
                 let mut clients = active_clients.lock().unwrap();
@@ -186,8 +191,6 @@ fn handle_client(
 
             break;
         }
-
-        println!("[SERVER] Before utf-8 Conversion: {:?} bytes", &n);
 
         let line = match String::from_utf8(buffer[..n].to_vec()) {
             Ok(l) => l,
@@ -205,7 +208,7 @@ fn handle_client(
                     // Marcar como conectado en la BD
                     let _ = clients.conectar(&username);
                     let clients_list: Vec<String>;
-                    eprintln!("[SERVER] User '{}' logged in", username);
+                    log_s!("[SERVER] User '{}' logged in", username);
                     let msg_joined = ServerMessage::UserJoined {
                         username: username.clone(),
                     };
@@ -221,10 +224,9 @@ fn handle_client(
                     {
                         let clients_map = connected_clients.lock().unwrap();
                         for (other_user, other_stream) in clients_map.iter() {
-                            println!("[SERVER] loop other user: {:?}", &other_user);
                             if other_user != &username {
                                 if let Ok(mut tls_s) = other_stream.lock() {
-                                    eprintln!("\n\n[SERVER] Login Success");
+                                    println!("\n\n[SERVER] Login Success");
                                     let _ = write_all_nonblocking(&mut *tls_s, msg_json.as_bytes());
                                     let _ = tls_s.flush();
                                 }
@@ -250,7 +252,7 @@ fn handle_client(
                             response.to_json_line().as_bytes(),
                         );
                         let _ = tls_write.flush();
-                        println!("[SERVER] Sent LoginOk\n");
+                        log_s!("[SERVER] Sent LoginOk\n");
                     }
 
                     // Le enviamos la lista una vez que entra, ya que la primera vez
@@ -270,7 +272,7 @@ fn handle_client(
                         };
                         let _ = write_all_nonblocking(&mut *tls_write, list_json.as_bytes());
                         let _ = tls_write.flush();
-                        println!("[SERVER] Sent Initial UserList to new user");
+                        log_s!("[SERVER] Sent Initial UserList to new user");
                     }
                 } else {
                     let response = ServerMessage::LoginError {
@@ -286,19 +288,19 @@ fn handle_client(
                     let _ =
                         write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
                     let _ = tls_write.flush();
-                    println!("[SERVER] Login failed for '{}'", username);
+                    log_s!("[SERVER] Login failed for '{}'", username);
                 }
             }
             Some(ClientMessage::CallStarted {
                 username,
                 target_user,
             }) => {
-                eprintln!("[SERVER] CallStarted from {} to {}", username, target_user);
+                log_s!("[SERVER] CallStarted from {} to {}", username, target_user);
 
                 // checkeo si alguno de los dos ya está ocupado
                 let mut busy_map = busy_clients.lock().unwrap();
                 if busy_map.contains_key(&target_user) || busy_map.contains_key(&username) {
-                    eprintln!("[SERVER] Busy user. Notifying caller {}", username);
+                    log_s!("[SERVER] Busy user. Notifying caller {}", username);
                     let response = ServerMessage::CalledUserBusy;
 
                     let mut tls_write = match write_tls.lock() {
@@ -323,7 +325,7 @@ fn handle_client(
                 if let (Some(user1), Some(user2)) = (user1, user2) {
                     busy_map.insert(username.clone(), user1.clone());
                     busy_map.insert(target_user.clone(), user2.clone());
-                    eprintln!("[SERVER] Marked {} and {} as busy", username, target_user);
+                    log_s!("[SERVER] Marked {} and {} as busy", username, target_user);
                 }
             }
 
@@ -340,7 +342,7 @@ fn handle_client(
                         // ----- Reuso bloque de login -----
                         let _ = clients.conectar(&username);
                         let clients_list: Vec<String>;
-                        eprintln!("[SERVER] User '{}' logged in", username);
+                        log_s!("[SERVER] User '{}' logged in", username);
 
                         {
                             let mut clients_map = connected_clients.lock().unwrap();
@@ -352,12 +354,11 @@ fn handle_client(
                             let msg_json = msg_joined.to_json_line();
 
                             for (other_user, other_stream) in clients_map.iter_mut() {
-                                println!("[SERVER] loop other user: {:?}", &other_user);
 
                                 let _tls_other_stream = match other_stream.lock() {
                                     Ok(mut tls_s) => {
                                         if other_user != &username {
-                                            eprintln!("\n\n[SERVER] Login Success");
+                                            println!("\n\n[SERVER] Login Success");
                                             // let _ = tls_s.write_all(msg_json.as_bytes());
                                             let _ = write_all_nonblocking(
                                                 &mut *tls_s,
@@ -395,13 +396,13 @@ fn handle_client(
                                 )));
                             }
                         };
-                        println!("\n\n[SERVER] Login Success");
+                        log_s!("\n\n[SERVER] Login Success");
                         let response = ServerMessage::LoginOk { username };
                         let response_json = response.to_json_line();
                         // stream_write.flush()?; //me aseguro que se escriba todo
                         let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                         tls_write.flush()?;
-                        println!("[SERVER] Sent LoginOk\n");
+                        log_s!("[SERVER] Sent LoginOk\n");
 
                         // Le enviamos la lista una vez que entra, ya que la primera vez
                         // el usuario todavia no estaba adentro
@@ -411,7 +412,7 @@ fn handle_client(
                         let list_json = user_list.to_json_line();
                         let _ = write_all_nonblocking(&mut *tls_write, list_json.as_bytes());
                         tls_write.flush()?;
-                        println!("[SERVER] Sent Initial UserList to new user");
+                        log_s!("[SERVER] Sent Initial UserList to new user");
                         // ----- Reuso bloque de login -----
                     }
                     Err(e) => {
@@ -433,7 +434,7 @@ fn handle_client(
 
                         let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                         tls_write.flush()?;
-                        println!("[SERVER] Login failed for '{}'", username);
+                        log_s!("[SERVER] Login failed for '{}'", username);
                     }
                 }
             }
@@ -444,7 +445,7 @@ fn handle_client(
                     let _ = clients.desconectar(&username);
                 }
 
-                eprintln!("[SERVER] User {} logged out", &username);
+                log_s!("[SERVER] User {} logged out", &username);
 
                 // Enviar confirmación
                 let response = ServerMessage::LogoutOk;
@@ -512,7 +513,7 @@ fn handle_client(
 
                 let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                 tls_write.flush()?;
-                println!("[SERVER] Sent users list (from active connections)\n");
+                log_s!("[SERVER] Sent users list (from active connections)\n");
             }
 
             //quiero llamar a alguien
@@ -523,7 +524,7 @@ fn handle_client(
                 offer,
                 target_user,
             }) => {
-                eprintln!("[SERVER] OFFER from {}", username);
+                log_s!("[SERVER] OFFER from {}", username);
 
                 // Almacenar el offer recibido
                 {
@@ -539,7 +540,7 @@ fn handle_client(
                 if let Some(target) = target_user {
                     let busy_map = busy_clients.lock().unwrap();
                     if busy_map.contains_key(&target) {
-                        eprintln!(
+                        log_s!(
                             "[SERVER] Target {} is busy. Notifying caller {}",
                             target, username
                         );
@@ -581,9 +582,9 @@ fn handle_client(
                                 response.to_json_line().as_bytes(),
                             );
                             let _ = tls_write.flush();
-                            eprintln!("[SERVER] Forwarded OFFER to {}", target);
+                            log_s!("[SERVER] Forwarded OFFER to {}", target);
                         } else {
-                            eprintln!("[SERVER] Target {} not found", target);
+                            log_s!("[SERVER] Target {} not found", target);
                         }
                     }
                 }
@@ -596,7 +597,7 @@ fn handle_client(
                 answer,
                 target_user,
             }) => {
-                eprintln!(
+                log_s!(
                     "[SERVER] ANSWER from {} -> target: {}",
                     username, target_user
                 );
@@ -620,22 +621,22 @@ fn handle_client(
                     {
                         Ok(()) => {
                             if let Err(e) = tls_write.flush() {
-                                eprintln!(
+                                log_s!(
                                     "[SERVER] ERROR flushing ANSWER to {}: {}",
                                     target_user, e
                                 );
                             } else {
-                                eprintln!("[SERVER] ANSWER bytes sent OK to {}", target_user);
+                                log_s!("[SERVER] ANSWER bytes sent OK to {}", target_user);
                             }
                         }
                         Err(e) => {
-                            eprintln!("[SERVER] ERROR sending ANSWER to {}: {}", target_user, e);
+                            log_s!("[SERVER] ERROR sending ANSWER to {}: {}", target_user, e);
                         }
                     }
                     tls_write.flush()?;
-                    eprintln!("[SERVER] Forwarded ANSWER to {}", target_user);
+                    log_s!("[SERVER] Forwarded ANSWER to {}", target_user);
                 } else {
-                    eprintln!(
+                    log_s!(
                         "[SERVER] ANSWER target {} NOT FOUND in connected_clients",
                         target_user
                     );
@@ -679,7 +680,7 @@ fn handle_client(
                 username,
                 target_user,
             }) => {
-                eprintln!("[SERVER] CallEnd by: {} to: {}", username, target_user);
+                log_s!("[SERVER] CallEnd by: {} to: {}", username, target_user);
 
                 //saco a username de ocupado
                 {
@@ -709,9 +710,9 @@ fn handle_client(
                     let _ =
                         write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
                     tls_write.flush()?;
-                    eprintln!("[SERVER] Forwarded CallEnded to {}", target_user);
+                    log_s!("[SERVER] Forwarded CallEnded to {}", target_user);
                 } else {
-                    eprintln!("[SERVER] Target not found for CallEnded");
+                    log_s!("[SERVER] Target not found for CallEnded");
                 }
             }
 
@@ -721,7 +722,7 @@ fn handle_client(
                 username,
                 target_user,
             }) => {
-                eprintln!(
+                log_s!(
                     "[SERVER] CallReject from {} -> target: {}",
                     username, target_user
                 );
@@ -743,15 +744,15 @@ fn handle_client(
                     let _ =
                         write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
                     let _ = tls_write.flush();
-                    eprintln!("[SERVER] Forwarded CallRejected to {}", target_user);
+                    log_s!("[SERVER] Forwarded CallRejected to {}", target_user);
                 } else {
-                    eprintln!("[SERVER] Target {} not found for CallReject", target_user);
+                    log_s!("[SERVER] Target {} not found for CallReject", target_user);
                 }
             }
 
             None => {
                 //no deberia pasar, se recibe un mensaje que no se reconoce
-                eprintln!("[ERROR] Failed to parse JSON");
+                log_s!("[ERROR] Failed to parse JSON");
                 let response = ServerMessage::Error {
                     reason: "Invalid JSON".to_string(),
                 };
@@ -769,6 +770,5 @@ fn handle_client(
             }
         }
     }
-
     Ok(())
 }

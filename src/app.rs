@@ -522,7 +522,7 @@ impl AppUI {
             let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
-                
+
                 // Setear Rol DTLS (True = Caller/Cliente, False = Callee/Servidor)
                 c.set_rol(is_active);
                 self.client_handles = c.initialize_call();
@@ -663,12 +663,12 @@ impl eframe::App for AppUI {
             match result {
                 Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-                    
+
                     // --- CORRECCIÓN AQUÍ: Determinar ROL ---
                     // Si pending_offer es None -> Yo inicié la llamada -> SOY CALLER (True)
                     // Si pending_offer es Some -> Me llamaron -> SOY CALLEE (False)
                     let is_caller = self.pending_offer.is_none();
-                    
+
                     self.crear_cliente(socket, is_caller);
                     self.cambiar_vista(CambioVista::ToCall);
                 }

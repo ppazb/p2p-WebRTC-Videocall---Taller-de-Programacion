@@ -111,8 +111,7 @@ impl ClientMessage {
             ClientMessage::CallStarted {
                 username,
                 target_user,
-            } => 
-                format!(
+            } => format!(
                 "{{\"type\":\"call_started\",\"username\":\"{}\",\"target_user\":\"{}\"}}\n",
                 replace_special_character(username),
                 replace_special_character(target_user)
@@ -344,10 +343,8 @@ impl ServerMessage {
             }),
 
             "user_list" | "User_list" => {
-                let arr = parsed_objects.get("users")?.as_str_array(); 
-                Some(ServerMessage::UserList {
-                    users: arr,  
-                })
+                let arr = parsed_objects.get("users")?.as_str_array();
+                Some(ServerMessage::UserList { users: arr })
             }
 
             "user_joined" => Some(ServerMessage::UserJoined {
