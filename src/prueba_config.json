@@ -7,7 +7,7 @@
         "local_adder": "localhost:8080",
         "server_adder": "localhost:8000", 
         "codecs": ["VP8", "H264"],
-        "ice_candidates": ["192.168.0.91:8052", "192.168.0.91:8053", "192.168.0.91:8054"],
+        "ice_candidates": ["192.168.0.106:8052", "192.168.0.106:8053", "192.168.0.106:8054"],
         "offer_path": "src/offer.sdp"
     }
 }

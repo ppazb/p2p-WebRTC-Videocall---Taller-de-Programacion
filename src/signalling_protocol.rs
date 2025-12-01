@@ -1,12 +1,8 @@
+use crate::json_parser::json_clasify;
 use std::io::{self, ErrorKind, Write};
 
-use serde::{Deserialize, Serialize};
-
-use crate::json_parser::json_clasify;
-
 /// Mensajes que envía el cliente al servidor
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[derive(Debug, Clone)]
 pub enum ClientMessage {
     Login {
         username: String,
@@ -61,7 +57,7 @@ pub enum ClientMessage {
 }
 
 /// Mensajes que envía el servidor al cliente
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum ServerMessage {
     LoginOk { username: String },
 

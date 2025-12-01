@@ -435,7 +435,7 @@ fn handle_client(
 
                         let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
                         tls_write.flush()?;
-                        println!("[SERVER] Login failed for '{}'", username);
+                        println!("[SERVER] Signup failed for '{}'", username);
                     }
                 }
             }
