@@ -14,6 +14,7 @@ pub mod video_processing_errors;
 
 pub mod ice;
 pub mod ice_errors;
+pub mod stun;
 
 pub mod client;
 pub mod client_errors;
@@ -30,3 +31,5 @@ pub mod server_users;
 pub mod server_users_errors;
 
 pub mod rtcp;
+pub mod tls_error;
+pub mod tls_interface;

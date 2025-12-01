@@ -15,24 +15,60 @@ pub fn elegir_codec(codecs: &[String]) -> Result<String, IceErrors> {
     Err(IceErrors::NoValidCodec)
 }
 
-pub fn crear_conexion_ice(my_ip: &[String], peer_ip: &[String]) -> Result<UdpSocket, IceErrors> {
-    //     let socket = UdpSocket::bind(my_addres).map_err(ClientErrors::CantBind)?;
-    //    socket.connect(peer).map_err(ClientErrors::CantConect)?;
+pub fn crear_conexion_ice(
+    sockets: Vec<UdpSocket>,
+    peer_candidates: &[String],
+) -> Result<UdpSocket, IceErrors> {
+    println!(
+        "[ICE] Trying to connect with {} peer candidates",
+        peer_candidates.len()
+    );
 
-    // Itero los IP:puertos hasta lograr una conexion
-    for my_addr in my_ip {
-        for peer_addr in peer_ip {
-            //PRUEBO CONECTAR, SI FALLA ITERO HASTA QUE NO UNO FALLE
-            match UdpSocket::bind(my_addr) {
-                Ok(socket) => match socket.connect(peer_addr) {
-                    Ok(_) => return Ok(socket),
-                    Err(_) => continue,
-                },
-                Err(_) => continue,
+    // obtengo las direcciones de los candidatos del otro
+    // formato ejemplo: 1 1 UDP 2130706431 192.168.1.100 5000 typ host
+    let peer_addresses: Vec<String> = peer_candidates
+        .iter()
+        .filter_map(|candidate| {
+            let parts: Vec<&str> = candidate.split_whitespace().collect();
+            if parts.len() >= 6 {
+                let address = format!("{}:{}", parts[4], parts[5]);
+                println!("[ICE] Peer candidate: {}", address);
+                Some(address)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if peer_addresses.is_empty() {
+        return Err(IceErrors::FailedConnection);
+    }
+
+    // itero los sockets y veo si alguno conecta
+    for socket in sockets {
+        for peer_addr in &peer_addresses {
+            println!("[ICE] Trying connection to {}", peer_addr);
+            match socket.connect(peer_addr) {
+                Ok(_) => {
+                    // Testeo parecido a stun, mando algo y veo si funciona
+                    let test_data = [0x00u8; 4];
+                    match socket.send(&test_data) {
+                        Ok(_) => {
+                            println!("[ICE] Successful connection to {}", peer_addr);
+                            return Ok(socket);
+                        }
+                        Err(_) => {
+                            continue;
+                        }
+                    }
+                }
+                Err(_) => {
+                    continue;
+                }
             }
         }
     }
-    // Si falla, devolver un error
+    println!("[ICE] All connection attempts failed");
     Err(IceErrors::FailedConnection)
 }
 

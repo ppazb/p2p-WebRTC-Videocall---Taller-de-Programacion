@@ -1,11 +1,15 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-    mpsc::Receiver,
+use std::{
+    net::TcpStream,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
+    },
 };
 
 use eframe::egui::{self, Color32, Frame, Margin, TextureHandle, Vec2};
 use opencv::prelude::*;
+use rustls::StreamOwned;
 
 use crate::{camera::Camera, client::RtcStats, vista::cambio::CambioVista};
 
@@ -17,12 +21,16 @@ pub struct VistaLlamada {
 }
 
 impl VistaLlamada {
-    pub fn new(rx_remoto: Option<Receiver<Mat>>, in_call: Arc<AtomicBool>, stats: Arc<Mutex<RtcStats>>) -> Self {
+    pub fn new(
+        rx_remoto: Option<Receiver<Mat>>,
+        in_call: Arc<AtomicBool>,
+        stats: Arc<Mutex<RtcStats>>,
+    ) -> Self {
         Self {
             rx_remoto,
             tex_remoto: None,
             in_call,
-            stats
+            stats,
         }
     }
 
@@ -30,7 +38,7 @@ impl VistaLlamada {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
-        _tcp: &mut std::net::TcpStream,
+        _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         // Reduzco demora de tooltip de estadísticas
         ctx.style_mut(|style| {
@@ -51,7 +59,7 @@ impl VistaLlamada {
             .show(ctx, |ui| {
                 // Icono de estadísticas
                 self.stats_indicator(ui);
-                
+
                 let rect = ui.max_rect();
                 let stroke_color = ui.visuals().widgets.noninteractive.bg_stroke.color;
                 ui.painter().line_segment(
@@ -225,13 +233,13 @@ impl VistaLlamada {
             match s.get_jitter() {
                 j if j < 15.0 => {
                     color = Color32::DARK_GREEN;
-                },
+                }
                 j if j < 40.0 => {
                     color = Color32::YELLOW;
-                },
+                }
                 _ => {
                     color = Color32::RED;
-                },
+                }
             }
 
             // Construyo el icono de jitter
@@ -239,13 +247,16 @@ impl VistaLlamada {
 
             // Completo tooltip con más estadísticas
             widget.on_hover_ui(|ui| {
-                ui.set_min_width(200.0);
+                ui.set_min_width(150.0);
 
                 ui.label("Recepción");
                 ui.separator();
 
                 ui.label(format!("Jitter: {:.2} ms", s.get_jitter()));
-                ui.label(format!("Bitrate: {}", Self::format_bitrate(s.get_bitrate())));
+                ui.label(format!(
+                    "Bitrate: {}",
+                    Self::format_bitrate(s.get_bitrate())
+                ));
                 ui.label(format!("Paquetes: {}", Self::format_pps(s.get_pps())));
                 ui.separator();
 
@@ -269,7 +280,7 @@ impl VistaLlamada {
         // Defino dimensiones del elemento interactivo
         let (rect, response) = ui.allocate_exact_size(
             Vec2::new(diameter + margin_left, diameter + margin_top),
-            egui::Sense::hover()
+            egui::Sense::hover(),
         );
 
         // Calculo posición del ícono circular, y lo dibujo
@@ -291,5 +302,4 @@ impl VistaLlamada {
         // Devuelvo el indicador de color configurado
         response
     }
-
 }
