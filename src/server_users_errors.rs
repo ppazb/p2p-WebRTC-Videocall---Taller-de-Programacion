@@ -1,5 +1,5 @@
 use core::fmt;
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum LoginErrors {
     UserNotFound,
     IncorrectPassword,

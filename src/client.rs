@@ -24,9 +24,7 @@ use openssl::bn::BigNum;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
-use openssl::ssl::{
-    HandshakeError, SslAcceptor, SslConnector, SslMethod, SslVerifyMode,
-};
+use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod, SslVerifyMode};
 use openssl::x509::X509;
 
 #[derive(Debug, Default)]
@@ -56,9 +54,15 @@ pub struct RtcStats {
 }
 
 impl RtcStats {
-    pub fn get_bitrate(&self) -> f64 { self.bitrate }
-    pub fn get_pps(&self) -> f64 { self.pps }
-    pub fn get_jitter(&self) -> f64 { self.last_jitter }
+    pub fn get_bitrate(&self) -> f64 {
+        self.bitrate
+    }
+    pub fn get_pps(&self) -> f64 {
+        self.pps
+    }
+    pub fn get_jitter(&self) -> f64 {
+        self.last_jitter
+    }
 
     pub fn update_rates(&mut self) {
         let now = Instant::now();
@@ -90,19 +94,26 @@ struct JitterBuffer {
 
 impl JitterBuffer {
     fn new() -> Self {
-        Self { buffer: BTreeMap::new(), min_depth: 4, max_depth: 30 }
+        Self {
+            buffer: BTreeMap::new(),
+            min_depth: 4,
+            max_depth: 30,
+        }
     }
     fn push(&mut self, timestamp: u32, data: Vec<u8>) {
         if self.buffer.len() >= self.max_depth {
-
             // si esta arriba de la cant max priorizamos lo mas nuevo
-            if let Some(&k) = self.buffer.keys().next() { self.buffer.remove(&k); }
+            if let Some(&k) = self.buffer.keys().next() {
+                self.buffer.remove(&k);
+            }
         }
         self.buffer.insert(timestamp, data);
     }
     fn pop(&mut self) -> Option<Vec<u8>> {
-        if self.buffer.len() >= self.min_depth {
-            if let Some(&k) = self.buffer.keys().next() { return self.buffer.remove(&k); }
+        if self.buffer.len() >= self.min_depth
+            && let Some(&k) = self.buffer.keys().next()
+        {
+            return self.buffer.remove(&k);
         }
         None
     }
@@ -146,7 +157,8 @@ impl Client {
     }
 
     pub fn set_rol(&self, is_client: bool) {
-        self.is_active_comunicator.store(is_client, Ordering::SeqCst);
+        self.is_active_comunicator
+            .store(is_client, Ordering::SeqCst);
     }
     ///Se encarga de matchear y aplicaar el paseo de SDP
     pub fn handle_signalling(&self, text: String) {
@@ -164,8 +176,18 @@ impl Client {
     pub fn initialize_call(
         &self,
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
-        let socket_recev = self.socket_recev.as_ref().ok_or(ClientErrors::SocketNotInitialized)?.try_clone().map_err(ClientErrors::CantClone)?;
-        let socket_send = self.socket_send.as_ref().ok_or(ClientErrors::SocketNotInitialized)?.try_clone().map_err(ClientErrors::CantClone)?;
+        let socket_recev = self
+            .socket_recev
+            .as_ref()
+            .ok_or(ClientErrors::SocketNotInitialized)?
+            .try_clone()
+            .map_err(ClientErrors::CantClone)?;
+        let socket_send = self
+            .socket_send
+            .as_ref()
+            .ok_or(ClientErrors::SocketNotInitialized)?
+            .try_clone()
+            .map_err(ClientErrors::CantClone)?;
         let socket_rtcp_out = socket_send.try_clone().map_err(ClientErrors::CantClone)?;
 
         let tx_remoto = self.tx_remoto.clone();
@@ -174,7 +196,10 @@ impl Client {
 
         // --- HANDSHAKE DTLS ROBUSTO ---
         if let Err(e) = self.perform_dtls_handshake() {
-            eprintln!("[DTLS] Error Fatal: {:?}. La conexión no será segura o fallará.", e);
+            eprintln!(
+                "[DTLS] Error Fatal: {:?}. La conexión no será segura o fallará.",
+                e
+            );
             // Podríamos retornar error aquí si la seguridad es obligatoria
         } else {
             println!("[DTLS] Handshake Completado Correctamente.");
@@ -246,7 +271,10 @@ impl Client {
                     let s = stats.lock().map_err(|_e| ClientErrors::StatsCouldtGets)?;
                     (s.packets_sent, s.bytes_sent)
                 };
-                let ntp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
+                let ntp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros() as u64;
                 let rtp_ts = (ntp / 1000) as u32;
 
                 let sender_report = SenderReport::new(1234, ntp, rtp_ts, packets, bytes);
@@ -290,19 +318,21 @@ impl Client {
             match socket_recev.recv(&mut buff) {
                 Ok(n) => {
                     let data = &buff[..n];
-                    if n < 2 { continue; }
+                    if n < 2 {
+                        continue;
+                    }
 
                     let package_type: u8 = data[1];
                     let mut processed_as_rtcp = false;
 
-                    if (200..=204).contains(&package_type) {
-                        if let Some(package) = RtcpPacket::from_bytes(data) {
-                            processed_as_rtcp = true;
-                            if let RtcpPacket::Bye(_) = package {
-                                println!("[RTCP] Recibido BYE. Cerrando llamada.");
-                                in_call.store(false, Ordering::SeqCst);
-                                return Ok(());
-                            }
+                    if (200..=204).contains(&package_type)
+                        && let Some(package) = RtcpPacket::from_bytes(data)
+                    {
+                        processed_as_rtcp = true;
+                        if let RtcpPacket::Bye(_) = package {
+                            println!("[RTCP] Recibido BYE. Cerrando llamada.");
+                            in_call.store(false, Ordering::SeqCst);
+                            return Ok(());
                         }
                     }
                     if !processed_as_rtcp && let Some(msg) = Message::deserializable(data) {
@@ -313,7 +343,9 @@ impl Client {
                                 if let Some(rtp_package) = RtpPackage::from_bytes(&media) {
                                     Self::update_rtp_stats(stats, &rtp_package, n);
                                 }
-                                if let Some((ts, full_frame)) = Self::reassemble_frame(media, &mut chunks_hash) {
+                                if let Some((ts, full_frame)) =
+                                    Self::reassemble_frame(media, &mut chunks_hash)
+                                {
                                     jitter_buffer.push(ts, full_frame);
                                     width = msg.dimension.0;
                                     height = msg.dimension.1;
@@ -322,18 +354,20 @@ impl Client {
                         }
                     }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut 
-                           || e.kind() == std::io::ErrorKind::WouldBlock 
-                           || e.kind() == std::io::ErrorKind::ConnectionReset => {
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::ConnectionReset =>
+                {
                     thread::sleep(Duration::from_millis(5));
                 }
                 Err(e) => return Err(ClientErrors::CantConect(e)),
             }
             // sacamos el frame del arbol
-            if let Some(encoded_frame) = jitter_buffer.pop() {
-                if let Ok(frame) = decoder.decode(&encoded_frame, width, height) {
-                    let _ = tx_remoto.try_send(frame);
-                }
+            if let Some(encoded_frame) = jitter_buffer.pop()
+                && let Ok(frame) = decoder.decode(&encoded_frame, width, height)
+            {
+                let _ = tx_remoto.try_send(frame);
             }
 
             if last_reciever_report.elapsed() >= reciever_report_interval {
@@ -392,13 +426,18 @@ impl Client {
             } else {
                 // No hay frame disponible
 
-                 return Ok(()); }
+                return Ok(());
+            }
         };
 
         // Encodeo el frame cargado, y lo serializo para enviar los datos por el socket
 
-        let encoded_frame = encoder.encode(&frame).map_err(ClientErrors::EncodingError)?;
-        if encoded_frame.is_empty() { return Ok(()); };
+        let encoded_frame = encoder
+            .encode(&frame)
+            .map_err(ClientErrors::EncodingError)?;
+        if encoded_frame.is_empty() {
+            return Ok(());
+        };
 
         let mut index_chunk: u16 = 0;
         let mut bytes_sent_batch = 0;
@@ -408,10 +447,14 @@ impl Client {
             let rtp_package = RtpPackage::new(index_chunk, chunk.to_vec());
             let rtp_bytes = rtp_package.to_bytes();
             let video_to_send = Message::new_msg_binary(rtp_bytes, camara_width, camara_height);
-            let bytes_to_send = video_to_send.serialize().map_err(|_e| ClientErrors::SerializeBits)?;
+            let bytes_to_send = video_to_send
+                .serialize()
+                .map_err(|_e| ClientErrors::SerializeBits)?;
 
             if let Err(e) = socket_send.send(&bytes_to_send) {
-                if !e.to_string().contains("Connection reset") { eprintln!("Send failed: {}", e); }
+                if !e.to_string().contains("Connection reset") {
+                    eprintln!("Send failed: {}", e);
+                }
             } else {
                 bytes_sent_batch += bytes_to_send.len() as u32;
                 package_sent_batch += 1;
@@ -447,15 +490,20 @@ impl Client {
 
             // Actualización de secuencias
             let seq = rtp.secuence_number;
-            if seq < update_stats.max_seq_received && (update_stats.max_seq_received as i32 - seq as i32) > 30000 {
+            if seq < update_stats.max_seq_received
+                && (update_stats.max_seq_received as i32 - seq as i32) > 30000
+            {
                 update_stats.cycles += 1;
             }
-            if seq > update_stats.max_seq_received { update_stats.max_seq_received = seq; }
+            if seq > update_stats.max_seq_received {
+                update_stats.max_seq_received = seq;
+            }
 
             // Calculo de jitter
             if let Some(last_arrival) = update_stats.last_arrival_time {
                 let dif_arrival = now.duration_since(last_arrival).as_millis() as f64;
-                let dif_timestamp = (rtp.time_stamp as f64 - update_stats.last_pkt_timestamp as f64).abs();
+                let dif_timestamp =
+                    (rtp.time_stamp as f64 - update_stats.last_pkt_timestamp as f64).abs();
                 let diference: f64 = (dif_arrival - dif_timestamp).abs();
                 update_stats.jitter += (diference - update_stats.jitter) / 16.0;
             }
@@ -465,11 +513,19 @@ impl Client {
         }
     }
 
-    fn send_receiver_report(socket: &UdpSocket, stats: &Arc<Mutex<RtcStats>>) -> Result<(), ClientErrors> {
+    fn send_receiver_report(
+        socket: &UdpSocket,
+        stats: &Arc<Mutex<RtcStats>>,
+    ) -> Result<(), ClientErrors> {
         let rb = {
             let client_stats = stats.lock().map_err(|_e| ClientErrors::StatsCouldtGets)?;
-            let extended_max = (client_stats.cycles as u32) << 16 | client_stats.max_seq_received as u32;
-            let expected = if client_stats.initialized { extended_max - client_stats.base_seq as u32 + 1 } else { 0 };
+            let extended_max =
+                (client_stats.cycles as u32) << 16 | client_stats.max_seq_received as u32;
+            let expected = if client_stats.initialized {
+                extended_max - client_stats.base_seq as u32 + 1
+            } else {
+                0
+            };
             let lost = expected.saturating_sub(client_stats.packets_received);
             ReportBlock::new(lost, extended_max, client_stats.jitter as u32)
         };
@@ -481,7 +537,9 @@ impl Client {
 
     fn signal_handle(signal: Signal, in_call: &Arc<AtomicBool>) {
         match signal {
-            Signal::EndCall => { in_call.store(false, Ordering::SeqCst); }
+            Signal::EndCall => {
+                in_call.store(false, Ordering::SeqCst);
+            }
         }
     }
     ///Se encarga de realizar el hadnshake DTLS con el create dimpl, su gestion es cuasi
@@ -490,17 +548,25 @@ impl Client {
     /// El unico factor importante es el seteo de "cliente activo" para saber quien actuara de cliente
     /// y quien de servidor. Si el handshake falla la comunicacion deberia cortarse puesto que no es segura
     pub fn perform_dtls_handshake(&self) -> Result<bool, ClientErrors> {
-        let socket = self.socket_send.as_ref().ok_or(ClientErrors::SocketNotInitialized)?;
+        let socket = self
+            .socket_send
+            .as_ref()
+            .ok_or(ClientErrors::SocketNotInitialized)?;
         let socket_clone = socket.try_clone().map_err(ClientErrors::CantClone)?;
-        socket_clone.set_nonblocking(true).map_err(ClientErrors::CantConect)?;
+        socket_clone
+            .set_nonblocking(true)
+            .map_err(ClientErrors::CantConect)?;
 
         let rsa = Rsa::generate(2048).map_err(|_| ClientErrors::SocketNotInitialized)?;
         let pkey = PKey::from_rsa(rsa).map_err(|_| ClientErrors::SocketNotInitialized)?;
         let mut x509 = X509::builder().map_err(|_| ClientErrors::SocketNotInitialized)?;
         x509.set_version(2).unwrap();
-        x509.set_serial_number(&BigNum::from_u32(1).unwrap().to_asn1_integer().unwrap()).unwrap();
-        x509.set_not_before(&Asn1Time::days_from_now(0).unwrap()).unwrap();
-        x509.set_not_after(&Asn1Time::days_from_now(365).unwrap()).unwrap();
+        x509.set_serial_number(&BigNum::from_u32(1).unwrap().to_asn1_integer().unwrap())
+            .unwrap();
+        x509.set_not_before(&Asn1Time::days_from_now(0).unwrap())
+            .unwrap();
+        x509.set_not_after(&Asn1Time::days_from_now(365).unwrap())
+            .unwrap();
         x509.set_pubkey(&pkey).unwrap();
         x509.sign(&pkey, MessageDigest::sha256()).unwrap();
         let cert = x509.build();
@@ -508,30 +574,42 @@ impl Client {
         connector_builder.set_certificate(&cert).unwrap();
         connector_builder.set_private_key(&pkey).unwrap();
         connector_builder.set_verify(SslVerifyMode::NONE);
-        connector_builder.set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80").unwrap();
+        connector_builder
+            .set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80")
+            .unwrap();
         let connector = connector_builder.build();
 
         let is_client = self.is_active_comunicator.load(Ordering::SeqCst);
-        println!("[DTLS] Iniciando Handshake (Non-blocking). Rol Cliente: {}", is_client);
+        println!(
+            "[DTLS] Iniciando Handshake (Non-blocking). Rol Cliente: {}",
+            is_client
+        );
         let udp_stream = UdpStream(socket_clone);
         let mut stream_result = if is_client {
             connector.connect("localhost", udp_stream)
         } else {
-            let mut acceptor_builder = SslAcceptor::mozilla_intermediate(SslMethod::dtls()).unwrap();
+            let mut acceptor_builder =
+                SslAcceptor::mozilla_intermediate(SslMethod::dtls()).unwrap();
             acceptor_builder.set_certificate(&cert).unwrap();
             acceptor_builder.set_private_key(&pkey).unwrap();
             acceptor_builder.set_verify(SslVerifyMode::NONE);
-            acceptor_builder.set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80").unwrap();
+            acceptor_builder
+                .set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80")
+                .unwrap();
             let acceptor = acceptor_builder.build();
             acceptor.accept(udp_stream)
         };
         let start = Instant::now();
         loop {
             match stream_result {
-                Ok(mut ssl_stream) => {
+                Ok(ssl_stream) => {
                     println!("[DTLS] Handshake Exitoso!");
                     let mut material = [0u8; 60];
-                    let _ = ssl_stream.ssl().export_keying_material(&mut material, "EXTRACTOR-dtls_srtp", None);
+                    let _ = ssl_stream.ssl().export_keying_material(
+                        &mut material,
+                        "EXTRACTOR-dtls_srtp",
+                        None,
+                    );
                     println!("[DTLS] Keying Material Exportado (Simulado)");
                     return Ok(true);
                 }
@@ -542,11 +620,11 @@ impl Client {
                     }
                     stream_result = mid_stream.handshake();
                 }
-                Err(HandshakeError::Failure(e)) => {
+                Err(HandshakeError::Failure(_)) => {
                     eprintln!("[DTLS] Error fatal:");
                     return Err(ClientErrors::SocketNotInitialized);
                 }
-                Err(HandshakeError::SetupFailure(e)) => {
+                Err(HandshakeError::SetupFailure(_)) => {
                     eprintln!("[DTLS] Error setup:");
                     return Err(ClientErrors::SocketNotInitialized);
                 }

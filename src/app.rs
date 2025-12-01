@@ -105,7 +105,7 @@ impl AppUI {
 
             // Thread para escuchar del servidor
             let _read_handle = std::thread::spawn(move || {
-                // Buffer acumulativo para reconstruir mensajes fragmentados 
+                // Buffer acumulativo para reconstruir mensajes fragmentados
                 let mut pending_buffer: Vec<u8> = Vec::new();
 
                 loop {
@@ -127,10 +127,7 @@ impl AppUI {
                                 break;
                             }
                             // Si está bloqueado seguir sin quedar bloqueada esperando
-                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                                
-                                0
-                            }
+                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => 0,
                             Ok(n) => n,
                             Err(_) => {
                                 let _ = tx.send(AppEvent::ConnectionLost);
@@ -147,50 +144,50 @@ impl AppUI {
                         while let Some(pos) = pending_buffer.iter().position(|&x| x == b'\n') {
                             let line_bytes: Vec<u8> = pending_buffer.drain(..=pos).collect();
 
-                            if let Ok(line) = String::from_utf8(line_bytes) {
-                                if let Some(msg) = ServerMessage::from_json(&line) {
-                                    match msg {
-                                        ServerMessage::LoginOk { username } => {
-                                            let _ = tx.send(AppEvent::LoginSuccess(username));
-                                        }
-                                        ServerMessage::LoginError { reason } => {
-                                            let _ = tx.send(AppEvent::LoginError(reason));
-                                        }
-                                        ServerMessage::SignUpOk { username } => {
-                                            let _ = tx.send(AppEvent::SignUpSuccess(username));
-                                        }
-                                        ServerMessage::SignUpError { reason } => {
-                                            let _ = tx.send(AppEvent::SignUpError(reason));
-                                        }
-                                        ServerMessage::UserList { users } => {
-                                            let _ = tx.send(AppEvent::UserListUpdated(users));
-                                        }
-                                        ServerMessage::UserJoined { username } => {
-                                            let _ = tx.send(AppEvent::NewUser(username));
-                                        }
-                                        ServerMessage::UserLeft { username } => {
-                                            let _ = tx.send(AppEvent::UserLeft(username));
-                                        }
-                                        ServerMessage::OfferForwarded { .. } => {
-                                            let _ = tx.send(AppEvent::SdpMessage(msg));
-                                        }
-                                        ServerMessage::AnswerForwarded { .. } => {
-                                            let _ = tx.send(AppEvent::SdpMessage(msg));
-                                        }
-                                        ServerMessage::OfferAvailable { .. } => {
-                                            let _ = tx.send(AppEvent::SdpMessage(msg));
-                                        }
-                                        ServerMessage::CallEnded { .. } => {
-                                            let _ = tx.send(AppEvent::SdpMessage(msg));
-                                        }
-                                        ServerMessage::CallRejected { .. } => {
-                                            let _ = tx.send(AppEvent::SdpMessage(msg));
-                                        }
-                                        ServerMessage::CalledUserBusy => {
-                                            let _ = tx.send(AppEvent::CalledUserBusy);
-                                        }
-                                        _ => {}
+                            if let Ok(line) = String::from_utf8(line_bytes)
+                                && let Some(msg) = ServerMessage::from_json(&line)
+                            {
+                                match msg {
+                                    ServerMessage::LoginOk { username } => {
+                                        let _ = tx.send(AppEvent::LoginSuccess(username));
                                     }
+                                    ServerMessage::LoginError { reason } => {
+                                        let _ = tx.send(AppEvent::LoginError(reason));
+                                    }
+                                    ServerMessage::SignUpOk { username } => {
+                                        let _ = tx.send(AppEvent::SignUpSuccess(username));
+                                    }
+                                    ServerMessage::SignUpError { reason } => {
+                                        let _ = tx.send(AppEvent::SignUpError(reason));
+                                    }
+                                    ServerMessage::UserList { users } => {
+                                        let _ = tx.send(AppEvent::UserListUpdated(users));
+                                    }
+                                    ServerMessage::UserJoined { username } => {
+                                        let _ = tx.send(AppEvent::NewUser(username));
+                                    }
+                                    ServerMessage::UserLeft { username } => {
+                                        let _ = tx.send(AppEvent::UserLeft(username));
+                                    }
+                                    ServerMessage::OfferForwarded { .. } => {
+                                        let _ = tx.send(AppEvent::SdpMessage(msg));
+                                    }
+                                    ServerMessage::AnswerForwarded { .. } => {
+                                        let _ = tx.send(AppEvent::SdpMessage(msg));
+                                    }
+                                    ServerMessage::OfferAvailable { .. } => {
+                                        let _ = tx.send(AppEvent::SdpMessage(msg));
+                                    }
+                                    ServerMessage::CallEnded { .. } => {
+                                        let _ = tx.send(AppEvent::SdpMessage(msg));
+                                    }
+                                    ServerMessage::CallRejected { .. } => {
+                                        let _ = tx.send(AppEvent::SdpMessage(msg));
+                                    }
+                                    ServerMessage::CalledUserBusy => {
+                                        let _ = tx.send(AppEvent::CalledUserBusy);
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -601,10 +598,9 @@ impl eframe::App for AppUI {
                 AppEvent::NewUser(user) => {
                     if let Vista::VistaLobby(lobby) = &mut self.vista_actual
                         && Some(&user) != self.current_username.as_ref()
+                        && !lobby.users_list.contains(&user)
                     {
-                        if !lobby.users_list.contains(&user) {
-                            lobby.users_list.push(user);
-                        }
+                        lobby.users_list.push(user);
                     }
                 }
 
@@ -675,10 +671,10 @@ impl eframe::App for AppUI {
             match result {
                 Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-                    
+
                     let is_caller = self.pending_offer.is_none();
                     self.crear_cliente(socket, is_caller);
-                    
+
                     self.cambiar_vista(CambioVista::ToCall);
                 }
                 Err(_) => self.cambiar_vista(CambioVista::ToLobby {

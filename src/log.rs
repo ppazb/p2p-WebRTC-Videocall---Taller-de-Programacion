@@ -1,12 +1,11 @@
-use std::sync::Mutex;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::sync::Mutex;
 
 pub const MAX_LOGS_BEFORE_FLUSH: usize = 10;
 
 pub static LOG_SERVER_BUFFER: Mutex<Vec<String>> = Mutex::new(Vec::new());
 pub static LOG_CLIENT_BUFFER: Mutex<Vec<String>> = Mutex::new(Vec::new());
-
 
 fn flush_buffer(buffer: &mut Vec<String>, path: &'static str) {
     if buffer.is_empty() {
@@ -16,11 +15,7 @@ fn flush_buffer(buffer: &mut Vec<String>, path: &'static str) {
     let content = buffer.join("");
     buffer.clear();
 
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-    {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = file.write_all(content.as_bytes());
         let _ = file.flush();
     }
@@ -35,7 +30,6 @@ pub fn flush_client() {
     let mut buffer = LOG_CLIENT_BUFFER.lock().unwrap();
     flush_buffer(&mut buffer, "src/logs/log_client.txt");
 }
-
 
 #[macro_export]
 macro_rules! log_s {

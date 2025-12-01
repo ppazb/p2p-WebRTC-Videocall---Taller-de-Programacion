@@ -1,5 +1,5 @@
-use crate::tls_error::TlsError;
 use crate::server_users_errors::LoginErrors;
+use crate::tls_error::TlsError;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ impl fmt::Display for SignallingServerError {
             Self::ConnectionError => write!(f, "Error: \"Connection error\""),
             Self::ConfigInfoError => write!(f, "Error: \"Config information error\""),
             Self::TlsHandshakeError(e) => write!(f, "Error: \"TLS: {:?}\"", e),
-            Self::FileNotFound( e) => write!(f, "Error: \"USER DATA: {:?}\"", e),
+            Self::FileNotFound(e) => write!(f, "Error: \"USER DATA: {:?}\"", e),
             Self::SyncError => write!(f, "Error: \"Cant use resource right now\""),
         }
     }
