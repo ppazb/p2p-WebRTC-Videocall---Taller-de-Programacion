@@ -36,26 +36,34 @@ Para levantar el Client en una terminal:
 ```
 cargo run --bin room_rtc  path_config_file
 ```
-## TLS Certificates y Keys 
 
-### Creación de Certificates y Keys
+### Ejemplo de configs para server y client
+
 ```
-openssl x509 -in cert.pem -outform DER -out cert.der                 
-openssl pkcs8 -topk8 -inform PEM -outform DER -in key.pem -out key.der -nocrypt
+{
+    "server_adder": "localhost:8000",
+    "users_db": "src/users.json"
+}
+```
 
-openssl req \
-  -x509 \           
-  -newkey rsa:2048 \                                                           
-  -keyout key.pem \
-  -out cert.pem \
-  -days 365 \
-  -nodes \
-  -subj "/CN=localhost" \
-  -addext "basicConstraints=CA:FALSE" \
-  -addext "keyUsage=digitalSignature, keyEncipherment" \
-  -addext "extendedKeyUsage=serverAuth" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
 
 ```
+{
+    "general_info": {
+        "server_adder": "192.168.0.15"
+    },
+
+    "sdp_handshake": {
+        "local_adder": "localhost:8090",
+        "server_adder": "192.168.0.15:8000", 
+        "codecs": ["VP8", "H264"],
+        "ice_candidates": [ "192.168.0.114:8500", "192.168.0.114:8250"],
+        "offer_path": "src/offer2.sdp"
+    }
+}
+
+
+```
+
 

@@ -105,6 +105,9 @@ impl AppUI {
 
             // Thread para escuchar del servidor
             let _read_handle = std::thread::spawn(move || {
+                // Buffer acumulativo para reconstruir mensajes fragmentados 
+                let mut pending_buffer: Vec<u8> = Vec::new();
+
                 loop {
                     // Setear un Buffer para leer
                     let mut buffer = [0u8; 4096];
@@ -125,7 +128,9 @@ impl AppUI {
                             }
                             // Si está bloqueado seguir sin quedar bloqueada esperando
                             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                                continue;
+                                
+                                std::thread::sleep(std::time::Duration::from_millis(5));
+                                0
                             }
                             Ok(n) => n,
                             Err(_) => {
@@ -135,50 +140,60 @@ impl AppUI {
                         }
                     };
 
-                    if let Ok(line) = String::from_utf8(buffer[..n].to_vec())
-                        && let Some(msg) = ServerMessage::from_json(&line)
-                    {
-                        match msg {
-                            ServerMessage::LoginOk { username } => {
-                                let _ = tx.send(AppEvent::LoginSuccess(username));
+                    if n > 0 {
+                        // Acumular bytes leídos
+                        pending_buffer.extend_from_slice(&buffer[..n]);
+
+                        // Procesar todos los mensajes completos (delimitados por \n)
+                        while let Some(pos) = pending_buffer.iter().position(|&x| x == b'\n') {
+                            let line_bytes: Vec<u8> = pending_buffer.drain(..=pos).collect();
+
+                            if let Ok(line) = String::from_utf8(line_bytes) {
+                                if let Some(msg) = ServerMessage::from_json(&line) {
+                                    match msg {
+                                        ServerMessage::LoginOk { username } => {
+                                            let _ = tx.send(AppEvent::LoginSuccess(username));
+                                        }
+                                        ServerMessage::LoginError { reason } => {
+                                            let _ = tx.send(AppEvent::LoginError(reason));
+                                        }
+                                        ServerMessage::SignUpOk { username } => {
+                                            let _ = tx.send(AppEvent::SignUpSuccess(username));
+                                        }
+                                        ServerMessage::SignUpError { reason } => {
+                                            let _ = tx.send(AppEvent::SignUpError(reason));
+                                        }
+                                        ServerMessage::UserList { users } => {
+                                            let _ = tx.send(AppEvent::UserListUpdated(users));
+                                        }
+                                        ServerMessage::UserJoined { username } => {
+                                            let _ = tx.send(AppEvent::NewUser(username));
+                                        }
+                                        ServerMessage::UserLeft { username } => {
+                                            let _ = tx.send(AppEvent::UserLeft(username));
+                                        }
+                                        ServerMessage::OfferForwarded { .. } => {
+                                            let _ = tx.send(AppEvent::SdpMessage(msg));
+                                        }
+                                        ServerMessage::AnswerForwarded { .. } => {
+                                            let _ = tx.send(AppEvent::SdpMessage(msg));
+                                        }
+                                        ServerMessage::OfferAvailable { .. } => {
+                                            let _ = tx.send(AppEvent::SdpMessage(msg));
+                                        }
+                                        ServerMessage::CallEnded { .. } => {
+                                            let _ = tx.send(AppEvent::SdpMessage(msg));
+                                        }
+                                        ServerMessage::CallRejected { .. } => {
+                                            let _ = tx.send(AppEvent::SdpMessage(msg));
+                                        }
+                                        ServerMessage::CalledUserBusy => {
+                                            let _ = tx.send(AppEvent::CalledUserBusy);
+                                        }
+                                        _ => {}
+                                    }
+                                }
                             }
-                            ServerMessage::LoginError { reason } => {
-                                let _ = tx.send(AppEvent::LoginError(reason));
-                            }
-                            ServerMessage::SignUpOk { username } => {
-                                let _ = tx.send(AppEvent::SignUpSuccess(username));
-                            }
-                            ServerMessage::SignUpError { reason } => {
-                                let _ = tx.send(AppEvent::SignUpError(reason));
-                            }
-                            ServerMessage::UserList { users } => {
-                                let _ = tx.send(AppEvent::UserListUpdated(users));
-                            }
-                            ServerMessage::UserJoined { username } => {
-                                let _ = tx.send(AppEvent::NewUser(username));
-                            }
-                            ServerMessage::UserLeft { username } => {
-                                let _ = tx.send(AppEvent::UserLeft(username));
-                            }
-                            ServerMessage::OfferForwarded { .. } => {
-                                let _ = tx.send(AppEvent::SdpMessage(msg));
-                            }
-                            ServerMessage::AnswerForwarded { .. } => {
-                                let _ = tx.send(AppEvent::SdpMessage(msg));
-                            }
-                            ServerMessage::OfferAvailable { .. } => {
-                                let _ = tx.send(AppEvent::SdpMessage(msg));
-                            }
-                            ServerMessage::CallEnded { .. } => {
-                                let _ = tx.send(AppEvent::SdpMessage(msg));
-                            }
-                            ServerMessage::CallRejected { .. } => {
-                                let _ = tx.send(AppEvent::SdpMessage(msg));
-                            }
-                            ServerMessage::CalledUserBusy => {
-                                let _ = tx.send(AppEvent::CalledUserBusy);
-                            }
-                            _ => {}
                         }
                     }
                 }
@@ -522,8 +537,6 @@ impl AppUI {
             let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
-
-                // Setear Rol DTLS (True = Caller/Cliente, False = Callee/Servidor)
                 c.set_rol(is_active);
                 self.client_handles = c.initialize_call();
                 self.cliente = Some(c);
@@ -572,14 +585,12 @@ impl eframe::App for AppUI {
                 }
                 AppEvent::SignUpError(reason) => {
                     if let Vista::VistaSignUp(sign_up) = &mut self.vista_actual {
-                        // Vacío los campos y notifico el error
                         sign_up.username = "".to_string();
                         sign_up.password = "".to_string();
                         sign_up.error_msg = Some(reason);
                         sign_up.auth_pending = false;
                     }
                 }
-
                 AppEvent::UserListUpdated(users) => {
                     if let Vista::VistaLobby(lobby) = &mut self.vista_actual {
                         lobby.users_list = users
@@ -592,7 +603,9 @@ impl eframe::App for AppUI {
                     if let Vista::VistaLobby(lobby) = &mut self.vista_actual
                         && Some(&user) != self.current_username.as_ref()
                     {
-                        lobby.users_list.push(user);
+                        if !lobby.users_list.contains(&user) {
+                            lobby.users_list.push(user);
+                        }
                     }
                 }
 
@@ -663,13 +676,10 @@ impl eframe::App for AppUI {
             match result {
                 Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-
-                    // --- CORRECCIÓN AQUÍ: Determinar ROL ---
-                    // Si pending_offer es None -> Yo inicié la llamada -> SOY CALLER (True)
-                    // Si pending_offer es Some -> Me llamaron -> SOY CALLEE (False)
+                    
                     let is_caller = self.pending_offer.is_none();
-
                     self.crear_cliente(socket, is_caller);
+                    
                     self.cambiar_vista(CambioVista::ToCall);
                 }
                 Err(_) => self.cambiar_vista(CambioVista::ToLobby {
