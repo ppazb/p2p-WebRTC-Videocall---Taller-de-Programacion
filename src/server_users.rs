@@ -225,21 +225,20 @@ impl ServerUser {
     }
 }
 
-
 fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
     let mut users = Vec::new();
     let str_json = json_str.trim();
 
     // manejo de caso vacio
     if str_json == "[]" {
-        return Ok(users); 
+        return Ok(users);
     }
 
     // saco []
     if !str_json.starts_with('[') || !str_json.ends_with(']') {
         return Err(LoginErrors::FileIncompatible);
     }
-    
+
     let inner_content = &str_json[1..str_json.len() - 1].trim();
     // otro manejo de caso vacio
     if inner_content.is_empty() {
@@ -267,8 +266,7 @@ fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
         for key_value in keys_values {
             let kv: Vec<&str> = key_value
                 .split(':')
-                .map(|s| s.trim()
-                .trim_matches('"'))
+                .map(|s| s.trim().trim_matches('"'))
                 .collect();
 
             if kv.len() != 2 {
@@ -291,7 +289,6 @@ fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
 
     Ok(users)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -370,11 +367,17 @@ mod tests {
 
         // conecto
         assert!(server_data.conectar("testuser").is_ok());
-        assert_eq!(server_data.users.get("testuser").unwrap().status,UserStatus::Conectado);
+        assert_eq!(
+            server_data.users.get("testuser").unwrap().status,
+            UserStatus::Conectado
+        );
 
         // desconecto
         assert!(server_data.desconectar("testuser").is_ok());
-        assert_eq!(server_data.users.get("testuser").unwrap().status,UserStatus::Desconectado);
+        assert_eq!(
+            server_data.users.get("testuser").unwrap().status,
+            UserStatus::Desconectado
+        );
     }
 
     #[test]
