@@ -54,7 +54,6 @@ impl From<DecodingErrors> for ClientErrors {
     }
 }
 
-
 impl From<SdpError> for ClientErrors {
     fn from(error: SdpError) -> Self {
         ClientErrors::SdpError(error)

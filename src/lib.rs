@@ -34,3 +34,4 @@ pub mod rtcp;
 pub mod tls_error;
 pub mod tls_interface;
 
+pub mod log;
