@@ -144,7 +144,6 @@ fn handle_client(
             Ok(n) => n,
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                 drop(guard_read);
-                std::thread::sleep(std::time::Duration::from_millis(5));
                 continue;
             }
             Err(e) => {

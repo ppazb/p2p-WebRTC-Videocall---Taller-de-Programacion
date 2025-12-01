@@ -129,7 +129,6 @@ impl AppUI {
                             // Si está bloqueado seguir sin quedar bloqueada esperando
                             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                                 
-                                std::thread::sleep(std::time::Duration::from_millis(5));
                                 0
                             }
                             Ok(n) => n,
