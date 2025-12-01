@@ -206,79 +206,76 @@ fn handle_client(
                     let _ = clients.conectar(&username);
                     let clients_list: Vec<String>;
                     eprintln!("[SERVER] User '{}' logged in", username);
+                    let msg_joined = ServerMessage::UserJoined {
+                        username: username.clone(),
+                    };
+                    let msg_json = msg_joined.to_json_line();
 
+                    //scope para evitar lock
                     {
                         let mut clients_map = connected_clients.lock().unwrap();
-
-                        // Server avisa a los ya conectados que entró uno nuevo (avisa a todos los Observers)
-                        let msg_joined = ServerMessage::UserJoined {
-                            username: username.clone(),
-                        };
-                        let msg_json = msg_joined.to_json_line();
-
-                        for (other_user, other_stream) in clients_map.iter_mut() {
-                            println!("[SERVER] loop other user: {:?}", &other_user);
-
-                            let _tls_other_stream = match other_stream.lock() {
-                                Ok(mut tls_s) => {
-                                    if other_user != &username {
-                                        eprintln!("\n\n[SERVER] Login Success");
-                                        // let _ = tls_s.write_all(msg_json.as_bytes());
-                                        let _ =
-                                            write_all_nonblocking(&mut *tls_s, msg_json.as_bytes());
-                                        let _ = tls_s.flush();
-                                    }
-                                    tls_s
-                                }
-                                Err(e) => {
-                                    return Err(std::io::Error::other(format!(
-                                        "TLS mutex poisoned: {e}"
-                                    )));
-                                }
-                            };
-                        }
-
-                        // Guardar la conexión de este usuario
-                        // if let Ok(write_clone) = stream_write.try_clone() {
                         clients_map.insert(username.clone(), write_tls.clone());
-                        // }
                         clients_list = clients_map.keys().cloned().collect();
                     }
 
-                    current_user = Some(username.clone());
-
-                    // Avisar a la UI que el login fue exitoso
-                    // Enviamos primero LoginOk para que UI cambie de vista al Lobby
-                    // para después cuando reciba la lista de conectados, lo pueda mostrar correctamente
-                    let mut tls_write = match write_tls.lock() {
-                        Ok(s) => s,
-                        Err(e) => {
-                            return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
+                    {
+                        let clients_map = connected_clients.lock().unwrap();
+                        for (other_user, other_stream) in clients_map.iter() {
+                            println!("[SERVER] loop other user: {:?}", &other_user);
+                            if other_user != &username {
+                                if let Ok(mut tls_s) = other_stream.lock() {
+                                    eprintln!("\n\n[SERVER] Login Success");
+                                    let _ = write_all_nonblocking(&mut *tls_s, msg_json.as_bytes());
+                                    let _ = tls_s.flush();
+                                }
+                            }
                         }
-                    };
-                    println!("\n\n[SERVER] Login Success");
-                    let response = ServerMessage::LoginOk { username };
-                    let response_json = response.to_json_line();
-                    // stream_write.flush()?; //me aseguro que se escriba todo
-                    let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
-                    tls_write.flush()?;
-                    println!("[SERVER] Sent LoginOk\n");
+                    }
+
+                    {
+                        let mut tls_write = match write_tls.lock() {
+                            Ok(s) => s,
+                            Err(e) => {
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
+                            }
+                        };
+                        println!("\n\n[SERVER] Login Success");
+                        let response = ServerMessage::LoginOk {
+                            username: username.clone(),
+                        };
+                        let _ = write_all_nonblocking(
+                            &mut *tls_write,
+                            response.to_json_line().as_bytes(),
+                        );
+                        let _ = tls_write.flush();
+                        println!("[SERVER] Sent LoginOk\n");
+                    }
 
                     // Le enviamos la lista una vez que entra, ya que la primera vez
                     // el usuario todavia no estaba adentro
-                    let user_list = ServerMessage::UserList {
-                        users: clients_list,
-                    };
-                    let list_json = user_list.to_json_line();
-                    let _ = write_all_nonblocking(&mut *tls_write, list_json.as_bytes());
-                    tls_write.flush()?;
-                    println!("[SERVER] Sent Initial UserList to new user");
+                    {
+                        let user_list = ServerMessage::UserList {
+                            users: clients_list,
+                        };
+                        let list_json = user_list.to_json_line();
+                        let mut tls_write = match write_tls.lock() {
+                            Ok(s) => s,
+                            Err(e) => {
+                                return Err(std::io::Error::other(format!(
+                                    "TLS mutex poisoned: {e}"
+                                )));
+                            }
+                        };
+                        let _ = write_all_nonblocking(&mut *tls_write, list_json.as_bytes());
+                        let _ = tls_write.flush();
+                        println!("[SERVER] Sent Initial UserList to new user");
+                    }
                 } else {
                     let response = ServerMessage::LoginError {
                         reason: "Datos invalidos o usuario ya conectado".to_string(),
                     };
-                    let response_json = response.to_json_line();
-
                     let mut tls_write = match write_tls.lock() {
                         Ok(s) => s,
                         Err(e) => {
@@ -286,8 +283,9 @@ fn handle_client(
                         }
                     };
 
-                    let _ = write_all_nonblocking(&mut *tls_write, response_json.as_bytes());
-                    tls_write.flush()?;
+                    let _ =
+                        write_all_nonblocking(&mut *tls_write, response.to_json_line().as_bytes());
+                    let _ = tls_write.flush();
                     println!("[SERVER] Login failed for '{}'", username);
                 }
             }
