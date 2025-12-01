@@ -1,9 +1,9 @@
-use serde::Deserialize;
+
 use std::{collections::HashMap, fs};
 
 use crate::json_parser::*;
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AppParameters {
     pub general_info: GeneralAppInfo,
     pub sdp_handshake: SdpHandshakeParameters,
@@ -18,7 +18,7 @@ impl AppParameters {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GeneralAppInfo {
     pub server_adder: String,
 }
@@ -31,7 +31,7 @@ impl GeneralAppInfo {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SdpHandshakeParameters {
     pub local_adder: String,
     pub server_adder: String,
@@ -52,7 +52,7 @@ impl SdpHandshakeParameters {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SignallingServerParameters {
     pub server_adder: String,
     pub users_db: String,

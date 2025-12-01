@@ -1,5 +1,4 @@
 use crate::server_users_errors::LoginErrors;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 
@@ -12,7 +11,7 @@ pub struct ServerUserData {
 }
 
 /// Struct para representar el usuario en el servidor, contiene datos que perduran como datos volatiles como el estado de conexion
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct ServerUser {
     username: String,
     password: String,
@@ -20,14 +19,14 @@ pub struct ServerUser {
 }
 
 /// Struct utilizado de forma temporal para parsear los datos perdurables de los usuarios
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Clone)]
 struct UserLoginData {
     username: String,
     password: String,
 }
 
 ///Estado de conexion del usuario relevantes al login
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UserStatus {
     Conectado,
     Desconectado,
@@ -40,8 +39,7 @@ impl ServerUserData {
         let lectura = fs::read_to_string(file_path).map_err(|_| LoginErrors::FileNotFound)?;
 
         // Parseo Json a un vector de usuaruios
-        let lista_usuarios: Vec<UserLoginData> =
-            serde_json::from_str(&lectura).map_err(|_| LoginErrors::FileIncompatible)?;
+        let lista_usuarios = parse_json_login(&lectura)?;
 
         // Genero un hashmap con los usarios donde la clave es el nonmbre de usuario
         let mut users = HashMap::new();
@@ -166,14 +164,24 @@ impl ServerUserData {
 
     /// guardo los cambios en el archivo Json
     pub fn guardar_cambios(&self) -> Result<(), LoginErrors> {
-        //No necesito las claves del hashmap, solo los valores
-        let lista_usuarios: Vec<&ServerUser> = self.users.values().collect();
+        let users: Vec<&ServerUser> = self.users.values().collect();
 
-        //serializo
-        let json = serde_json::to_string_pretty(&lista_usuarios)
-            .map_err(|_| LoginErrors::FileIncompatible)?;
+        let mut json = String::from("[\n");
+        for (i, user) in users.iter().enumerate() {
+            json.push_str("  {\n");
+            json.push_str(&format!("\"username\": \"{}\",\n", user.username));
+            json.push_str(&format!("\"password\": \"{}\"\n", user.password));
+            json.push_str("  }");
 
-        //escribo en el archivo
+            if i < users.len() - 1 {
+                json.push_str(",");
+            }
+            json.push_str("\n");
+        }
+
+        json.push_str("]");
+
+        // lo guardamos
         fs::write(&self.file_path, json).map_err(|_| LoginErrors::FileNotFound)?;
         eprintln!(
             "[SERVER USERS] Changes saved to {}, {} total users",
@@ -214,5 +222,209 @@ impl ServerUserData {
 impl ServerUser {
     pub fn get_username(&self) -> String {
         self.username.clone()
+    }
+}
+
+
+fn parse_json_login(json_str: &str) -> Result<Vec<UserLoginData>, LoginErrors> {
+    let mut users = Vec::new();
+    let str_json = json_str.trim();
+
+    // manejo de caso vacio
+    if str_json == "[]" {
+        return Ok(users); 
+    }
+
+    // saco []
+    if !str_json.starts_with('[') || !str_json.ends_with(']') {
+        return Err(LoginErrors::FileIncompatible);
+    }
+    
+    let inner_content = &str_json[1..str_json.len() - 1].trim();
+    // otro manejo de caso vacio
+    if inner_content.is_empty() {
+        return Ok(users);
+    }
+
+    let items: Vec<&str> = inner_content.split("},").map(|s| s.trim()).collect();
+    for item in items {
+        let mut item_trim = item.trim();
+
+        // Saco {}
+        if item_trim.starts_with('{') {
+            item_trim = &item_trim[1..];
+        }
+        if item_trim.ends_with('}') {
+            item_trim = &item_trim[..item_trim.len() - 1];
+        }
+
+        let mut username = None;
+        let mut password = None;
+
+        // Separo key - valor
+        let keys_values: Vec<&str> = item_trim.split(',').map(|s| s.trim()).collect();
+
+        for key_value in keys_values {
+            let kv: Vec<&str> = key_value
+                .split(':')
+                .map(|s| s.trim()
+                .trim_matches('"'))
+                .collect();
+
+            if kv.len() != 2 {
+                continue;
+            }
+
+            match kv[0] {
+                "username" => username = Some(kv[1].to_string()),
+                "password" => password = Some(kv[1].to_string()),
+                _ => {}
+            }
+        }
+
+        if let (Some(username), Some(password)) = (username, password) {
+            users.push(UserLoginData { username, password });
+        } else {
+            return Err(LoginErrors::FileIncompatible);
+        }
+    }
+
+    Ok(users)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::NamedTempFile;
+
+    /// Trabajo con archivos temporales para no generar archivos de mas
+    /// Crea un archivo temporal con el contenido dado y devuelve el NamedTempFile
+    fn create_test_file(content: &str) -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        fs::write(file.path(), content).unwrap();
+        file
+    }
+
+    #[test]
+    /// Prueba que la función new carga correctamente los usuarios desde un archivo JSON
+    fn test_new_loads_users_correctly() {
+        let test_data = r#"
+        [
+            {"username": "user1", "password": "pass1"},
+            {"username": "user2", "password": "pass2"}
+        ]
+        "#;
+
+        let file = create_test_file(test_data);
+        let server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(server_data.users.len(), 2);
+        assert!(server_data.users.contains_key("user1"));
+        assert!(server_data.users.contains_key("user2"));
+    }
+
+    #[test]
+    /// Prueba que la funcion verificar_login retorna Ok para credenciales correctas
+    fn test_verificar_login_success() {
+        let test_data = r#"
+        [
+            {"username": "testuser", "password": "testpass"}
+        ]
+        "#;
+
+        let file = create_test_file(test_data);
+        let server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        assert!(server_data.verificar_login("testuser", "testpass").is_ok());
+    }
+
+    #[test]
+    /// Prueba que la funcion verificar_login retorna un error para una contraseña incorrecta
+    fn test_verificar_login_wrong_password() {
+        let test_data = r#"
+        [
+            {"username": "testuser", "password": "testpass"}
+        ]
+        "#;
+
+        let file = create_test_file(test_data);
+        let server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        let result = server_data.verificar_login("testuser", "wrongpass");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    /// Prueba que la funcion conectar y desconectar funcionan correctamente
+    fn test_conectar_and_desconectar() {
+        let test_data = r#"
+        [
+            {"username": "testuser", "password": "testpass"}
+        ]
+        "#;
+
+        let file = create_test_file(test_data);
+        let mut server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        // conecto
+        assert!(server_data.conectar("testuser").is_ok());
+        assert_eq!(server_data.users.get("testuser").unwrap().status,UserStatus::Conectado);
+
+        // desconecto
+        assert!(server_data.desconectar("testuser").is_ok());
+        assert_eq!(server_data.users.get("testuser").unwrap().status,UserStatus::Desconectado);
+    }
+
+    #[test]
+    /// Prueba que la funcion add_user agrega un nuevo usuario correctamente y no permite duplicados
+    fn test_add_user() {
+        let file = create_test_file("[]");
+        let mut server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        // agrego nuevo usuario
+        assert!(server_data.add_user("newuser", "newpass").is_ok());
+        assert!(server_data.users.contains_key("newuser"));
+        assert!(server_data.verificar_login("newuser", "newpass").is_ok());
+
+        // Usuario duplicado debería dar error
+        let result = server_data.add_user("newuser", "otherpass");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    /// Prueba que la funcion get_listado_usuarios retorna la lista correcta de usuarios
+    fn test_get_listado_usuarios() {
+        let test_data = r#"
+        [
+            {"username": "user1", "password": "pass1"},
+            {"username": "user2", "password": "pass2"}
+        ]
+        "#;
+
+        let file = create_test_file(test_data);
+        let server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        let usuarios = server_data.get_listado_usuarios();
+        assert_eq!(usuarios.len(), 2);
+        assert!(usuarios.contains(&"user1".to_string()));
+        assert!(usuarios.contains(&"user2".to_string()));
+    }
+
+    #[test]
+    /// Prueba que la funcion verificar_login retorna un error cuando el usuario no existe
+    fn test_verificar_login_user_not_found() {
+        let test_data = r#"
+        [
+            {"username": "testuser", "password": "testpass"}
+        ]
+        "#;
+
+        let file = create_test_file(test_data);
+        let server_data = ServerUserData::new(file.path().to_str().unwrap()).unwrap();
+
+        let result = server_data.verificar_login("nonexistent", "password");
+        assert!(result.is_err());
     }
 }
