@@ -175,7 +175,6 @@ impl AppUI {
                             ServerMessage::CallRejected { .. } => {
                                 let _ = tx.send(AppEvent::SdpMessage(msg));
                             }
-                            // Fixed: CalledUserBusy is a unit variant; match without `{ .. }`
                             ServerMessage::CalledUserBusy => {
                                 let _ = tx.send(AppEvent::CalledUserBusy);
                             }
@@ -333,7 +332,6 @@ impl AppUI {
                         username: me.clone(),
                         target_user: target_user.clone(),
                     };
-                    // let _ = writer.write_all(msg.to_json_line().as_bytes());
                     let writer_arc = Arc::clone(writer);
                     let write_thread = std::thread::spawn(move || {
                         let mut guard_write = match writer_arc.lock() {
@@ -517,13 +515,16 @@ impl AppUI {
         }
     }
 
-    fn crear_cliente(&mut self, socket: UdpSocket) {
+    fn crear_cliente(&mut self, socket: UdpSocket, is_active: bool) {
         let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
         self.rx_remoto = Some(rx_remoto);
         if let Some(cam) = &self.camara {
             let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
+                
+                // Setear Rol DTLS (True = Caller/Cliente, False = Callee/Servidor)
+                c.set_rol(is_active);
                 self.client_handles = c.initialize_call();
                 self.cliente = Some(c);
             }
@@ -646,7 +647,7 @@ impl eframe::App for AppUI {
                 AppEvent::ConnectionLost => {
                     self.cambiar_vista(CambioVista::ToLogin);
                     if let Vista::VistaLogin(login) = &mut self.vista_actual {
-                        login.error_msg = Some("Se perdió la conexión al servidor.".into());
+                        login.error_msg = Some("Conection lost".into());
                     }
                 }
             }
@@ -662,7 +663,13 @@ impl eframe::App for AppUI {
             match result {
                 Ok((socket, _, _)) => {
                     self.pedido_socket = None;
-                    self.crear_cliente(socket);
+                    
+                    // --- CORRECCIÓN AQUÍ: Determinar ROL ---
+                    // Si pending_offer es None -> Yo inicié la llamada -> SOY CALLER (True)
+                    // Si pending_offer es Some -> Me llamaron -> SOY CALLEE (False)
+                    let is_caller = self.pending_offer.is_none();
+                    
+                    self.crear_cliente(socket, is_caller);
                     self.cambiar_vista(CambioVista::ToCall);
                 }
                 Err(_) => self.cambiar_vista(CambioVista::ToLobby {
