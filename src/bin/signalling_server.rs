@@ -46,7 +46,7 @@ fn main() -> Result<(), SignallingServerError> {
         .map_err(|_| SignallingServerError::ConnectionError)?;
 
     let file_path = &server_info.users_db;
-    let login = ServerUserData::new(file_path).unwrap();
+    let login = ServerUserData::new(file_path).map_err(|e| SignallingServerError::FileNotFound(e))?;
 
     let active_clients: Arc<Mutex<ServerUserData>> = Arc::new(Mutex::new(login));
 
@@ -121,7 +121,7 @@ fn handle_client(
     let mut buffer = [0u8; 4096];
     // Loop infinito: leer múltiples mensajes del mismo cliente
     loop {
-        let mut guard_read = match read_tls.lock() {
+        let mut guard_read = match read_tls.lock().map_err(|_e| SignallingServerError::SyncError) {
             Ok(rg) => rg,
             Err(e) => {
                 return Err(std::io::Error::other(format!("TLS mutex poisoned: {e}")));
@@ -150,11 +150,11 @@ fn handle_client(
                 {
                     // Dejar los cochetes es para que se dropee el lock cuando salga del scope
                     // Sacar del mapa de conexiones
-                    let mut clients_map = connected_clients.lock().unwrap();
+                    let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     clients_map.remove(user);
 
                     //de haber estado ocupado sacar tambien de ahi
-                    let mut busy_map = busy_clients.lock().unwrap();
+                    let mut busy_map = busy_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     busy_map.remove(user);
 
                     // Avisar a todos los demás que este usuario se fue
@@ -180,7 +180,7 @@ fn handle_client(
                     eprintln!("[SERVER] Removed {} and notified others", user);
                 }
                 // Desconectar el client
-                let mut clients = active_clients.lock().unwrap();
+                let mut clients = active_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 let _ = clients.desconectar(user);
             }
 
@@ -200,7 +200,7 @@ fn handle_client(
 
         match ClientMessage::from_json(&line) {
             Some(ClientMessage::Login { username, password }) => {
-                let mut clients = active_clients.lock().unwrap();
+                let mut clients = active_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 if clients.verificar_login(&username, &password).is_ok() {
                     // Marcar como conectado en la BD
                     let _ = clients.conectar(&username);
@@ -208,7 +208,7 @@ fn handle_client(
                     eprintln!("[SERVER] User '{}' logged in", username);
 
                     {
-                        let mut clients_map = connected_clients.lock().unwrap();
+                        let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
 
                         // Server avisa a los ya conectados que entró uno nuevo (avisa a todos los Observers)
                         let msg_joined = ServerMessage::UserJoined {
@@ -298,7 +298,7 @@ fn handle_client(
                 eprintln!("[SERVER] CallStarted from {} to {}", username, target_user);
 
                 // checkeo si alguno de los dos ya está ocupado
-                let mut busy_map = busy_clients.lock().unwrap();
+                let mut busy_map = busy_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 if busy_map.contains_key(&target_user) || busy_map.contains_key(&username) {
                     eprintln!("[SERVER] Busy user. Notifying caller {}", username);
                     let response = ServerMessage::CalledUserBusy;
@@ -316,7 +316,7 @@ fn handle_client(
                 }
 
                 // Si ambos están libres, agarro streams y los marco como ocupados.
-                let clients_map = connected_clients.lock().unwrap();
+                let clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 let user1 = clients_map.get(&username);
                 let user2 = clients_map.get(&target_user);
 
@@ -331,7 +331,7 @@ fn handle_client(
 
             Some(ClientMessage::SignUp { username, password }) => {
                 // Tomo la lista de clientes
-                let mut clients = active_clients.lock().unwrap();
+                let mut clients = active_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
 
                 match clients.verificar_signup(&username, &password) {
                     Ok(()) => {
@@ -345,7 +345,7 @@ fn handle_client(
                         eprintln!("[SERVER] User '{}' logged in", username);
 
                         {
-                            let mut clients_map = connected_clients.lock().unwrap();
+                            let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
 
                             // Server avisa a los ya conectados que entró uno nuevo (avisa a todos los Observers)
                             let msg_joined = ServerMessage::UserJoined {
@@ -442,7 +442,7 @@ fn handle_client(
 
             Some(ClientMessage::Logout { username }) => {
                 {
-                    let mut clients = active_clients.lock().unwrap();
+                    let mut clients = active_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     let _ = clients.desconectar(&username);
                 }
 
@@ -464,11 +464,11 @@ fn handle_client(
 
                 // Sacar la conexión de los conectados y notificar salida
                 {
-                    let mut clients_map = connected_clients.lock().unwrap();
+                    let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     clients_map.remove(&username);
 
                     //tambien lo saco de ocupado de haberlo estado
-                    let mut busy_map = busy_clients.lock().unwrap();
+                    let mut busy_map = busy_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     busy_map.remove(&username);
 
                     let msg_left = ServerMessage::UserLeft {
@@ -497,7 +497,7 @@ fn handle_client(
 
             Some(ClientMessage::GetUsers {}) => {
                 // lockeamos para leerlo y evitar inconsistencias
-                let clients_guard = connected_clients.lock().unwrap();
+                let clients_guard = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
 
                 let users_vec: Vec<String> = clients_guard.keys().cloned().collect();
                 drop(clients_guard);
@@ -529,7 +529,7 @@ fn handle_client(
 
                 // Almacenar el offer recibido
                 {
-                    let mut offers_map = stored_offers.lock().unwrap();
+                    let mut offers_map = stored_offers.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     let stored = StoredOffer {
                         from_user: username.clone(),
                         offer: offer.clone(),
@@ -539,7 +539,7 @@ fn handle_client(
 
                 // Reenviar el offer al client al que me quiero conectar
                 if let Some(target) = target_user {
-                    let busy_map = busy_clients.lock().unwrap();
+                    let busy_map = busy_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     if busy_map.contains_key(&target) {
                         eprintln!(
                             "[SERVER] Target {} is busy. Notifying caller {}",
@@ -562,7 +562,7 @@ fn handle_client(
                         );
                         tls_write.flush()?;
                     } else {
-                        let mut clients_map = connected_clients.lock().unwrap();
+                        let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                         if let Some(target_stream) = clients_map.get_mut(&target) {
                             let response = ServerMessage::OfferForwarded {
                                 from_user: username.clone(),
@@ -603,7 +603,7 @@ fn handle_client(
                     username, target_user
                 );
 
-                let mut clients_map = connected_clients.lock().unwrap();
+                let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 //  Creo mensaje del answer al client que envió el offer
                 if let Some(target_stream) = clients_map.get_mut(&target_user) {
                     let response = ServerMessage::AnswerForwarded {
@@ -649,7 +649,7 @@ fn handle_client(
                 username: _,
                 target_user,
             }) => {
-                let offers_map = stored_offers.lock().unwrap();
+                let offers_map = stored_offers.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
 
                 let mut tls_write = match write_tls.lock() {
                     Ok(s) => s,
@@ -685,15 +685,15 @@ fn handle_client(
 
                 //saco a username de ocupado
                 {
-                    let mut busy_map = busy_clients.lock().unwrap();
+                    let mut busy_map = busy_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                     busy_map.remove(&username);
                 }
 
-                let clients_map = connected_clients.lock().unwrap();
+                let clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 if let Some(target_stream) = clients_map.get(&target_user) {
                     //Ese usuario tambien va a dejar de estar ocupado
                     {
-                        let mut busy_map = busy_clients.lock().unwrap();
+                        let mut busy_map = busy_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                         busy_map.remove(&target_user);
                     }
 
@@ -728,7 +728,7 @@ fn handle_client(
                     username, target_user
                 );
 
-                let mut clients_map = connected_clients.lock().unwrap();
+                let mut clients_map = connected_clients.lock().map_err(|e| std::io::Error::other(format!("Sync Error: Cant use resource now {e}")))?;
                 if let Some(target_stream) = clients_map.get_mut(&target_user) {
                     // Notificamos al client que llamó que fue rechazado
                     let response = ServerMessage::CallRejected {
