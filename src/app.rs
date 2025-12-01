@@ -285,10 +285,15 @@ impl AppUI {
 
             // Llamada aceptada
             CambioVista::ToCall => {
-                self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
+                if let Some(c) = &self.cliente {
+                    let stats = c.copy_stats();
+
+                    self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
                     self.rx_remoto.take(),
                     Arc::clone(&self.in_call),
+                    stats,
                 ))
+                }
             }
 
             // finalizo llamada -> pantalla de fin de llamada con boton a volver al lobby

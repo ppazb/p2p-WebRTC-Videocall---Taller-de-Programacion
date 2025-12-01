@@ -33,6 +33,50 @@ pub struct RtcStats {
     pub last_pkt_timestamp: u32,
     pub last_arrival_time: Option<Instant>,
     pub initialized: bool,
+
+    // Stats for calculating rates
+    last_bytes: u32,
+    last_packets: u32,
+    last_rate_update: Option<Instant>,
+    bitrate: f64,
+    pps: f64,
+    last_jitter: f64,
+}
+
+impl RtcStats {
+    pub fn get_bitrate(&self) -> f64 {
+        self.bitrate
+    }
+    pub fn get_pps(&self) -> f64 {
+        self.pps
+    }
+    pub fn get_jitter(&self) -> f64 {
+        self.last_jitter
+    }
+
+    pub fn update_rates(&mut self) {
+        let now = Instant::now();
+
+        // Actualización de rates para UI (cada segundo)
+        if let Some(last_rate_update) = self.last_rate_update {
+            let duration = now.duration_since(last_rate_update);
+
+            if duration > Duration::from_secs(1) {
+                let bytes_dif = self.bytes_received - self.last_bytes;
+                let packets_dif = self.packets_received - self.last_packets;
+
+                self.bitrate = (bytes_dif as f64 * 8.0) / duration.as_secs_f64();
+                self.pps = (packets_dif as f64) / duration.as_secs_f64();
+
+                // Actualizo valores para la siguiente toma
+                self.last_bytes = self.bytes_received;
+                self.last_packets = self.packets_received;
+                self.last_rate_update = Some(now);
+
+                self.last_jitter = self.jitter;
+            }
+        }
+    }
 }
 
 struct JitterBuffer {
@@ -398,22 +442,29 @@ impl Client {
     fn update_rtp_stats(stats: &Arc<Mutex<RtcStats>>, rtp: &RtpPackage, packet_len: usize) {
         if let Ok(mut update_stats) = stats.lock().map_err(|_e| ClientErrors::StatsCouldtGets) {
             let now = Instant::now();
+
+            // Primera inicialización
             if !update_stats.initialized {
                 update_stats.base_seq = rtp.secuence_number;
                 update_stats.max_seq_received = rtp.secuence_number;
                 update_stats.last_pkt_timestamp = rtp.time_stamp;
                 update_stats.last_arrival_time = Some(now);
+                update_stats.last_rate_update = Some(now);
                 update_stats.initialized = true;
             }
+
+            // Contadores de recepción
             update_stats.packets_received += 1;
             update_stats.bytes_received += packet_len as u32;
 
+            // Actualización de secuencias
             let seq = rtp.secuence_number;
             if seq < update_stats.max_seq_received && (update_stats.max_seq_received as i32 - seq as i32) > 30000 {
                 update_stats.cycles += 1;
             }
             if seq > update_stats.max_seq_received { update_stats.max_seq_received = seq; }
 
+            // Calculo de jitter
             if let Some(last_arrival) = update_stats.last_arrival_time {
                 let dif_arrival = now.duration_since(last_arrival).as_millis() as f64;
                 let dif_timestamp = (rtp.time_stamp as f64 - update_stats.last_pkt_timestamp as f64).abs();
@@ -422,6 +473,8 @@ impl Client {
             }
             update_stats.last_pkt_timestamp = rtp.time_stamp;
             update_stats.last_arrival_time = Some(now);
+
+            update_stats.update_rates();
         }
     }
 
@@ -498,5 +551,9 @@ impl Client {
             }
             if handshake_start.elapsed() > handshake_timeout { return Ok(false); }
         }
+    }
+
+    pub fn copy_stats(&self) -> Arc<Mutex<RtcStats>> {
+        Arc::clone(&self.stats)
     }
 }
