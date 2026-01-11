@@ -174,12 +174,12 @@ impl ServerUserData {
             json.push_str("  }");
 
             if i < users.len() - 1 {
-                json.push_str(",");
+                json.push(',');
             }
-            json.push_str("\n");
+            json.push('\n');
         }
 
-        json.push_str("]");
+        json.push(']');
 
         // lo guardamos
         fs::write(&self.file_path, json).map_err(|_| LoginErrors::FileNotFound)?;

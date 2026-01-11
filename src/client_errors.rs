@@ -1,5 +1,3 @@
-use dimpl::certificate::CertificateError;
-
 use crate::encoding_errors::{DecodingErrors, EncodingErrors};
 use crate::ice_errors::IceErrors;
 use crate::mensaje_errors::MessageErrors;
@@ -22,7 +20,6 @@ pub enum ClientErrors {
     SendBits,
     SdpError(SdpError),
     IceError(IceErrors),
-    DtlsError(CertificateError),
     SocketNotInitialized,
     StatsCouldtGets,
 }
@@ -56,11 +53,6 @@ impl From<DecodingErrors> for ClientErrors {
         Self::DecodingError(err)
     }
 }
-impl From<CertificateError> for ClientErrors {
-    fn from(err: CertificateError) -> Self {
-        Self::DtlsError(err)
-    }
-}
 
 impl From<SdpError> for ClientErrors {
     fn from(error: SdpError) -> Self {
@@ -89,7 +81,6 @@ impl fmt::Display for ClientErrors {
             Self::SendBits => writeln!(f, "Error: \"No se pudieron enviar los bits\""),
             Self::SdpError(sdp_error) => writeln!(f, "{}", sdp_error),
             Self::IceError(ice_error) => writeln!(f, "{}", ice_error),
-            Self::DtlsError(dtls_error) => writeln!(f, "{}", dtls_error),
             Self::SocketNotInitialized => writeln!(f, "El cliente no tiene socket"),
             Self::StatsCouldtGets => writeln!(f, "No se pudo obtener las estadisticas"),
         }

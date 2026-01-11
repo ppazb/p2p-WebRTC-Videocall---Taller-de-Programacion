@@ -15,6 +15,12 @@ pub struct VistaSignUp {
     pub auth_pending: bool,
 }
 
+impl Default for VistaSignUp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VistaSignUp {
     pub fn new() -> Self {
         Self {
@@ -151,6 +157,6 @@ impl VistaSignUp {
             );
         });
 
-        return cambio;
+        cambio
     }
 }
