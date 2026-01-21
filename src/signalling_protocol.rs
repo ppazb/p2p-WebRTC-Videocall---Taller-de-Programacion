@@ -1,4 +1,4 @@
-use crate::json_parser::json_clasify;
+use crate::{client::Client, json_parser::json_clasify};
 use std::io::{self, ErrorKind, Write};
 
 /// Mensajes que envía el cliente al servidor
@@ -54,6 +54,24 @@ pub enum ClientMessage {
         username: String,
         target_user: String,
     },
+
+    FileSendingRequest {
+        username: String, 
+        target_user: String, 
+        filename: String
+    }, 
+
+    FileSendingReject {
+        username: String, 
+        target_user: String, 
+        filename: String
+    }, 
+
+    FileSendingAccept {
+        username: String, 
+        target_user: String, 
+        filename: String
+    }, 
 }
 
 /// Mensajes que envía el servidor al cliente
@@ -85,6 +103,18 @@ pub enum ServerMessage {
 
     CallEnded { from_user: String },
     CallRejected { from_user: String },
+
+    // Servidor al recibir el request de un Client de mandar un archivo a otro Client
+    // envía un Message al Client solicitado para recibir el archivo 
+    FileSendingRequestForwarded { from_user: String, filename: String }, 
+
+    // El Client Receptor del archivo cuando RECHAZA la solicitud de 
+    // envío de archivo, el Servidor le manda al Client Emisor un Mensaje de Rechazo 
+    FileSendingRejected { from_user: String, filename: String }, 
+
+    // El Client Receptor del archivo cuando ACEPTA la solicitud de envío de archivo, 
+    // el Servidor le manda al Client Emisor un Mensaje de Aceptación
+    FileSendingAccepted { from_user: String, filename: String}, 
 
     Error { reason: String },
 }
@@ -176,6 +206,27 @@ impl ClientMessage {
                 replace_special_character(username),
                 replace_special_character(target_user)
             ),
+
+            ClientMessage::FileSendingRequest { username, target_user, filename } => format!(
+                "{{\"type\":\"file_sending_request\",\"username\":\"{}\",\"target_user\":\"{}\",\"filename\":\"{}\"}}\n",
+                replace_special_character(username),
+                replace_special_character(target_user),
+                replace_special_character(filename)
+            ),
+
+            ClientMessage::FileSendingReject { username, target_user, filename } => format!(
+                "{{\"type\":\"file_sending_deny\",\"username\":\"{}\",\"target_user\":\"{}\",\"filename\":\"{}\"}}\n",
+                replace_special_character(username),
+                replace_special_character(target_user),
+                replace_special_character(filename)
+            ),
+
+            ClientMessage::FileSendingAccept { username, target_user, filename } => format!(
+                "{{\"type\":\"file_sending_accept\",\"username\":\"{}\",\"target_user\":\"{}\",\"filename\":\"{}\"}}\n",
+                replace_special_character(username),
+                replace_special_character(target_user),
+                replace_special_character(filename)
+            ),
         }
     }
 
@@ -232,6 +283,21 @@ impl ClientMessage {
             "call_started" => Some(ClientMessage::CallStarted {
                 username: parsed_objects.get("username")?.as_str(),
                 target_user: parsed_objects.get("target_user")?.as_str(),
+            }),
+            "file_sending_request" => Some(ClientMessage::FileSendingRequest {
+                username: parsed_objects.get("username")?.as_str(),
+                target_user: parsed_objects.get("target_user")?.as_str(),
+                filename: parsed_objects.get("filename")?.as_str(),
+            }),
+            "file_sending_reject" => Some(ClientMessage::FileSendingReject {
+                username: parsed_objects.get("username")?.as_str(),
+                target_user: parsed_objects.get("target_user")?.as_str(),
+                filename: parsed_objects.get("filename")?.as_str(),
+            }),
+            "file_sending_accept" => Some(ClientMessage::FileSendingAccept {
+                username: parsed_objects.get("username")?.as_str(),
+                target_user: parsed_objects.get("target_user")?.as_str(),
+                filename: parsed_objects.get("filename")?.as_str(),
             }),
             _ => None,
         }
@@ -312,6 +378,24 @@ impl ServerMessage {
                 "{{\"type\":\"error\",\"reason\":\"{}\"}}\n",
                 replace_special_character(reason)
             ),
+
+            ServerMessage::FileSendingRequestForwarded { from_user, filename } => format!(
+                "{{\"type\":\"file_sending_request_forwarded\",\"from_user\":\"{}\",\"filename\":\"{}\"}}\n",
+                replace_special_character(from_user),
+                replace_special_character(filename)
+            ),
+
+            ServerMessage::FileSendingRejected { from_user, filename } => format!(
+                "{{\"type\":\"file_sending_rejected\",\"from_user\":\"{}\",\"filename\":\"{}\"}}\n",
+                replace_special_character(from_user),
+                replace_special_character(filename)
+            ),
+
+            ServerMessage::FileSendingAccepted { from_user, filename } => format!(
+                "{{\"type\":\"file_sending_accepted\",\"from_user\":\"{}\",\"filename\":\"{}\"}}\n",
+                replace_special_character(from_user),
+                replace_special_character(filename)
+            ),
         }
     }
 
@@ -376,6 +460,21 @@ impl ServerMessage {
 
             "call_rejected" => Some(ServerMessage::CallRejected {
                 from_user: parsed_objects.get("from_user")?.as_str(),
+            }),
+
+            "file_sending_request_forwarded" => Some(ServerMessage::FileSendingRequestForwarded {
+                from_user: parsed_objects.get("from_user")?.as_str(),
+                filename: parsed_objects.get("filename")?.as_str(),
+            }),
+
+            "file_sending_rejected" => Some(ServerMessage::FileSendingRejected {
+                from_user: parsed_objects.get("from_user")?.as_str(),
+                filename: parsed_objects.get("filename")?.as_str(),
+            }),
+
+            "file_sending_accepted" => Some(ServerMessage::FileSendingAccepted {
+                from_user: parsed_objects.get("from_user")?.as_str(),
+                filename: parsed_objects.get("filename")?.as_str(),
             }),
 
             "error" => Some(ServerMessage::Error {

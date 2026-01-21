@@ -9,9 +9,7 @@ use rustls::StreamOwned;
 use crate::{
     camera::Camera,
     vista::{
-        call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy,
-        cambio::CambioVista, incoming_call::VistaIncomingCall, llamada::VistaLlamada,
-        lobby::VistaLobby, login::VistaLogin, sign_up::VistaSignUp,
+        call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy, cambio::CambioVista, file_sending::VistaSendFile, incoming_call::VistaIncomingCall, llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin, sign_up::VistaSignUp
     },
 };
 use opencv::{
@@ -28,6 +26,7 @@ pub mod llamada;
 pub mod lobby;
 pub mod login;
 pub mod sign_up;
+pub mod file_sending;
 
 pub enum Vista {
     VistaLogin(VistaLogin),
@@ -38,6 +37,10 @@ pub enum Vista {
     VistaCallEnd(VistaCallEnd),
     VistaIncomingCall(VistaIncomingCall),
     VistaCalledUserBusy(VistaCalledUserBusy),
+    VistaSendFile(VistaSendFile),
+    VistaFileSendingRequested(String, String),
+    VistaTargetUserFileSendingAccepted(String, String),
+    VistaTargetUserFileSendingRejected(String, String),
 }
 
 impl Vista {
@@ -56,7 +59,75 @@ impl Vista {
             Vista::VistaCallEnd(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaCalledUserBusy(view) => view.ui(ctx, camara),
+            Vista::VistaSendFile(view) => view.ui(ctx), 
+            Vista::VistaFileSendingRequested(from_user, filename) => Self::file_sending_requested_pop_up(ctx, from_user, filename), 
+            Vista::VistaTargetUserFileSendingAccepted(from_user, filename) => Self::file_sending_accepted_pop_up(ctx, from_user, filename),
+            Vista::VistaTargetUserFileSendingRejected(from_user, filename) => Self::file_sending_rejected_pop_up(ctx, from_user, filename),
         }
+    }
+
+    fn file_sending_requested_pop_up(ctx: &egui::Context, from_user: &str, filename: &str) -> CambioVista {
+        let mut cambio = CambioVista::None;
+
+        egui::Window::new("Solicitud de envío de archivo")
+            .collapsible(true)
+            .resizable(true)
+            .default_width(300.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label(format!("Usuario {} quiere enviarte un archivo: {}", from_user, filename));
+
+                ui.horizontal(|ui| {
+                    if ui.button("Aceptar").clicked() {
+                        // Lógica para aceptar el envío
+                        cambio = CambioVista::SendFileAccepted { from_user: from_user.to_string(), filename: filename.to_string() }; // Cambiar según corresponda
+                    }
+                    if ui.button("Rechazar").clicked() {
+                        // Lógica para rechazar el envío
+                        cambio = CambioVista::SendFileRejected { from_user: from_user.to_string(), filename: filename.to_string() }; // Cambiar según corresponda
+                    }
+                });
+            });
+
+        cambio
+    }
+
+    fn file_sending_accepted_pop_up(ctx: &egui::Context, from_user: &str, filename: &str) -> CambioVista {
+        let mut cambio = CambioVista::None;
+
+        egui::Window::new("Solicitud Aceptada")
+            .collapsible(true)
+            .resizable(true)
+            .default_width(500.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label(format!("El usuario {} ha aceptado recibir el archivo: {}", from_user, filename));
+
+                if ui.button("Cerrar").clicked() {
+                    cambio = CambioVista::SendFileNoticeClosed; 
+                }
+            });
+
+        cambio
+    }
+
+    fn file_sending_rejected_pop_up(ctx: &egui::Context, from_user: &str, filename: &str) -> CambioVista {
+        let mut cambio = CambioVista::None;
+
+        egui::Window::new("Solicitud Rechazada")
+            .collapsible(true)
+            .resizable(true)
+            .default_width(500.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label(format!("El usuario {} ha rechazado recibir el archivo: {}", from_user, filename));
+
+                if ui.button("Cerrar").clicked() {
+                    cambio = CambioVista::None; 
+                }
+            });
+
+        cambio
     }
 
     fn generar_imagen(frame: &Mat) -> Option<ColorImage> {

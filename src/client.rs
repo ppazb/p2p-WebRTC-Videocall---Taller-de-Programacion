@@ -1,17 +1,19 @@
 use crate::camera::Camera;
 use crate::client_errors::ClientErrors;
 use crate::encoding::{DecoderRtc, EncoderRtc};
+use crate::file_path::FilePathPacket;
 use crate::mensaje::Message;
 use crate::mensaje::{Content, Signal};
 use crate::rtcp::{Bye, ReceiverReport, ReportBlock, RtcpPacket, SenderReport};
 use crate::rtp::RtpPackage;
+use crate::sctp::{MuxedUdpStream, SctpStats};
 use crate::sdp_protocol::*;
 use crate::video_processing_errors::VideoProcessingErrors;
 use opencv::core::{Mat, MatTraitConst};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -24,7 +26,7 @@ use openssl::bn::BigNum;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
-use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod, SslVerifyMode};
+use openssl::ssl::{self, HandshakeError, SslAcceptor, SslConnector, SslMethod, SslStream, SslVerifyMode};
 use openssl::x509::X509;
 
 #[derive(Debug, Default)]
@@ -123,11 +125,19 @@ impl JitterBuffer {
 pub struct Client {
     socket_send: Option<UdpSocket>,
     socket_recev: Option<UdpSocket>,
+    dtls_stream: Option<SslStream<UdpStream>>,
+
     tx_remoto: SyncSender<Mat>,
+    rx_file: Option<Receiver<FilePathPacket>>,
+
     in_call: Arc<AtomicBool>,
     is_active_comunicator: Arc<AtomicBool>,
     camera: Arc<Mutex<Camera>>,
     stats: Arc<Mutex<RtcStats>>,
+
+    sctp: Option<SctpStats>,
+    
+    is_initiator: Arc<AtomicBool>,
 }
 
 impl Client {
@@ -135,17 +145,23 @@ impl Client {
     /// tambien recive channel para comunicarse con la UI.
     pub fn new(
         tx_remoto: SyncSender<Mat>,
+        rx_file: Receiver<FilePathPacket>,
         in_call: Arc<AtomicBool>,
         camera: Arc<Mutex<Camera>>,
     ) -> Result<Self, ClientErrors> {
         Ok(Self {
             socket_recev: None,
             socket_send: None,
+            dtls_stream: None,
             tx_remoto,
+            rx_file: Some(rx_file),
             in_call,
             is_active_comunicator: Arc::new(AtomicBool::new(false)),
             camera,
             stats: Arc::new(Mutex::new(RtcStats::default())),
+
+            sctp: None, 
+            is_initiator: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -174,7 +190,7 @@ impl Client {
     /// Ademas cada hilo levanta los recursos necesarios: camara, decoder, encoder que necesite.
     /// Finalmente llama a metodo privados para encargar de toda la logica y manejo interno de la comunicacion.
     pub fn initialize_call(
-        &self,
+        &mut self,
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self
             .socket_recev
@@ -189,28 +205,36 @@ impl Client {
             .try_clone()
             .map_err(ClientErrors::CantClone)?;
         let socket_rtcp_out = socket_send.try_clone().map_err(ClientErrors::CantClone)?;
+        let local_adder = socket_recev.local_addr().map_err(|_| ClientErrors::SocketNotInitialized)?; 
+        let remote_adder = socket_recev.peer_addr().map_err(|_| ClientErrors::SocketNotInitialized)?;
+
+        let (tx_dtls, rx_dtls) = mpsc::sync_channel::<Vec<u8>>(256);
 
         let tx_remoto = self.tx_remoto.clone();
-        let in_call = Arc::clone(&self.in_call);
         let stats_recv = Arc::clone(&self.stats);
 
         // --- HANDSHAKE DTLS ROBUSTO ---
-        if let Err(e) = self.perform_dtls_handshake() {
-            eprintln!(
-                "[DTLS] Error Fatal: {:?}. La conexión no será segura o fallará.",
-                e
-            );
-            // Podríamos retornar error aquí si la seguridad es obligatoria
-        } else {
-            println!("[DTLS] Handshake Completado Correctamente.");
-        }
+        // if let Err(e) = self.perform_dtls_handshake() {
+        //     eprintln!(
+        //         "[DTLS] Error Fatal: {:?}. La conexión no será segura o fallará.",
+        //         e
+        //     );
+        //     // Podríamos retornar error aquí si la seguridad es obligatoria
+        // } else {
+        //     println!("[DTLS] Handshake Completado Correctamente.");
+        // }
+
+        let in_call = Arc::clone(&self.in_call);
+        let is_initiator = Arc::clone(&self.is_initiator);
 
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
-            let res = Self::reciver(
+            let res = Self::receiver(
                 &socket_recev,
                 &socket_rtcp_out,
                 &tx_remoto,
+                tx_dtls, // Para mandar paquetes DTLS
                 &in_call,
+                &is_initiator, 
                 &stats_recv,
             );
             if let Err(ref e) = res {
@@ -218,6 +242,52 @@ impl Client {
             }
             res
         });
+
+        // let mut sctpstats = self.sctp.take().ok_or(ClientErrors::SocketNotInitialized)?;
+
+        let rx_file = self
+            .rx_file
+            .take()
+            .ok_or(ClientErrors::SocketNotInitialized)?;
+
+
+        let mut ssl_muxed_stream = self.perform_dtls_handshake_mux(rx_dtls)?; 
+        let in_call = Arc::clone(&self.in_call);
+        let is_initiator = Arc::clone(&self.is_initiator);
+
+        let dtls_thread = std::thread::spawn(move || -> Result<(), ClientErrors> {
+            println!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
+            // Tengo que avisar al otro Peer Receptor de que va a ser el server. 
+
+            while in_call.load(Ordering::SeqCst) {
+                if let Ok(ui_pkt) = rx_file.try_recv() {
+                    if ui_pkt.is_server() {
+                        println!("[SCTP] RECEPTOR de Archivo"); 
+                        let mut sctp_stats = SctpStats::new(local_adder, remote_adder,  false, ui_pkt); 
+                        sctp_stats.file_receiver_handler(&mut ssl_muxed_stream); 
+                    } else {
+                        println!("[SCTP] EMISOR de Archivo"); 
+                        println!("[SCTP] EMISOR de Archivo con FilePath: {:?}", &ui_pkt.get_path()); 
+                        let mut sctp_stats = SctpStats::new(local_adder, remote_adder, true, ui_pkt); 
+                        sctp_stats.file_sender_handler(&mut ssl_muxed_stream); 
+                    }
+                }
+            }
+
+
+
+            // let res = dtls_receive_handler(
+            //     ssl_muxed_stream,
+            //     rx_file,
+            //     &mut sctpstats,
+            //     &in_call,
+            // ); 
+            // if let Err(ref e) = res {
+            //     eprintln!("[CRITICAL] DTLS thread died: {:?}", e);
+            // }
+            // res
+            Ok(())
+        }); 
 
         let in_call = Arc::clone(&self.in_call);
         let camera = Arc::clone(&self.camera);
@@ -231,7 +301,7 @@ impl Client {
             res
         });
 
-        Ok(vec![receiver_thread, sender_thread])
+        Ok(vec![receiver_thread, sender_thread, dtls_thread])
     }
 
     ///Levanta la camara, y se queda constantemente enviando mensajes por medio de la funcion
@@ -284,16 +354,25 @@ impl Client {
             }
         }
     }
+
+    fn is_dtls_packet(pkt: &[u8]) -> bool {
+        let first_byte = pkt[0]; 
+
+        (20..=64).contains(&first_byte)
+    }
+
     ///Crea un decoder, y una tabla de hash y luego se queda escuchando constantemente por el socket
     /// detecta el tipo de mensaje que se recive y delega la responsabilidad a la funcion determinada
     /// pasando los recursos necesarios para permitir el funcionamiento correcto
     /// la estructura esta pensada para ser escalable y agregar funcionalidad sea un proceso simple
     /// En caso de detectar el fin de la llamada comunica esta decision a la aplicacion para un correcto cierre.
-    fn reciver(
+    fn receiver(
         socket_recev: &UdpSocket,
         socket_rtcp_out: &UdpSocket,
         tx_remoto: &SyncSender<Mat>,
+        tx_dtls: SyncSender<Vec<u8>>,
         in_call: &Arc<AtomicBool>,
+        is_initiator: &Arc<AtomicBool>,
         stats: &Arc<Mutex<RtcStats>>,
     ) -> Result<(), ClientErrors> {
         let mut decoder = DecoderRtc::new_decoder()?;
@@ -325,34 +404,43 @@ impl Client {
                     let package_type: u8 = data[1];
                     let mut processed_as_rtcp = false;
 
-                    if (200..=204).contains(&package_type)
-                        && let Some(package) = RtcpPacket::from_bytes(data)
-                    {
-                        processed_as_rtcp = true;
-                        if let RtcpPacket::Bye(_) = package {
-                            println!("[RTCP] Recibido BYE. Cerrando llamada.");
-                            in_call.store(false, Ordering::SeqCst);
-                            return Ok(());
-                        }
-                    }
-                    if !processed_as_rtcp && let Some(msg) = Message::deserializable(data) {
-                        match msg.content {
-                            Content::Signal(signal) => Self::signal_handle(signal, in_call),
-                            Content::Text(_text) => continue,
-                            Content::Binary(media) => {
-                                if let Some(rtp_package) = RtpPackage::from_bytes(&media) {
-                                    Self::update_rtp_stats(stats, &rtp_package, n);
-                                }
-                                if let Some((ts, full_frame)) =
-                                    Self::reassemble_frame(media, &mut chunks_hash)
-                                {
-                                    jitter_buffer.push(ts, full_frame);
-                                    width = msg.dimension.0;
-                                    height = msg.dimension.1;
+                    if Self::is_dtls_packet(&data) {
+                        println!("[DTLS] Paquete DTLS recibido"); 
+                        let _ = tx_dtls.send(data.to_vec());
+                        
+                    } else {
+
+                        // Si no es DTLS entonces va para Media
+                        if (200..=204).contains(&package_type)
+                                && let Some(package) = RtcpPacket::from_bytes(data)
+                            {
+                                processed_as_rtcp = true;
+                                if let RtcpPacket::Bye(_) = package {
+                                    println!("[RTCP] Recibido BYE. Cerrando llamada.");
+                                    in_call.store(false, Ordering::SeqCst);
+                                    return Ok(());
                                 }
                             }
-                        }
+                            if !processed_as_rtcp && let Some(msg) = Message::deserializable(data) {
+                                match msg.content {
+                                    Content::Signal(signal) => Self::signal_handle(signal, in_call),
+                                    Content::Text(text) => continue, 
+                                    Content::Binary(media) => {
+                                        if let Some(rtp_package) = RtpPackage::from_bytes(&media) {
+                                            Self::update_rtp_stats(stats, &rtp_package, n);
+                                        }
+                                        if let Some((ts, full_frame)) =
+                                            Self::reassemble_frame(media, &mut chunks_hash)
+                                        {
+                                            jitter_buffer.push(ts, full_frame);
+                                            width = msg.dimension.0;
+                                            height = msg.dimension.1;
+                                        }
+                                    }
+                                }
+                            }
                     }
+  
                 }
                 Err(ref e)
                     if e.kind() == std::io::ErrorKind::TimedOut
@@ -547,7 +635,7 @@ impl Client {
     /// y matchea si el hadnshake fue exitoso.
     /// El unico factor importante es el seteo de "cliente activo" para saber quien actuara de cliente
     /// y quien de servidor. Si el handshake falla la comunicacion deberia cortarse puesto que no es segura
-    pub fn perform_dtls_handshake(&self) -> Result<bool, ClientErrors> {
+    pub fn perform_dtls_handshake(&mut self) -> Result<bool, ClientErrors> {
         let socket = self
             .socket_send
             .as_ref()
@@ -611,6 +699,7 @@ impl Client {
                         None,
                     );
                     println!("[DTLS] Keying Material Exportado (Simulado)");
+                    self.dtls_stream = Some(ssl_stream); 
                     return Ok(true);
                 }
                 Err(HandshakeError::WouldBlock(mid_stream)) => {
@@ -634,10 +723,92 @@ impl Client {
     pub fn copy_stats(&self) -> Arc<Mutex<RtcStats>> {
         Arc::clone(&self.stats)
     }
+
+
+
+    pub fn perform_dtls_handshake_mux(
+    &mut self,
+    rx_dtls: std::sync::mpsc::Receiver<Vec<u8>>,
+    ) -> Result<openssl::ssl::SslStream<MuxedUdpStream>, ClientErrors> {
+        let socket = self.socket_send.as_ref().ok_or(ClientErrors::SocketNotInitialized)?;
+        let socket_clone = socket.try_clone().map_err(ClientErrors::CantClone)?;
+        socket_clone.set_nonblocking(true).map_err(ClientErrors::CantConect)?;
+
+        // --- Cert self-signed (igual que ya tenés)
+        let rsa = Rsa::generate(2048).map_err(|_| ClientErrors::SocketNotInitialized)?;
+        let pkey = PKey::from_rsa(rsa).map_err(|_| ClientErrors::SocketNotInitialized)?;
+        let mut x509 = X509::builder().map_err(|_| ClientErrors::SocketNotInitialized)?;
+        x509.set_version(2).unwrap();
+        x509.set_serial_number(&BigNum::from_u32(1).unwrap().to_asn1_integer().unwrap()).unwrap();
+        x509.set_not_before(&Asn1Time::days_from_now(0).unwrap()).unwrap();
+        x509.set_not_after(&Asn1Time::days_from_now(365).unwrap()).unwrap();
+        x509.set_pubkey(&pkey).unwrap();
+        x509.sign(&pkey, MessageDigest::sha256()).unwrap();
+        let cert = x509.build();
+
+        let is_client = self.is_active_comunicator.load(Ordering::SeqCst);
+
+        // --- Transport correcto: MuxedUdpStream (lee desde rx_dtls, escribe al socket)
+        let mux = MuxedUdpStream::new(socket_clone, rx_dtls);
+
+        println!("[DTLS] Iniciando Handshake (mux). Rol Cliente: {}", is_client);
+
+        let mut stream_result = if is_client {
+            let mut connector_builder = SslConnector::builder(SslMethod::dtls()).unwrap();
+            connector_builder.set_certificate(&cert).unwrap();
+            connector_builder.set_private_key(&pkey).unwrap();
+            connector_builder.set_verify(SslVerifyMode::NONE);
+            connector_builder.set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80").unwrap();
+            let connector = connector_builder.build();
+            connector.connect("localhost", mux)
+        } else {
+            let mut acceptor_builder = SslAcceptor::mozilla_intermediate(SslMethod::dtls()).unwrap();
+            acceptor_builder.set_certificate(&cert).unwrap();
+            acceptor_builder.set_private_key(&pkey).unwrap();
+            acceptor_builder.set_verify(SslVerifyMode::NONE);
+            acceptor_builder.set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80").unwrap();
+            let acceptor = acceptor_builder.build();
+            acceptor.accept(mux)
+        };
+
+        let start = Instant::now();
+        loop {
+            match stream_result {
+                Ok(ssl_stream) => {
+                    println!("[DTLS] Handshake Exitoso!");
+                    let mut material = [0u8; 60];
+                    let _ = ssl_stream.ssl().export_keying_material(
+                        &mut material,
+                        "EXTRACTOR-dtls_srtp",
+                        None,
+                    );
+                    println!("[DTLS] Keying Material Exportado (Simulado)");
+                    return Ok(ssl_stream);
+                }
+                Err(HandshakeError::WouldBlock(mid_stream)) => {
+                    if start.elapsed() > Duration::from_secs(15) {
+                        eprintln!("[DTLS] Timeout esperando handshake.");
+                        return Err(ClientErrors::SocketNotInitialized);
+                    }
+                    stream_result = mid_stream.handshake();
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(HandshakeError::Failure(_)) => {
+                    eprintln!("[DTLS] Error fatal");
+                    return Err(ClientErrors::SocketNotInitialized);
+                }
+                Err(HandshakeError::SetupFailure(_)) => {
+                    eprintln!("[DTLS] Error setup");
+                    return Err(ClientErrors::SocketNotInitialized);
+                }
+            }
+        }
+    }
 }
 
 // creamos un wrapper para poder usar OpenSSL ya que espera cierta firma
 //para recivir y enviar por socket
+#[derive(Debug)]
 struct UdpStream(UdpSocket);
 
 impl Read for UdpStream {
