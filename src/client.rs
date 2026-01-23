@@ -6,7 +6,7 @@ use crate::mensaje::Message;
 use crate::mensaje::{Content, Signal};
 use crate::rtcp::{Bye, ReceiverReport, ReportBlock, RtcpPacket, SenderReport};
 use crate::rtp::RtpPackage;
-use crate::sctp::{MuxedUdpStream, SctpStats};
+use crate::sctp::{MuxedUdpStream, start_sctp_thread};
 use crate::sdp_protocol::*;
 use crate::video_processing_errors::VideoProcessingErrors;
 use opencv::core::{Mat, MatTraitConst};
@@ -26,7 +26,7 @@ use openssl::bn::BigNum;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
-use openssl::ssl::{self, HandshakeError, SslAcceptor, SslConnector, SslMethod, SslStream, SslVerifyMode};
+use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod, SslStream, SslVerifyMode};
 use openssl::x509::X509;
 
 #[derive(Debug, Default)]
@@ -134,10 +134,6 @@ pub struct Client {
     is_active_comunicator: Arc<AtomicBool>,
     camera: Arc<Mutex<Camera>>,
     stats: Arc<Mutex<RtcStats>>,
-
-    sctp: Option<SctpStats>,
-    
-    is_initiator: Arc<AtomicBool>,
 }
 
 impl Client {
@@ -159,9 +155,6 @@ impl Client {
             is_active_comunicator: Arc::new(AtomicBool::new(false)),
             camera,
             stats: Arc::new(Mutex::new(RtcStats::default())),
-
-            sctp: None, 
-            is_initiator: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -225,7 +218,6 @@ impl Client {
         // }
 
         let in_call = Arc::clone(&self.in_call);
-        let is_initiator = Arc::clone(&self.is_initiator);
 
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let res = Self::receiver(
@@ -234,7 +226,6 @@ impl Client {
                 &tx_remoto,
                 tx_dtls, // Para mandar paquetes DTLS
                 &in_call,
-                &is_initiator, 
                 &stats_recv,
             );
             if let Err(ref e) = res {
@@ -251,42 +242,18 @@ impl Client {
             .ok_or(ClientErrors::SocketNotInitialized)?;
 
 
-        let mut ssl_muxed_stream = self.perform_dtls_handshake_mux(rx_dtls)?; 
+        let ssl_muxed_stream = self.perform_dtls_handshake_mux(rx_dtls)?; 
         let in_call = Arc::clone(&self.in_call);
-        let is_initiator = Arc::clone(&self.is_initiator);
+        let is_initiator = Arc::clone(&self.is_active_comunicator);
 
+        // Thread que se encarga de manejar los paquetes DTLS 
         let dtls_thread = std::thread::spawn(move || -> Result<(), ClientErrors> {
             println!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
-            // Tengo que avisar al otro Peer Receptor de que va a ser el server. 
-
-            while in_call.load(Ordering::SeqCst) {
-                if let Ok(ui_pkt) = rx_file.try_recv() {
-                    if ui_pkt.is_server() {
-                        println!("[SCTP] RECEPTOR de Archivo"); 
-                        let mut sctp_stats = SctpStats::new(local_adder, remote_adder,  false, ui_pkt); 
-                        sctp_stats.file_receiver_handler(&mut ssl_muxed_stream); 
-                    } else {
-                        println!("[SCTP] EMISOR de Archivo"); 
-                        println!("[SCTP] EMISOR de Archivo con FilePath: {:?}", &ui_pkt.get_path()); 
-                        let mut sctp_stats = SctpStats::new(local_adder, remote_adder, true, ui_pkt); 
-                        sctp_stats.file_sender_handler(&mut ssl_muxed_stream); 
-                    }
-                }
-            }
-
-
-
-            // let res = dtls_receive_handler(
-            //     ssl_muxed_stream,
-            //     rx_file,
-            //     &mut sctpstats,
-            //     &in_call,
-            // ); 
-            // if let Err(ref e) = res {
-            //     eprintln!("[CRITICAL] DTLS thread died: {:?}", e);
-            // }
-            // res
-            Ok(())
+            match start_sctp_thread(local_adder, remote_adder, &is_initiator, &in_call, rx_file, ssl_muxed_stream) {
+                Ok(_) => return Ok(()), 
+                Err(e) => return Err(ClientErrors::SctpError(e))
+            };
+        
         }); 
 
         let in_call = Arc::clone(&self.in_call);
@@ -372,7 +339,6 @@ impl Client {
         tx_remoto: &SyncSender<Mat>,
         tx_dtls: SyncSender<Vec<u8>>,
         in_call: &Arc<AtomicBool>,
-        is_initiator: &Arc<AtomicBool>,
         stats: &Arc<Mutex<RtcStats>>,
     ) -> Result<(), ClientErrors> {
         let mut decoder = DecoderRtc::new_decoder()?;

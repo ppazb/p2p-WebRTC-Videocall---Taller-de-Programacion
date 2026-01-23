@@ -1,4 +1,4 @@
-use crate::{client::Client, json_parser::json_clasify};
+use crate::{json_parser::json_clasify};
 use std::io::{self, ErrorKind, Write};
 
 /// Mensajes que envía el cliente al servidor

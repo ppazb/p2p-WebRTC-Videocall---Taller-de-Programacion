@@ -527,12 +527,12 @@ impl AppUI {
                             filename: filename.clone(),
                         };
 
-                        self.file_path = Some(FilePathPacket::new(None, true));
-                        if let Some(file_pkt_ref) = &self.file_path {
-                            if let Some(tx_file) = &self.tx_file {
-                                tx_file.send(file_pkt_ref.clone()); 
-                            }
-                        }
+                        // self.file_path = Some(FilePathPacket::new(None, true));
+                        // if let Some(file_pkt_ref) = &self.file_path {
+                        //     if let Some(tx_file) = &self.tx_file {
+                        //         tx_file.send(file_pkt_ref.clone()); 
+                        //     }
+                        // }
 
                         let writer_arc = Arc::clone(writer);
                         let write_handle = std::thread::spawn(move || {

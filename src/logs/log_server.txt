@@ -908,3 +908,369 @@
 
 [21-01-26 13.17.54] [SERVER] Sent Initial UserList to new user
 [21-01-26 13.18.02] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 14.56.00] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 14.56.05] 
+
+[SERVER] New connection received
+[21-01-26 14.56.13] [SERVER] User 'admin' logged in
+[21-01-26 14.56.13] [SERVER] Sent LoginOk
+
+[21-01-26 14.56.13] [SERVER] Sent Initial UserList to new user
+[21-01-26 14.56.31] 
+
+[SERVER] New connection received
+[21-01-26 14.56.36] [SERVER] User 'usuario1' logged in
+[21-01-26 14.56.36] [SERVER] Sent LoginOk
+
+[21-01-26 14.56.36] [SERVER] Sent Initial UserList to new user
+[21-01-26 14.56.43] [SERVER] CallStarted from admin to usuario1
+[21-01-26 15.56.04] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 15.56.16] 
+
+[SERVER] New connection received
+[21-01-26 15.56.21] [SERVER] User 'admin' logged in
+[21-01-26 15.56.21] [SERVER] Sent LoginOk
+
+[21-01-26 15.56.21] [SERVER] Sent Initial UserList to new user
+[21-01-26 15.56.37] 
+
+[SERVER] New connection received
+[21-01-26 15.56.43] [SERVER] User 'usuario1' logged in
+[21-01-26 15.56.43] [SERVER] Sent LoginOk
+
+[21-01-26 15.56.43] [SERVER] Sent Initial UserList to new user
+[21-01-26 15.56.47] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 15.59.40] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 15.59.44] 
+
+[SERVER] New connection received
+[21-01-26 15.59.49] [SERVER] User 'admin' logged in
+[21-01-26 15.59.49] [SERVER] Sent LoginOk
+
+[21-01-26 15.59.49] [SERVER] Sent Initial UserList to new user
+[21-01-26 16.00.06] 
+
+[SERVER] New connection received
+[21-01-26 16.00.11] [SERVER] User 'usuario1' logged in
+[21-01-26 16.00.11] [SERVER] Sent LoginOk
+
+[21-01-26 16.00.11] [SERVER] Sent Initial UserList to new user
+[21-01-26 16.00.16] [SERVER] CallStarted from admin to usuario1
+[21-01-26 16.09.31] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 16.09.37] 
+
+[SERVER] New connection received
+[21-01-26 16.09.42] [SERVER] User 'admin' logged in
+[21-01-26 16.09.42] [SERVER] Sent LoginOk
+
+[21-01-26 16.09.42] [SERVER] Sent Initial UserList to new user
+[21-01-26 16.10.00] 
+
+[SERVER] New connection received
+[21-01-26 16.10.06] [SERVER] User 'usuario1' logged in
+[21-01-26 16.10.06] [SERVER] Sent LoginOk
+
+[21-01-26 16.10.06] [SERVER] Sent Initial UserList to new user
+[21-01-26 16.10.10] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 16.24.34] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 16.24.41] 
+
+[SERVER] New connection received
+[21-01-26 16.24.51] [SERVER] User 'admin' logged in
+[21-01-26 16.24.51] [SERVER] Sent LoginOk
+
+[21-01-26 16.24.51] [SERVER] Sent Initial UserList to new user
+[21-01-26 16.25.12] 
+
+[SERVER] New connection received
+[21-01-26 16.25.18] [SERVER] User 'admin' logged in
+[21-01-26 16.25.18] [SERVER] Sent LoginOk
+
+[21-01-26 16.25.18] [SERVER] Sent Initial UserList to new user
+[21-01-26 16.25.33] 
+
+[SERVER] New connection received
+[21-01-26 17.50.40] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 17.51.05] 
+
+[SERVER] New connection received
+[21-01-26 17.51.10] [SERVER] User 'admin' logged in
+[21-01-26 17.51.10] [SERVER] Sent LoginOk
+
+[21-01-26 17.51.10] [SERVER] Sent Initial UserList to new user
+[21-01-26 17.51.29] 
+
+[SERVER] New connection received
+[21-01-26 17.51.35] [SERVER] User 'usuario1' logged in
+[21-01-26 17.51.35] [SERVER] Sent LoginOk
+
+[21-01-26 17.51.35] [SERVER] Sent Initial UserList to new user
+[21-01-26 17.51.39] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 17.51.39] [SERVER] Marked usuario1 and admin as busy
+[21-01-26 17.57.10] 
+
+[SERVER] New connection received
+[21-01-26 17.57.16] [SERVER] User 'admin' logged in
+[21-01-26 17.57.16] [SERVER] Sent LoginOk
+
+[21-01-26 17.57.16] [SERVER] Sent Initial UserList to new user
+[21-01-26 17.57.39] 
+
+[SERVER] New connection received
+[21-01-26 17.57.45] [SERVER] User 'usuario1' logged in
+[21-01-26 17.57.45] [SERVER] Sent LoginOk
+
+[21-01-26 17.57.45] [SERVER] Sent Initial UserList to new user
+[21-01-26 17.57.51] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 17.57.51] [SERVER] Marked usuario1 and admin as busy
+[21-01-26 18.00.43] 
+
+[SERVER] New connection received
+[21-01-26 18.00.49] [SERVER] User 'admin' logged in
+[21-01-26 18.00.49] [SERVER] Sent LoginOk
+
+[21-01-26 18.00.49] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.01.07] 
+
+[SERVER] New connection received
+[21-01-26 18.01.13] [SERVER] User 'usuario1' logged in
+[21-01-26 18.01.13] [SERVER] Sent LoginOk
+
+[21-01-26 18.01.13] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.01.17] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 18.01.17] [SERVER] Marked usuario1 and admin as busy
+[21-01-26 18.07.48] 
+
+[SERVER] New connection received
+[21-01-26 18.07.57] [SERVER] User 'admin' logged in
+[21-01-26 18.07.57] [SERVER] Sent LoginOk
+
+[21-01-26 18.07.57] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.08.16] 
+
+[SERVER] New connection received
+[21-01-26 18.08.22] [SERVER] User 'usuario1' logged in
+[21-01-26 18.08.22] [SERVER] Sent LoginOk
+
+[21-01-26 18.08.22] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.08.27] [SERVER] CallStarted from admin to usuario1
+[21-01-26 18.08.53] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 18.09.04] 
+
+[SERVER] New connection received
+[21-01-26 18.09.09] [SERVER] User 'admin' logged in
+[21-01-26 18.09.09] [SERVER] Sent LoginOk
+
+[21-01-26 18.09.09] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.09.23] 
+
+[SERVER] New connection received
+[21-01-26 18.09.28] [SERVER] User 'usuario1' logged in
+[21-01-26 18.09.28] [SERVER] Sent LoginOk
+
+[21-01-26 18.09.28] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.09.36] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 18.09.36] [SERVER] Marked usuario1 and admin as busy
+[21-01-26 18.11.11] 
+
+[SERVER] New connection received
+[21-01-26 18.11.16] [SERVER] User 'admin' logged in
+[21-01-26 18.11.16] [SERVER] Sent LoginOk
+
+[21-01-26 18.11.16] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.11.31] 
+
+[SERVER] New connection received
+[21-01-26 18.11.36] [SERVER] User 'usuario1' logged in
+[21-01-26 18.11.36] [SERVER] Sent LoginOk
+
+[21-01-26 18.11.36] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.11.44] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 18.42.21] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 18.42.27] 
+
+[SERVER] New connection received
+[21-01-26 18.42.33] [SERVER] User 'admin' logged in
+[21-01-26 18.42.33] [SERVER] Sent LoginOk
+
+[21-01-26 18.42.33] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.42.55] 
+
+[SERVER] New connection received
+[21-01-26 18.43.01] [SERVER] User 'usuario1' logged in
+[21-01-26 18.43.01] [SERVER] Sent LoginOk
+
+[21-01-26 18.43.01] [SERVER] Sent Initial UserList to new user
+[21-01-26 18.43.06] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 21.32.21] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 21.32.25] 
+
+[SERVER] New connection received
+[21-01-26 21.32.32] [SERVER] User 'admin' logged in
+[21-01-26 21.32.32] [SERVER] Sent LoginOk
+
+[21-01-26 21.32.32] [SERVER] Sent Initial UserList to new user
+[21-01-26 21.32.52] 
+
+[SERVER] New connection received
+[21-01-26 21.33.02] [SERVER] User 'usuario1' logged in
+[21-01-26 21.33.02] [SERVER] Sent LoginOk
+
+[21-01-26 21.33.02] [SERVER] Sent Initial UserList to new user
+[21-01-26 21.33.10] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 23.14.46] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 23.14.49] 
+
+[SERVER] New connection received
+[21-01-26 23.14.55] [SERVER] User 'admin' logged in
+[21-01-26 23.14.55] [SERVER] Sent LoginOk
+
+[21-01-26 23.14.55] [SERVER] Sent Initial UserList to new user
+[21-01-26 23.15.04] 
+
+[SERVER] New connection received
+[21-01-26 23.15.10] [SERVER] User 'usuario1' logged in
+[21-01-26 23.15.10] [SERVER] Sent LoginOk
+
+[21-01-26 23.15.10] [SERVER] Sent Initial UserList to new user
+[21-01-26 23.15.16] [SERVER] CallStarted from usuario1 to admin
+[21-01-26 23.17.32] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[21-01-26 23.17.35] 
+
+[SERVER] New connection received
+[21-01-26 23.17.42] [SERVER] User 'admin' logged in
+[21-01-26 23.17.42] [SERVER] Sent LoginOk
+
+[21-01-26 23.17.42] [SERVER] Sent Initial UserList to new user
+[21-01-26 23.17.55] 
+
+[SERVER] New connection received
+[21-01-26 23.18.02] [SERVER] User 'usuario1' logged in
+[21-01-26 23.18.02] [SERVER] Sent LoginOk
+
+[21-01-26 23.18.02] [SERVER] Sent Initial UserList to new user
+[21-01-26 23.18.08] [SERVER] CallStarted from admin to usuario1
+[23-01-26 00.24.48] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[23-01-26 00.24.53] 
+
+[SERVER] New connection received
+[23-01-26 00.25.05] [SERVER] User 'admin' logged in
+[23-01-26 00.25.05] [SERVER] Sent LoginOk
+
+[23-01-26 00.25.05] [SERVER] Sent Initial UserList to new user
+[23-01-26 00.25.22] 
+
+[SERVER] New connection received
+[23-01-26 00.25.29] [SERVER] User 'usuario1' logged in
+[23-01-26 00.25.29] [SERVER] Sent LoginOk
+
+[23-01-26 00.25.29] [SERVER] Sent Initial UserList to new user
+[23-01-26 00.25.37] [SERVER] CallStarted from admin to usuario1
+[23-01-26 00.25.37] [SERVER] Marked admin and usuario1 as busy
+[23-01-26 00.59.30] 
+
+[SERVER] New connection received
+[23-01-26 00.59.35] [SERVER] User 'admin' logged in
+[23-01-26 00.59.35] [SERVER] Sent LoginOk
+
+[23-01-26 00.59.35] [SERVER] Sent Initial UserList to new user
+[23-01-26 00.59.52] 
+
+[SERVER] New connection received
+[23-01-26 00.59.57] [SERVER] User 'usuario1' logged in
+[23-01-26 00.59.57] [SERVER] Sent LoginOk
+
+[23-01-26 00.59.57] [SERVER] Sent Initial UserList to new user
+[23-01-26 01.00.02] [SERVER] CallStarted from admin to usuario1
+[23-01-26 14.36.28] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[23-01-26 14.36.39] 
+
+[SERVER] New connection received
+[23-01-26 14.36.44] [SERVER] User 'admin' logged in
+[23-01-26 14.36.44] [SERVER] Sent LoginOk
+
+[23-01-26 14.36.44] [SERVER] Sent Initial UserList to new user
+[23-01-26 14.37.00] 
+
+[SERVER] New connection received
+[23-01-26 14.37.06] [SERVER] User 'usuario1' logged in
+[23-01-26 14.37.06] [SERVER] Sent LoginOk
+
+[23-01-26 14.37.06] [SERVER] Sent Initial UserList to new user
+[23-01-26 14.37.23] 
+
+[SERVER] New connection received
+[23-01-26 14.37.30] [SERVER] User 'admin2' logged in
+[23-01-26 14.37.30] [SERVER] Sent LoginOk
+
+[23-01-26 14.37.30] [SERVER] Sent Initial UserList to new user
+[23-01-26 14.37.48] 
+
+[SERVER] New connection received
+[23-01-26 14.37.54] [SERVER] Login failed for 'admin3'
+[23-01-26 14.38.15] [SERVER] User 'admin4' logged in
+[23-01-26 14.38.15] [SERVER] Sent LoginOk
+
+[23-01-26 14.38.15] [SERVER] Sent Initial UserList to new user
+[23-01-26 14.38.33] [SERVER] CallStarted from admin to admin2
+[23-01-26 14.38.33] [SERVER] Marked admin and admin2 as busy
+[23-01-26 15.42.25] 
+
+[SERVER] Starting on 192.168.0.41:8000
+[23-01-26 15.43.07] 
+
+[SERVER] New connection received
+[23-01-26 15.43.13] [SERVER] User 'admin' logged in
+[23-01-26 15.43.13] [SERVER] Sent LoginOk
+
+[23-01-26 15.43.13] [SERVER] Sent Initial UserList to new user
+[23-01-26 15.43.30] 
+
+[SERVER] New connection received
+[23-01-26 15.43.36] [SERVER] User 'usuario1' logged in
+[23-01-26 15.43.36] [SERVER] Sent LoginOk
+
+[23-01-26 15.43.36] [SERVER] Sent Initial UserList to new user
+[23-01-26 15.43.55] 
+
+[SERVER] New connection received
+[23-01-26 15.44.01] [SERVER] User 'admin2' logged in
+[23-01-26 15.44.01] [SERVER] Sent LoginOk
+
+[23-01-26 15.44.01] [SERVER] Sent Initial UserList to new user
+[23-01-26 15.44.34] 
+
+[SERVER] New connection received
+[23-01-26 15.44.44] [SERVER] User 'admin4' logged in
+[23-01-26 15.44.44] [SERVER] Sent LoginOk
+
+[23-01-26 15.44.44] [SERVER] Sent Initial UserList to new user
+[23-01-26 15.45.13] [SERVER] CallStarted from admin to admin2
+[23-01-26 15.45.13] [SERVER] Marked admin and admin2 as busy
+[23-01-26 15.45.18] [SERVER] CallStarted from admin4 to usuario1
