@@ -27,6 +27,9 @@ use eframe::egui;
 use opencv::core::Mat;
 use rustls::StreamOwned;
 
+// COMENTARIO: Dsp se borra esto
+// Puse comentarios en las partes que modifiqué para que puedan saber donde están 
+
 pub enum AppEvent {
     LoginSuccess(String),
     LoginError(String),
@@ -58,12 +61,12 @@ pub struct AppUI {
     cliente: Option<Client>,
     client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
     rx_remoto: Option<Receiver<Mat>>,
-    tx_file: Option<SyncSender<FilePathPacket>>,
+    tx_file: Option<SyncSender<FilePathPacket>>, // CHANNEL agregado para enviar FilePath al Client
     in_call: Arc<AtomicBool>,
     current_username: Option<String>,
     target_username: Option<String>,
 
-    file_path: Option<FilePathPacket>
+    file_path: Option<FilePathPacket> // Para guardar el FilePath
 }
 
 impl Drop for AppUI {
@@ -196,6 +199,7 @@ impl AppUI {
                                     ServerMessage::CalledUserBusy => {
                                         let _ = tx.send(AppEvent::CalledUserBusy);
                                     }
+                                    // Agregados para testear envío de archivos
                                     ServerMessage::FileSendingRequestForwarded { from_user, filename } => {
                                         let _ = tx.send(AppEvent::FileSendingRequest { from_user, filename }); 
                                     }
@@ -464,6 +468,8 @@ impl AppUI {
                 self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
             }
 
+            // Las siguientes CambioVistas son para la parte de archivos
+            // Solamente para testeo de envio de archivos 
             CambioVista::SendFile => {
                 self.push_vista(Vista::VistaSendFile(crate::vista::file_sending::VistaSendFile::new()));
             }
@@ -481,7 +487,7 @@ impl AppUI {
                             target_user: target.clone(),
                             filename: path.clone(),
                         };
-
+                        // Se genera acá el FilePathPacket con el FilePath
                         self.file_path = Some(FilePathPacket::new(Some(PathBuf::from(path.clone())), false));
 
                         let writer_arc = Arc::clone(writer);
@@ -695,7 +701,7 @@ impl AppUI {
         let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
         let (tx_remoto_file, rx_remoto_file) = std::sync::mpsc::sync_channel::<FilePathPacket>(1);
         self.rx_remoto = Some(rx_remoto);
-        self.tx_file = Some(tx_remoto_file);
+        self.tx_file = Some(tx_remoto_file); // Sender para archivo
         if let Some(cam) = &self.camara {
             let cliente = Client::new(tx_remoto, rx_remoto_file, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
@@ -829,6 +835,7 @@ impl eframe::App for AppUI {
                     self.cambiar_vista(CambioVista::SendFileRequested { from_user, filename });
                 }
                 AppEvent::FileSendingAccepted { from_user, filename } => {
+                    // Si el Receptor del archivo aceptó la solicitud mando el FilePathPacket al Client
                     self.tx_file.as_ref().map(|tx| {
                         if let Some(path) = &self.file_path {
                             let _ = tx.send(path.clone());

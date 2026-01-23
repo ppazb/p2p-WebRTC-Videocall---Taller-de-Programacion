@@ -43,8 +43,6 @@ impl VistaSendFile {
                         self.error_message = Some("La ruta no es un archivo.".into());
                     } else {
                         self.error_message = None;
-                        // Acá podrías devolver un cambio con la ruta
-                        // o disparar un comando al Client desde afuera.
                         cambio = CambioVista::SendFileConfirmed(self.file_path.clone());
 
                         

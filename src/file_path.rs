@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+// En su momento fue creado por si necesitaba enviar allá del FilePath desde la UI
+// al Client, después lo dejé porque SCTP maneja con FilePathPacket
 #[derive(Debug, Clone)]
 pub struct FilePathPacket {
     path: Option<PathBuf>, 

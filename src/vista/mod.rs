@@ -80,11 +80,11 @@ impl Vista {
                 ui.horizontal(|ui| {
                     if ui.button("Aceptar").clicked() {
                         // Lógica para aceptar el envío
-                        cambio = CambioVista::SendFileAccepted { from_user: from_user.to_string(), filename: filename.to_string() }; // Cambiar según corresponda
+                        cambio = CambioVista::SendFileAccepted { from_user: from_user.to_string(), filename: filename.to_string() }; 
                     }
                     if ui.button("Rechazar").clicked() {
                         // Lógica para rechazar el envío
-                        cambio = CambioVista::SendFileRejected { from_user: from_user.to_string(), filename: filename.to_string() }; // Cambiar según corresponda
+                        cambio = CambioVista::SendFileRejected { from_user: from_user.to_string(), filename: filename.to_string() }; 
                     }
                 });
             });
