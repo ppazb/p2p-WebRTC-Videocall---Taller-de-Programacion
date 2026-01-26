@@ -321,9 +321,12 @@ impl SctpStats {
             }; 
 
             // [len nombre 2 bytes][nombre][len del file]
-            let metadata = f.metadata().unwrap(); 
+            let metadata = f.metadata().map_err(|_| SctpError::FileMetaDataFail)?; 
             let file_size = metadata.len(); 
-            let filename = Path::new(file_path).file_name().unwrap().to_str().unwrap(); 
+
+            let filename_os = Path::new(file_path).file_name().ok_or(SctpError::FileCreationError)?; 
+
+            let filename = filename_os.to_str().ok_or(SctpError::FilenameError)?; 
             let filename_bytes = filename.as_bytes(); 
             let filename_len = filename_bytes.len() as u16; 
 
@@ -400,7 +403,10 @@ impl SctpStats {
                 return Err(SctpError::HeaderSizeError); 
             }
 
-            let name_len = u16::from_be_bytes(payload[0..2].try_into().unwrap()) as usize;
+            let name_len_bytes: [u8; 2] = payload[0..2].try_into().map_err(|_| SctpError::HeaderParseError)?; 
+            let name_len = u16::from_be_bytes(name_len_bytes) as usize; 
+
+            // let name_len = u16::from_be_bytes(payload[0..2].try_into().unwrap()) as usize;
             if payload.len() < 2 + name_len + 8 {
                 eprintln!("[SERVER ERROR] Header incompleto");
                 return Err(SctpError::HeaderIncomplete); 
@@ -410,7 +416,9 @@ impl SctpStats {
             let filename = String::from_utf8_lossy(name_bytes).to_string();
 
             let size_start = 2 + name_len;
-            let file_size = u64::from_be_bytes(payload[size_start..(size_start + 8)].try_into().unwrap());
+            let file_size_bytes  = payload[size_start..(size_start + 8)].try_into().map_err(|_| SctpError::HeaderParseError)?; 
+            let file_size = u64::from_be_bytes(file_size_bytes); 
+            // let file_size = u64::from_be_bytes(payload[size_start..(size_start + 8)].try_into().unwrap());
 
             let folder = "downloads";
             let file_path = format!("{}/recibido_{}", folder, filename);

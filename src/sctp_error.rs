@@ -8,12 +8,15 @@ pub enum SctpError {
     FileError, 
     FileCreationError, 
     HeaderSizeError, 
+    HeaderParseError,
     HeaderIncomplete, 
     StreamOpenFailed,
     AssociationLost(AssociationError), 
     AssociationNotEstablished, 
     NoAvailableStreamId, 
     FilePathError, 
+    FileMetaDataFail, 
+    FilenameError, 
     FilePathCreationFailed
 }
 
@@ -22,6 +25,7 @@ impl fmt::Display for SctpError{
         match self {
             SctpError::FileError => writeln!(f, "[SCTP] File Error falló apertura archivo"),
             SctpError::FileCreationError => writeln!(f, "[SCTP] Error en crear el archivo"),
+            SctpError::HeaderParseError => writeln!(f, "[SCTP] Error de parseo de Header"),
             SctpError::HeaderSizeError => writeln!(f, "[SCTP] Tamaño del Header por debajo del valor mínimo"),
             SctpError::HeaderIncomplete => writeln!(f, "[SCTP] Header incompleto"),
             SctpError::AssociationLost(reason) => writeln!(f, "[SCTP] Association Event {:?}", reason),
@@ -29,6 +33,8 @@ impl fmt::Display for SctpError{
             SctpError::NoAvailableStreamId => writeln!(f, "[SCTP] No hay Stream ID Libre para usar"),
             SctpError::StreamOpenFailed => writeln!(f, "[SCTP] Falló Open Stream"),
             SctpError::FilePathError => writeln!(f, "[SCTP] Error en obtener File Path"),
+            SctpError::FileMetaDataFail => writeln!(f, "[SCTP] Error en obtener Metadata"),
+            SctpError::FilenameError => writeln!(f, "[SCTP] Error en obtener Filename"),
             SctpError::FilePathCreationFailed => writeln!(f, "[SCTP] Creación de File Path fallido"),
         }
     }
