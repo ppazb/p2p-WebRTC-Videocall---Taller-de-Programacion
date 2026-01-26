@@ -127,6 +127,12 @@ impl VistaLlamada {
 
                         ui.add_space(10.0);
 
+                        if ui.button("Enviar Archivo").clicked() {
+                            cambio = CambioVista::SendFile;
+                        }
+
+                        ui.add_space(10.0);
+
                         if ui.button("Finalizar Llamada").clicked() {
                             cambio = CambioVista::ToCallEnd;
 

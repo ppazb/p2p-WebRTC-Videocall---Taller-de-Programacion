@@ -1,7 +1,8 @@
 use std::io::{ErrorKind, Read};
 use std::net::{TcpStream, UdpSocket};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -9,6 +10,7 @@ use crate::camera::Camera;
 use crate::client::Client;
 use crate::client_errors::ClientErrors;
 use crate::config::AppParameters;
+use crate::file_path::FilePathPacket;
 use crate::ice::{crear_conexion_ice, elegir_codec};
 use crate::sdp_errors::SdpError;
 use crate::sdp_protocol::sdp_handshake;
@@ -25,6 +27,9 @@ use eframe::egui;
 use opencv::core::Mat;
 use rustls::StreamOwned;
 
+// COMENTARIO: Dsp se borra esto
+// Puse comentarios en las partes que modifiqué para que puedan saber donde están 
+
 pub enum AppEvent {
     LoginSuccess(String),
     LoginError(String),
@@ -36,10 +41,14 @@ pub enum AppEvent {
     SdpMessage(ServerMessage),
     ConnectionLost,
     CalledUserBusy,
+    FileSendingRequest { from_user: String, filename: String },
+    FileSendingAccepted { from_user: String, filename: String },
+    FileSendingRejected { from_user: String, filename: String },
 }
 
 pub struct AppUI {
     vista_actual: Vista,
+    vista_prev: Option<Box<Vista>>,
     camara: Option<Arc<Mutex<Camera>>>,
     server_events_rx: Receiver<AppEvent>,
     server_writer: Option<Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>>,
@@ -52,9 +61,12 @@ pub struct AppUI {
     cliente: Option<Client>,
     client_handles: Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors>,
     rx_remoto: Option<Receiver<Mat>>,
+    tx_file: Option<SyncSender<FilePathPacket>>, // CHANNEL agregado para enviar FilePath al Client
     in_call: Arc<AtomicBool>,
     current_username: Option<String>,
     target_username: Option<String>,
+
+    file_path: Option<FilePathPacket> // Para guardar el FilePath
 }
 
 impl Drop for AppUI {
@@ -187,6 +199,16 @@ impl AppUI {
                                     ServerMessage::CalledUserBusy => {
                                         let _ = tx.send(AppEvent::CalledUserBusy);
                                     }
+                                    // Agregados para testear envío de archivos
+                                    ServerMessage::FileSendingRequestForwarded { from_user, filename } => {
+                                        let _ = tx.send(AppEvent::FileSendingRequest { from_user, filename }); 
+                                    }
+                                    ServerMessage::FileSendingAccepted { from_user, filename } => {
+                                        let _ = tx.send(AppEvent::FileSendingAccepted { from_user, filename }); 
+                                    }
+                                    ServerMessage::FileSendingRejected { from_user, filename } => {
+                                        let _ = tx.send(AppEvent::FileSendingRejected { from_user, filename }); 
+                                    }
                                     _ => {}
                                 }
                             }
@@ -198,11 +220,13 @@ impl AppUI {
             Some(Self {
                 //Inicia en vista de login por deffault
                 vista_actual: Vista::VistaLogin(VistaLogin::new()),
+                vista_prev: None,
                 server_events_rx: rx,
                 server_writer: Some(write_tls),
                 sdp_handshake_tx: None,
                 cliente: None,
                 rx_remoto: None,
+                tx_file: None,
                 in_call: Arc::new(AtomicBool::new(false)),
                 pedido_socket: None,
                 handshake_handle: None,
@@ -213,9 +237,22 @@ impl AppUI {
                 camara: None,
                 current_username: None,
                 target_username: None,
+
+                file_path: None
             })
         } else {
             None
+        }
+    }
+
+    fn push_vista(&mut self, next: Vista) {
+        let current = std::mem::replace(&mut self.vista_actual, next);
+        self.vista_prev = Some(Box::new(current));
+    }
+
+    fn pop_vista(&mut self) {
+        if let Some(prev) = self.vista_prev.take() {
+            self.vista_actual = *prev;
         }
     }
 
@@ -431,6 +468,140 @@ impl AppUI {
                 self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
             }
 
+            // Las siguientes CambioVistas son para la parte de archivos
+            // Solamente para testeo de envio de archivos 
+            CambioVista::SendFile => {
+                self.push_vista(Vista::VistaSendFile(crate::vista::file_sending::VistaSendFile::new()));
+            }
+
+            CambioVista::SendFileQuit => {
+                self.pop_vista();
+            }
+
+            CambioVista::SendFileConfirmed(path) => {
+
+                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
+                    if let Some(writer) = &mut self.server_writer {
+                        let msg = ClientMessage::FileSendingRequest {
+                            username: user.clone(),
+                            target_user: target.clone(),
+                            filename: path.clone(),
+                        };
+                        // Se genera acá el FilePathPacket con el FilePath
+                        self.file_path = Some(FilePathPacket::new(Some(PathBuf::from(path.clone())), false));
+
+                        let writer_arc = Arc::clone(writer);
+                        let write_handle = std::thread::spawn(move || {
+                            let mut guard_write = match writer_arc.lock() {
+                                Ok(gw) => gw,
+                                Err(_) => return,
+                            };
+
+                            let _ = write_all_nonblocking(
+                                &mut *guard_write,
+                                msg.to_json_line().as_bytes(),
+                            );
+                        });
+
+                        self.handles.push(write_handle);
+                    }; 
+                }; 
+
+                self.pop_vista();
+                // if let Some(c) = &self.cliente {
+                //     let stats = c.copy_stats();
+
+                //     self.vista_actual = Vista::VistaLlamada(VistaLlamada::new(
+                //         self.rx_remoto.take(),
+                //         Arc::clone(&self.in_call),
+                //         stats,
+                //     ))
+                // }
+            }
+
+            CambioVista::SendFileRequested { from_user, filename } => {
+                self.push_vista(Vista::VistaFileSendingRequested(from_user, filename));
+            }
+
+            CambioVista::SendFileAccepted {from_user, filename} => {
+
+                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
+                    if let Some(writer) = &mut self.server_writer {
+                        let msg = ClientMessage::FileSendingAccept {
+                            username: user.clone(),
+                            target_user: target.clone(),
+                            filename: filename.clone(),
+                        };
+
+                        // self.file_path = Some(FilePathPacket::new(None, true));
+                        // if let Some(file_pkt_ref) = &self.file_path {
+                        //     if let Some(tx_file) = &self.tx_file {
+                        //         tx_file.send(file_pkt_ref.clone()); 
+                        //     }
+                        // }
+
+                        let writer_arc = Arc::clone(writer);
+                        let write_handle = std::thread::spawn(move || {
+                            let mut guard_write = match writer_arc.lock() {
+                                Ok(gw) => gw,
+                                Err(_) => return,
+                            };
+
+                            let _ = write_all_nonblocking(
+                                &mut *guard_write,
+                                msg.to_json_line().as_bytes(),
+                            );
+                        });
+
+                        self.handles.push(write_handle);
+                    }; 
+                }; 
+            
+                self.pop_vista();
+            }
+
+            CambioVista::SendFileRejected { from_user, filename } => {
+
+                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
+                    if let Some(writer) = &mut self.server_writer {
+                        let msg = ClientMessage::FileSendingReject {
+                            username: user.clone(),
+                            target_user: target.clone(),
+                            filename: filename.clone(),
+                        };
+
+                        let writer_arc = Arc::clone(writer);
+                        let write_handle = std::thread::spawn(move || {
+                            let mut guard_write = match writer_arc.lock() {
+                                Ok(gw) => gw,
+                                Err(_) => return,
+                            };
+
+                            let _ = write_all_nonblocking(
+                                &mut *guard_write,
+                                msg.to_json_line().as_bytes(),
+                            );
+                        });
+
+                        self.handles.push(write_handle);
+                    }; 
+                }; 
+
+                self.pop_vista();
+            }
+
+            CambioVista::TargetUserSendFileAccepted { from_user, filename } => {
+                self.push_vista(Vista::VistaTargetUserFileSendingAccepted(from_user, filename));
+            }
+
+            CambioVista::TargetUserSendFileRejected { from_user, filename } => {
+                self.push_vista(Vista::VistaTargetUserFileSendingRejected(from_user, filename));
+            }
+
+            CambioVista::SendFileNoticeClosed => {
+                self.pop_vista();
+            }
+
             CambioVista::CamEnable => self.iniciar_camara(),
             CambioVista::CamDisable => self.detener_camara(),
         }
@@ -528,9 +699,11 @@ impl AppUI {
 
     fn crear_cliente(&mut self, socket: UdpSocket, is_active: bool) {
         let (tx_remoto, rx_remoto) = std::sync::mpsc::sync_channel(1);
+        let (tx_remoto_file, rx_remoto_file) = std::sync::mpsc::sync_channel::<FilePathPacket>(1);
         self.rx_remoto = Some(rx_remoto);
+        self.tx_file = Some(tx_remoto_file); // Sender para archivo
         if let Some(cam) = &self.camara {
-            let cliente = Client::new(tx_remoto, Arc::clone(&self.in_call), Arc::clone(cam));
+            let cliente = Client::new(tx_remoto, rx_remoto_file, Arc::clone(&self.in_call), Arc::clone(cam));
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
                 c.set_rol(is_active);
@@ -657,6 +830,21 @@ impl eframe::App for AppUI {
                     if let Vista::VistaLogin(login) = &mut self.vista_actual {
                         login.error_msg = Some("Conection lost".into());
                     }
+                }
+                AppEvent::FileSendingRequest { from_user, filename } => {
+                    self.cambiar_vista(CambioVista::SendFileRequested { from_user, filename });
+                }
+                AppEvent::FileSendingAccepted { from_user, filename } => {
+                    // Si el Receptor del archivo aceptó la solicitud mando el FilePathPacket al Client
+                    self.tx_file.as_ref().map(|tx| {
+                        if let Some(path) = &self.file_path {
+                            let _ = tx.send(path.clone());
+                        }
+                    });
+                    self.cambiar_vista(CambioVista::TargetUserSendFileAccepted { from_user, filename });
+                }
+                AppEvent::FileSendingRejected { from_user, filename } => {
+                    self.cambiar_vista(CambioVista::TargetUserSendFileRejected { from_user, filename });
                 }
             }
         }
