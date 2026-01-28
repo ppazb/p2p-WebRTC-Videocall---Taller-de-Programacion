@@ -1,0 +1,41 @@
+[28-01-26 01.23.48] [CLIENT] Starting encripted transmission
+
+[28-01-26 01.23.55] [DEBUG THREAD] Starting sdp_handshake...
+[28-01-26 01.23.55] [SDP] Initialize handshake with usuario1
+[28-01-26 01.23.55] [SDP] Created host candidate: 192.168.0.25:8092
+[28-01-26 01.23.55] [SDP] Created host candidate: 192.168.0.25:8081
+[28-01-26 01.23.55] [SDP] Created host candidate: 192.168.0.25:8059
+[28-01-26 01.23.55] [SDP] Gathered 3 candidates on 3 sockets
+[28-01-26 01.23.55] [SDP] Gathered 3 candidates
+[28-01-26 01.23.55] [SDP] Calling to: usuario1
+[28-01-26 01.23.58] [SDP] Answer recieved
+[28-01-26 01.23.58] [ICE] Trying to connect with 3 peer candidates
+[28-01-26 01.23.58] [ICE] Peer candidate: 192.168.0.15:8092
+[28-01-26 01.23.58] [ICE] Peer candidate: 192.168.0.15:8081
+[28-01-26 01.23.58] [ICE] Peer candidate: 192.168.0.15:8059
+[28-01-26 01.23.58] [ICE] Trying connection to 192.168.0.15:8092
+[28-01-26 01.23.58] [ICE] Successful connection to 192.168.0.15:8092
+[28-01-26 01.23.59] [DTLS] Iniciando Handshake (mux). Rol Cliente: true
+[28-01-26 01.24.00] [DTLS] Handshake Exitoso!
+[28-01-26 01.24.00] [DTLS] Keying Material Exportado (Simulado)
+[28-01-26 01.24.00] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[28-01-26 01.24.14] [DEBUG THREAD] Starting sdp_handshake...
+[28-01-26 01.24.14] [SDP] Initialize handshake with usuario1
+[28-01-26 01.24.14] [SDP] Created host candidate: 192.168.0.25:8092
+[28-01-26 01.24.14] [SDP] Created host candidate: 192.168.0.25:8081
+[28-01-26 01.24.14] [SDP] Created host candidate: 192.168.0.25:8059
+[28-01-26 01.24.14] [SDP] Gathered 3 candidates on 3 sockets
+[28-01-26 01.24.14] [SDP] Gathered 3 candidates
+[28-01-26 01.24.14] [SDP] Calling to: usuario1
+[28-01-26 01.24.33] [AppUI] Incomming call from usuario1
+[28-01-26 01.24.34] [CLIENT] Called accepted from: usuario1
+[28-01-26 01.24.34] [DEBUG THREAD] Starting sdp_handshake...
+[28-01-26 01.24.34] [SDP] Initialize handshake with usuario1
+[28-01-26 01.24.34] [SDP] Created host candidate: 192.168.0.25:8092
+[28-01-26 01.24.34] [SDP] Created host candidate: 192.168.0.25:8081
+[28-01-26 01.24.34] [SDP] Created host candidate: 192.168.0.25:8059
+[28-01-26 01.24.34] [SDP] Gathered 3 candidates on 3 sockets
+[28-01-26 01.24.34] [SDP] Gathered 3 candidates
+[28-01-26 01.24.34] [SDP] Offer recieved from: usuario1)
+[28-01-26 01.24.34] [SDP] Generating answer...
+[28-01-26 01.24.34] [ICE] Trying to connect with 3 peer candidates

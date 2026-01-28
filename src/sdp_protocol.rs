@@ -8,7 +8,7 @@
 // a=candidate: 196.168.0.1 80000
 
 use rustls::StreamOwned;
-
+use crate::log_c;
 use crate::config::SdpHandshakeParameters;
 use crate::sdp_errors::SdpError;
 use crate::signalling_protocol::{ClientMessage, ServerMessage, write_all_nonblocking};
@@ -526,10 +526,15 @@ pub fn gather_candidates(
                         local_addr.ip(),
                         local_addr.port()
                     );
+                    log_c!("[SDP] Created host candidate: {}:{}",
+                        local_addr.ip(),
+                        local_addr.port()
+                    );
                 }
             }
             Err(e) => {
                 println!("[SDP] Failed to bind to {}: {}", addr, e);
+                log_c!("[SDP] Failed to bind to {}: {}", addr, e);
                 continue;
             }
         }
@@ -555,6 +560,7 @@ pub fn gather_candidates(
         candidates.len(),
         sockets.len()
     );
+    log_c!("[SDP] Gathered {} candidates on {} sockets", candidates.len(), sockets.len());
     Ok((sockets, candidates))
 }
 
@@ -567,6 +573,7 @@ pub fn sdp_handshake(
     reader_rx: Receiver<ServerMessage>, // Recibo mensajes SDP
 ) -> Result<(Vec<UdpSocket>, Vec<String>, Vec<String>, Vec<String>), SdpError> {
     println!("[SDP] Initialize handshake with {}", target_user);
+    log_c!("[SDP] Initialize handshake with {}", target_user);
 
     // Antes del offer ya tengo que tener los candidatos -> esto es pq para STUN se tiene
     //que usar el mismo socket desde el que se envia el binding request o cambia el numerito
@@ -574,6 +581,7 @@ pub fn sdp_handshake(
 
     let (sockets, local_candidates) = gather_candidates(&local_addrs)?;
     println!("[SDP] Gathered {} candidates", local_candidates.len());
+    log_c!("[SDP] Gathered {} candidates", local_candidates.len());
 
     let mut remote_offer_received: Option<SessionDescription> = None;
     let mut remote_username = target_user.clone();
@@ -582,6 +590,7 @@ pub fn sdp_handshake(
         && let ServerMessage::OfferForwarded { from_user, offer } = msg
     {
         println!("[SDP] Offer recieved from: {})", from_user);
+        log_c!("[SDP] Offer recieved from: {})", from_user);
         remote_offer_received = Some(SessionDescription::parse(&offer)?);
         remote_username = from_user;
     }
@@ -589,6 +598,7 @@ pub fn sdp_handshake(
     if let Some(remote_offer) = remote_offer_received {
         // Generar Answer
         println!("[SDP] Generating answer...");
+        log_c!("[SDP] Generating answer...");
         //Ahora en vez de create uso create_with_candidates pq los tengo ya
         let my_session = SessionDescription::create_with_candidates(
             &handshake_params.local_adder,
@@ -624,6 +634,7 @@ pub fn sdp_handshake(
         Ok((sockets, local_candidates, remote_ice, codecs)) // Now local_candidates is still available
     } else {
         println!("[SDP] Calling to: {}", target_user);
+        log_c!("[SDP] Calling to: {}", target_user);
 
         // Genero offer
         let my_offer_desc = SessionDescription::create_with_candidates(
@@ -666,6 +677,7 @@ pub fn sdp_handshake(
                 Ok(ServerMessage::AnswerForwarded { from_user, answer }) => {
                     if from_user == target_user {
                         println!("[SDP] Answer recieved");
+                        log_c!("[SDP] Answer recieved");
                         let remote_answer = SessionDescription::parse(&answer)?;
 
                         let remote_ice =
@@ -678,6 +690,7 @@ pub fn sdp_handshake(
                 }
                 Ok(ServerMessage::Error { reason }) => {
                     println!("[SDP] Error recieved from server: {}", reason);
+                    log_c!("[SDP] Error recieved from server: {}", reason);
                 }
                 Err(_) => continue,
                 _ => {}

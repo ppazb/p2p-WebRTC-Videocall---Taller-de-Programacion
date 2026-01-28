@@ -17,8 +17,6 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::vec;
 use std::{net::UdpSocket, thread};
-
-// Imports de OpenSSL
 use openssl::asn1::Asn1Time;
 use openssl::bn::BigNum;
 use openssl::hash::MessageDigest;
@@ -26,8 +24,8 @@ use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
 use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod, SslVerifyMode};
 use openssl::x509::X509;
-
-// Importar el módulo de audio local
+use crate::log_c;
+// modulo de audio local
 use crate::audio_processing::{AudioSystem, g711};
 
 // Imports para manejo de archivos y SCTP
@@ -56,7 +54,7 @@ pub struct RtcStats {
     pub last_arrival_time: Option<Instant>,
     pub initialized: bool,
 
-    // Stats for calculating rates
+    // Stats para calcular rates
     last_bytes: u32,
     last_packets: u32,
     last_rate_update: Option<Instant>,
@@ -183,6 +181,7 @@ impl Client {
             Err(e) => return eprintln!("{}", e),
         };
         println!("[Session Description] {}", peer_session_description);
+        log_c!("[Session Description] {}", peer_session_description);
     }
 
     ///Inicia la comunicacion entre 2 clientes genera 2 hilos de ejecucion uno como receptor y otro como emsior
@@ -224,6 +223,7 @@ impl Client {
             self.audio_system = Some(sys);
         } else {
             eprintln!("Warning: No se pudo inicializar el sistema de audio.");
+            log_c!("Warning: No se pudo inicializar el sistema de audio.");
         }
 
         
@@ -239,6 +239,7 @@ impl Client {
             );
             if let Err(ref e) = res {
                 eprintln!("[CRITICAL] Receiver thread died: {:?}", e);
+                log_c!("[CRITICAL] Receiver thread died: {:?}", e);
             }
             res
         });
@@ -253,6 +254,7 @@ impl Client {
 
         let dtls_thread = std::thread::spawn(move || -> Result<(), ClientErrors> {
             println!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
+            log_c!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
             match start_sctp_thread(local_adder, remote_adder, &is_initiator, &in_call_sctp, rx_file, ssl_muxed_stream) {
                 Ok(_) => return Ok(()), 
                 Err(e) => return Err(ClientErrors::SctpError(e))
@@ -273,6 +275,7 @@ impl Client {
             );
             if let Err(ref e) = res {
                 eprintln!("[CRITICAL] Sender thread died: {:?}", e);
+                log_c!("[CRITICAL] Sender thread died: {:?}", e);
             }
             res
         });
@@ -335,6 +338,7 @@ impl Client {
                 if let Err(e) = socket_send.send(&rtp_bytes) {
                     if !e.to_string().contains("Connection reset") {
                         eprintln!("Audio Send failed: {}", e);
+                        log_c!("Audio Send failed: {}", e);
                     }
                 }
 
@@ -434,6 +438,7 @@ impl Client {
                             processed_as_rtcp = true;
                             if let RtcpPacket::Bye(_) = package {
                                 println!("[RTCP] Recibido BYE. Cerrando llamada.");
+                                log_c!("[RTCP] Recibido BYE. Cerrando llamada.");
                                 in_call.store(false, Ordering::SeqCst);
                                 return Ok(());
                             }
@@ -707,6 +712,7 @@ impl Client {
         let mux = MuxedUdpStream::new(socket_clone, rx_dtls);
 
         println!("[DTLS] Iniciando Handshake (mux). Rol Cliente: {}", is_client);
+        log_c!("[DTLS] Iniciando Handshake (mux). Rol Cliente: {}", is_client);
 
         let mut stream_result = if is_client {
             let mut connector_builder = SslConnector::builder(SslMethod::dtls()).unwrap();
@@ -731,6 +737,7 @@ impl Client {
             match stream_result {
                 Ok(ssl_stream) => {
                     println!("[DTLS] Handshake Exitoso!");
+                    log_c!("[DTLS] Handshake Exitoso!");
                     let mut material = [0u8; 60];
                     let _ = ssl_stream.ssl().export_keying_material(
                         &mut material,
@@ -738,11 +745,13 @@ impl Client {
                         None,
                     );
                     println!("[DTLS] Keying Material Exportado (Simulado)");
+                    log_c!("[DTLS] Keying Material Exportado (Simulado)");
                     return Ok(ssl_stream);
                 }
                 Err(HandshakeError::WouldBlock(mid_stream)) => {
                     if start.elapsed() > Duration::from_secs(15) {
                         eprintln!("[DTLS] Timeout esperando handshake.");
+                        log_c!("[DTLS] Timeout esperando handshake.");
                         return Err(ClientErrors::SocketNotInitialized);
                     }
                     stream_result = mid_stream.handshake();
@@ -750,10 +759,12 @@ impl Client {
                 }
                 Err(HandshakeError::Failure(_)) => {
                     eprintln!("[DTLS] Error fatal");
+                    log_c!("[DTLS] Error fatal");
                     return Err(ClientErrors::SocketNotInitialized);
                 }
                 Err(HandshakeError::SetupFailure(_)) => {
                     eprintln!("[DTLS] Error setup");
+                    log_c!("[DTLS] Error setup");
                     return Err(ClientErrors::SocketNotInitialized);
                 }
             }
