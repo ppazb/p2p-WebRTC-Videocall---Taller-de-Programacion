@@ -1274,3 +1274,39 @@
 [23-01-26 15.45.13] [SERVER] CallStarted from admin to admin2
 [23-01-26 15.45.13] [SERVER] Marked admin and admin2 as busy
 [23-01-26 15.45.18] [SERVER] CallStarted from admin4 to usuario1
+[26-01-26 01.20.31] 
+
+[SERVER] Starting on 192.168.0.15:8000
+[26-01-26 01.20.53] 
+
+[SERVER] New connection received
+[26-01-26 01.20.58] [SERVER] User 'admin' logged in
+[26-01-26 01.20.58] [SERVER] Sent LoginOk
+
+[26-01-26 01.20.58] [SERVER] Sent Initial UserList to new user
+[26-01-26 01.21.04] 
+
+[SERVER] New connection received
+[26-01-26 01.21.14] [SERVER] User 'usuario1' logged in
+[26-01-26 01.21.14] [SERVER] Sent LoginOk
+
+[26-01-26 01.21.14] [SERVER] Sent Initial UserList to new user
+[26-01-26 01.21.19] [SERVER] CallStarted from usuario1 to admin
+[26-01-26 01.31.53] 
+
+[SERVER] Starting on 192.168.0.15:8000
+[26-01-26 01.31.58] 
+
+[SERVER] New connection received
+[26-01-26 01.32.09] 
+
+[SERVER] New connection received
+[26-01-26 01.32.14] [SERVER] User 'admin' logged in
+[26-01-26 01.32.14] [SERVER] Sent LoginOk
+
+[26-01-26 01.32.14] [SERVER] Sent Initial UserList to new user
+[26-01-26 01.32.20] [SERVER] User 'usuario1' logged in
+[26-01-26 01.32.20] [SERVER] Sent LoginOk
+
+[26-01-26 01.32.20] [SERVER] Sent Initial UserList to new user
+[26-01-26 01.32.24] [SERVER] CallStarted from usuario1 to admin

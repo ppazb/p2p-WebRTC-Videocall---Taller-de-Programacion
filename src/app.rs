@@ -6,6 +6,7 @@ use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
+use crate::audio_processing::g711;
 use crate::camera::Camera;
 use crate::client::Client;
 use crate::client_errors::ClientErrors;
@@ -23,9 +24,11 @@ use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::lobby::VistaLobby;
 use crate::vista::sign_up::VistaSignUp;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
+use crate::{log, log_c};
 use eframe::egui;
 use opencv::core::Mat;
 use rustls::StreamOwned;
+
 
 // COMENTARIO: Dsp se borra esto
 // Puse comentarios en las partes que modifiqué para que puedan saber donde están 
@@ -112,6 +115,7 @@ impl AppUI {
             let read_tls = tls_arc.clone();
             let write_tls = tls_arc.clone();
             println!("[CLIENT] Starting encripted transmission\n");
+            log_c!("[CLIENT] Starting encripted transmission\n");
 
             let (tx, rx) = channel::<AppEvent>();
 
@@ -352,12 +356,14 @@ impl AppUI {
 
             CambioVista::CalledUserBusy => {
                 eprintln!("[CLIENT] Called user was busy");
+                log_c!("[CLIENT] Called user was busy");
                 self.vista_actual = Vista::VistaCalledUserBusy(VistaCalledUserBusy::new());
             }
 
             // acepto la llamada -> nueva vista
             CambioVista::CallAccepted { target_user } => {
                 eprintln!("[CLIENT] Called accepted from: {}", target_user);
+                log_c!("[CLIENT] Called accepted from: {}", target_user);
                 self.target_username = Some(target_user.clone());
                 self.crear_camara();
 
@@ -399,6 +405,7 @@ impl AppUI {
             // Rechazar llamada -> vuelvo a lobby
             CambioVista::CallRejected { target_user } => {
                 eprintln!("[CLIENT] Rejected call from {}", target_user);
+                log_c!("[CLIENT] Rejected call from {}", target_user);
                 if let (Some(writer), Some(me)) = (&mut self.server_writer, &self.current_username)
                 {
                     //hay que comunicarle al otro cliente
@@ -670,6 +677,7 @@ impl AppUI {
 
             let handshake_handle = std::thread::spawn(move || -> Result<(), ClientErrors> {
                 eprintln!("[DEBUG THREAD] Starting sdp_handshake...");
+                log_c!("[DEBUG THREAD] Starting sdp_handshake...");
                 let (sockets, local_candidates, remote_ice, codecs) = match sdp_handshake(
                     in_call,
                     handshake_params,
@@ -694,6 +702,7 @@ impl AppUI {
                 };
                 if let Err(e) = tx_result.send(Ok((socket, local_candidates, remote_ice))) {
                     eprintln!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
+                    log_c!("[CLIENT] ERROR sending UDP socket through channel: {:?}", e);
                 };
                 Ok(())
             });
@@ -799,6 +808,7 @@ impl eframe::App for AppUI {
                         ServerMessage::OfferForwarded { from_user, offer } => {
                             if matches!(self.vista_actual, Vista::VistaLobby(_)) {
                                 eprintln!("[AppUI] Incomming call from {}", from_user);
+                                log_c!("[AppUI] Incomming call from {}", from_user);
                                 // Guardo la oferta
                                 self.pending_offer = Some(offer);
                                 self.cambiar_vista(CambioVista::ToIncomingCall {
@@ -812,6 +822,7 @@ impl eframe::App for AppUI {
                         // Llamada rechazada
                         ServerMessage::CallRejected { from_user } => {
                             eprintln!("[AppUI] {} rejected the call", from_user);
+                            log_c!("[AppUI] {} rejected the call", from_user);
                             self.liberar_recursos();
                             self.cambiar_vista(CambioVista::ToLobby {
                                 username: String::new(),
@@ -820,6 +831,7 @@ impl eframe::App for AppUI {
                         // Llamada finalizada
                         ServerMessage::CallEnded { from_user } => {
                             eprintln!("[AppUI] {} finished the call", from_user);
+                            log_c!("[AppUI] {} finished the call", from_user);
                             self.liberar_recursos();
                             self.crear_camara();
                             self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
