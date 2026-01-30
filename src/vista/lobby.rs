@@ -1,5 +1,5 @@
 use crate::{camera::Camera, vista::cambio::CambioVista};
-use eframe::egui::{self, Color32, Frame, RichText};
+use eframe::egui::{self, Color32, Frame, RichText, TextureHandle};
 use rustls::StreamOwned;
 use std::{
     net::TcpStream,
@@ -8,6 +8,7 @@ use std::{
 
 pub struct VistaLobby {
     pub users_list: Vec<String>,
+    preview_texture: Option<TextureHandle>,
 }
 
 impl Default for VistaLobby {
@@ -20,6 +21,7 @@ impl VistaLobby {
     pub fn new() -> Self {
         Self {
             users_list: Vec::new(),
+            preview_texture: None,
         }
     }
 
@@ -50,7 +52,7 @@ impl VistaLobby {
             return cambio;
         }
 
-        crate::vista::Vista::camera_preview_side_panel(ctx, camara);
+        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, &mut self.preview_texture);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             Frame::new()

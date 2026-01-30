@@ -602,8 +602,13 @@ impl AppUI {
                 self.pop_vista();
             }
 
-            CambioVista::CamEnable => self.iniciar_camara(),
-            CambioVista::CamDisable => self.detener_camara(),
+            CambioVista::CamEnable => {
+                self.iniciar_camara();
+            }
+
+            CambioVista::CamDisable => {
+                self.detener_camara();
+            }
         }
     }
 
@@ -738,6 +743,8 @@ impl AppUI {
 
 impl eframe::App for AppUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.set_pixels_per_point(1.4);
+
         while let Ok(event) = self.server_events_rx.try_recv() {
             match event {
                 AppEvent::LoginSuccess(username) => {

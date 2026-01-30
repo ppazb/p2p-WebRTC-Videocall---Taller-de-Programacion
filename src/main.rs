@@ -21,15 +21,15 @@ fn main() -> eframe::Result<()> {
     };
 
     let screen_size = eframe::egui::Vec2::new(
-        1366.0, // ancho
-        768.0,  // alto
+        1280.0, // ancho
+        720.0,  // alto
     );
 
     // con native_options se configuran distintos aspectos de la ventana
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(screen_size / 1.5)
-            .with_min_inner_size(screen_size / 2.0)
+            .with_min_inner_size(screen_size / 1.5)
             .with_title("RoomRTC - Cliente"),
         ..Default::default()
     };
