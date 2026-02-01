@@ -11,7 +11,7 @@ use eframe::egui::{self, Color32, Frame, Margin, TextureHandle, Vec2};
 use opencv::prelude::*;
 use rustls::StreamOwned;
 
-use crate::{camera::Camera, client::RtcStats, vista::cambio::CambioVista};
+use crate::{audio_processing::AudioSystem, camera::Camera, client::RtcStats, vista::cambio::CambioVista};
 
 pub struct VistaLlamada {
     rx_remoto: Option<Receiver<Mat>>,
@@ -38,6 +38,7 @@ impl VistaLlamada {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
         _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         // Reduzco demora de tooltip de estadísticas

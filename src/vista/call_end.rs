@@ -6,7 +6,7 @@ use std::{
 use eframe::egui::{self, TextureHandle};
 use rustls::StreamOwned;
 
-use crate::{camera::Camera, vista::cambio::CambioVista};
+use crate::{audio_processing::AudioSystem, camera::Camera, vista::cambio::CambioVista};
 
 pub struct VistaCallEnd {
     preview_texture: Option<TextureHandle>,
@@ -29,6 +29,7 @@ impl VistaCallEnd {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
         _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
@@ -48,7 +49,7 @@ impl VistaCallEnd {
             return cambio;
         }
 
-        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, &mut self.preview_texture);
+        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, audio_system, &mut self.preview_texture);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Centramos verticalmente el contenido restante

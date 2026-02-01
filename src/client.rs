@@ -138,7 +138,7 @@ pub struct Client {
     is_active_comunicator: Arc<AtomicBool>,
     camera: Arc<Mutex<Camera>>,
     stats: Arc<Mutex<RtcStats>>,
-    audio_system: Option<AudioSystem>,
+    //audio_system: Option<Arc<AudioSystem>>,
 }
 
 impl Client {
@@ -159,7 +159,7 @@ impl Client {
             is_active_comunicator: Arc::new(AtomicBool::new(false)),
             camera,
             stats: Arc::new(Mutex::new(RtcStats::default())),
-            audio_system: None,
+            //audio_system: None,
         })
     }
 
@@ -190,6 +190,7 @@ impl Client {
     /// Finalmente llama a metodo privados para encargar de toda la logica y manejo interno de la comunicacion.
     pub fn initialize_call(
         &mut self,
+        audio_system: &Arc<AudioSystem>,
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self
             .socket_recev
@@ -219,14 +220,10 @@ impl Client {
         let (tx_audio_internal, rx_audio_sender) = std::sync::mpsc::channel();
         let remote_audio_buffer = Arc::new(Mutex::new(VecDeque::new()));
         
-        if let Ok(sys) = AudioSystem::new(tx_audio_internal, remote_audio_buffer.clone()) {
-            self.audio_system = Some(sys);
-        } else {
-            eprintln!("Warning: No se pudo inicializar el sistema de audio.");
-            log_c!("Warning: No se pudo inicializar el sistema de audio.");
-        }
-
-        
+        audio_system
+        .as_ref()
+        .start_call(tx_audio_internal, remote_audio_buffer.clone());
+    
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let res = Self::reciver(
                 &socket_recev,

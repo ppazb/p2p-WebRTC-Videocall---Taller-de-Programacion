@@ -6,7 +6,7 @@ use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use crate::audio_processing::g711;
+use crate::audio_processing::AudioSystem;
 use crate::camera::Camera;
 use crate::client::Client;
 use crate::client_errors::ClientErrors;
@@ -24,7 +24,7 @@ use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::lobby::VistaLobby;
 use crate::vista::sign_up::VistaSignUp;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
-use crate::{log, log_c};
+use crate::log_c;
 use eframe::egui;
 use opencv::core::Mat;
 use rustls::StreamOwned;
@@ -69,7 +69,11 @@ pub struct AppUI {
     current_username: Option<String>,
     target_username: Option<String>,
 
-    file_path: Option<FilePathPacket> // Para guardar el FilePath
+    file_path: Option<FilePathPacket>, // Para guardar el FilePath
+
+    audio_system: Arc<AudioSystem>,
+    _input_stream: cpal::Stream,
+    _output_stream: cpal::Stream,
 }
 
 impl Drop for AppUI {
@@ -221,6 +225,20 @@ impl AppUI {
                 }
             });
 
+            // Inicializo AudioSystem, y guardo referencias a los streams
+            let audio_system = match AudioSystem::new_2() {
+                Ok(s) => s,
+                Err(_) => return None,
+            };
+            let input_stream = match AudioSystem::build_input_stream(Arc::clone(&audio_system)) {
+                Ok(i) => i,
+                Err(_) => return None,
+            };
+            let output_stream = match AudioSystem::build_output_stream(Arc::clone(&audio_system)) {
+                Ok(i) => i,
+                Err(_) => return None,
+            };
+
             Some(Self {
                 //Inicia en vista de login por deffault
                 vista_actual: Vista::VistaLogin(VistaLogin::new()),
@@ -242,7 +260,11 @@ impl AppUI {
                 current_username: None,
                 target_username: None,
 
-                file_path: None
+                file_path: None,
+
+                audio_system,
+                _input_stream: input_stream,
+                _output_stream: output_stream,
             })
         } else {
             None
@@ -323,8 +345,6 @@ impl AppUI {
                 self.crear_camara();
                 self.vista_actual = Vista::VistaLobby(VistaLobby::new());
             }
-
-            // Pantalla aceptar y rechazar llamda
             CambioVista::ToCallStart { username } => {
                 self.target_username = Some(username.clone());
                 self.crear_camara();
@@ -347,20 +367,15 @@ impl AppUI {
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(username));
             }
-
-            // paso a la vista de aceptar o rechazar llamada
             CambioVista::ToIncomingCall { caller } => {
                 self.target_username = Some(caller.clone());
                 self.vista_actual = Vista::VistaIncomingCall(VistaIncomingCall::new(caller));
             }
-
             CambioVista::CalledUserBusy => {
                 eprintln!("[CLIENT] Called user was busy");
                 log_c!("[CLIENT] Called user was busy");
                 self.vista_actual = Vista::VistaCalledUserBusy(VistaCalledUserBusy::new());
             }
-
-            // acepto la llamada -> nueva vista
             CambioVista::CallAccepted { target_user } => {
                 eprintln!("[CLIENT] Called accepted from: {}", target_user);
                 log_c!("[CLIENT] Called accepted from: {}", target_user);
@@ -401,8 +416,6 @@ impl AppUI {
 
                 self.vista_actual = Vista::VistaCallStart(VistaCallStart::new(target_user));
             }
-
-            // Rechazar llamada -> vuelvo a lobby
             CambioVista::CallRejected { target_user } => {
                 eprintln!("[CLIENT] Rejected call from {}", target_user);
                 log_c!("[CLIENT] Rejected call from {}", target_user);
@@ -430,8 +443,6 @@ impl AppUI {
                     username: String::new(),
                 });
             }
-
-            // Llamada aceptada
             CambioVista::ToCall => {
                 if let Some(c) = &self.cliente {
                     let stats = c.copy_stats();
@@ -443,8 +454,6 @@ impl AppUI {
                     ))
                 }
             }
-
-            // finalizo llamada -> pantalla de fin de llamada con boton a volver al lobby
             CambioVista::ToCallEnd => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
                 {
@@ -471,20 +480,16 @@ impl AppUI {
                     }
                 }
                 self.liberar_recursos();
+                self.audio_system.end_call();
                 self.crear_camara();
                 self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
             }
-
-            // Las siguientes CambioVistas son para la parte de archivos
-            // Solamente para testeo de envio de archivos 
             CambioVista::SendFile => {
                 self.push_vista(Vista::VistaSendFile(crate::vista::file_sending::VistaSendFile::new()));
             }
-
             CambioVista::SendFileQuit => {
                 self.pop_vista();
             }
-
             CambioVista::SendFileConfirmed(path) => {
 
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
@@ -525,12 +530,10 @@ impl AppUI {
                 //     ))
                 // }
             }
-
             CambioVista::SendFileRequested { from_user, filename } => {
                 self.push_vista(Vista::VistaFileSendingRequested(from_user, filename));
             }
-
-            CambioVista::SendFileAccepted {from_user, filename} => {
+            CambioVista::SendFileAccepted {from_user: _, filename} => {
 
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
                     if let Some(writer) = &mut self.server_writer {
@@ -563,11 +566,10 @@ impl AppUI {
                         self.handles.push(write_handle);
                     }; 
                 }; 
-            
+
                 self.pop_vista();
             }
-
-            CambioVista::SendFileRejected { from_user, filename } => {
+            CambioVista::SendFileRejected { from_user: _, filename } => {
 
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
                     if let Some(writer) = &mut self.server_writer {
@@ -596,27 +598,36 @@ impl AppUI {
 
                 self.pop_vista();
             }
-
             CambioVista::TargetUserSendFileAccepted { from_user, filename } => {
                 self.push_vista(Vista::VistaTargetUserFileSendingAccepted(from_user, filename));
             }
-
             CambioVista::TargetUserSendFileRejected { from_user, filename } => {
                 self.push_vista(Vista::VistaTargetUserFileSendingRejected(from_user, filename));
             }
-
             CambioVista::SendFileNoticeClosed => {
                 self.pop_vista();
             }
-
             CambioVista::CamEnable => {
                 self.iniciar_camara();
             }
-
             CambioVista::CamDisable => {
                 self.detener_camara();
             }
+            CambioVista::MicEnable => {
+                self.iniciar_mic();
+            }
+            CambioVista::MicDisable => {
+                self.detener_mic();
+            },
         }
+    }
+
+    fn iniciar_mic(&self) {
+        self.audio_system.enable_capture();
+    }
+
+    fn detener_mic(&self) {
+        self.audio_system.disable_capture();
     }
 
     fn liberar_recursos(&mut self) {
@@ -721,7 +732,7 @@ impl AppUI {
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
                 c.set_rol(is_active);
-                self.client_handles = c.initialize_call();
+                self.client_handles = c.initialize_call(&self.audio_system);
                 self.cliente = Some(c);
             }
         }
@@ -898,7 +909,7 @@ impl eframe::App for AppUI {
         }
 
         if let Some(stream) = &mut self.server_writer {
-            let cambio = self.vista_actual.ui(ctx, &self.camara, stream);
+            let cambio = self.vista_actual.ui(ctx, &self.camara, stream, &self.audio_system);
             self.cambiar_vista(cambio);
         }
 

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use eframe::egui::{self, Color32, Frame, RichText, TextureHandle};
 
-use crate::{camera::Camera, vista::cambio::CambioVista};
+use crate::{audio_processing::AudioSystem, camera::Camera, vista::cambio::CambioVista};
 
 pub struct VistaCallStart {
     pub target_username: String,
@@ -17,7 +17,7 @@ impl VistaCallStart {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
+    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>, audio_system: &Arc<AudioSystem>) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::TopBottomPanel::top("menu_bar")
@@ -36,7 +36,7 @@ impl VistaCallStart {
         }
 
         // Mostramos la vista previa de la cámara local mientras esperamos
-        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, &mut self.preview_texture);
+        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, audio_system, &mut self.preview_texture);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.centered_and_justified(|ui| {

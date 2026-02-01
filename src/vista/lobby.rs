@@ -1,4 +1,4 @@
-use crate::{camera::Camera, vista::cambio::CambioVista};
+use crate::{audio_processing::AudioSystem, camera::Camera, vista::cambio::CambioVista};
 use eframe::egui::{self, Color32, Frame, RichText, TextureHandle};
 use rustls::StreamOwned;
 use std::{
@@ -29,6 +29,7 @@ impl VistaLobby {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
         _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
@@ -52,7 +53,7 @@ impl VistaLobby {
             return cambio;
         }
 
-        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, &mut self.preview_texture);
+        cambio = crate::vista::Vista::camera_preview_side_panel(ctx, camara, audio_system, &mut self.preview_texture);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             Frame::new()

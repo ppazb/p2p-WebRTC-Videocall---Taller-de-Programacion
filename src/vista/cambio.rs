@@ -26,4 +26,7 @@ pub enum CambioVista {
 
     TargetUserSendFileAccepted{ from_user: String, filename: String },
     TargetUserSendFileRejected{ from_user: String, filename: String },   
+
+    MicEnable,
+    MicDisable,
 }

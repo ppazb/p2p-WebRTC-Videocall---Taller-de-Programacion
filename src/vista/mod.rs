@@ -7,10 +7,9 @@ use eframe::egui::{self, Color32, ColorImage, Frame, Margin, TextureHandle, Vec2
 use rustls::StreamOwned;
 
 use crate::{
-    camera::Camera,
-    vista::{
+    audio_processing::AudioSystem, camera::Camera, vista::{
         call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy, cambio::CambioVista, file_sending::VistaSendFile, incoming_call::VistaIncomingCall, llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin, sign_up::VistaSignUp
-    },
+    }
 };
 use opencv::{
     core::{Mat, MatTraitConst, MatTraitConstManual},
@@ -49,16 +48,17 @@ impl Vista {
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
         tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
+        audio_system: &Arc<AudioSystem>,
     ) -> CambioVista {
         match self {
             Vista::VistaLogin(view) => view.ui(ctx, tls_tcp),
             Vista::VistaSignUp(view) => view.ui(ctx, tls_tcp),
-            Vista::VistaLobby(view) => view.ui(ctx, camara, tls_tcp),
-            Vista::VistaLlamada(view) => view.ui(ctx, camara, tls_tcp),
-            Vista::VistaCallStart(view) => view.ui(ctx, camara),
-            Vista::VistaCallEnd(view) => view.ui(ctx, camara, tls_tcp),
+            Vista::VistaLobby(view) => view.ui(ctx, camara, audio_system, tls_tcp),
+            Vista::VistaLlamada(view) => view.ui(ctx, camara, audio_system, tls_tcp),
+            Vista::VistaCallStart(view) => view.ui(ctx, camara, audio_system),
+            Vista::VistaCallEnd(view) => view.ui(ctx, camara, audio_system, tls_tcp),
             Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tls_tcp),
-            Vista::VistaCalledUserBusy(view) => view.ui(ctx, camara),
+            Vista::VistaCalledUserBusy(view) => view.ui(ctx, camara, audio_system),
             Vista::VistaSendFile(view) => view.ui(ctx), 
             Vista::VistaFileSendingRequested(from_user, filename) => Self::file_sending_requested_pop_up(ctx, from_user, filename), 
             Vista::VistaTargetUserFileSendingAccepted(from_user, filename) => Self::file_sending_accepted_pop_up(ctx, from_user, filename),
@@ -164,6 +164,7 @@ impl Vista {
     pub fn camera_preview_side_panel(
         ctx: &egui::Context,
         camera: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
         texture: &mut Option<TextureHandle>
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
@@ -199,8 +200,6 @@ impl Vista {
 
                 // Vista previa de cámara + controles
                 ui.vertical_centered(|ui| {
-                    // ui.add_space(ui.available_height() / 2.0);
-
                     // Mediciones de vista previa
                     let aspect_ratio = 4.0 / 3.0;
 
@@ -221,7 +220,6 @@ impl Vista {
                         egui::vec2(max_width, max_width / aspect_ratio)
                     };
 
-
                     // Carga de frame y consulta de estado
                     let (latest_frame, cam_active) = if let Some(cam) = camera {
                         if let Ok(cam) = cam.lock() {
@@ -239,7 +237,7 @@ impl Vista {
                     .or_else(Self::no_camera_texture);
 
                     let content_height = buttons_height + preview_size.y + 10.0;
-                    let top_space = ((ui.available_height() - content_height) / 2.0).max(10.0);
+                    let top_space = ((ui.available_height() - content_height).max(20.0))/2.0;
                     ui.add_space(top_space);
 
                     // Actualizo textura recibida de la vista
@@ -276,10 +274,15 @@ impl Vista {
                         }
                     }
                     
-                    if ui.add_sized([ui.available_width() * 0.45, 32.0], egui::Button::new("Encender micrófono")).clicked(){
-                        // TODO: Logica de microfono
+                    if !audio_system.is_capturing() {
+                        if ui.add_sized([200.0, 32.0], egui::Button::new("Encender micrófono")).clicked(){
+                            cambio = CambioVista::MicEnable;
+                        }
+                    } else {
+                        if ui.add_sized([200.0, 32.0], egui::Button::new("Apagar micrófono")).clicked(){
+                            cambio = CambioVista::MicDisable;
+                        }
                     }
-
 
                     // ui.set_width(ui.available_width());
 
@@ -372,66 +375,4 @@ impl Vista {
             egui::Color32::WHITE,
         );
     }
-
-    // fn _apply_rounded_mask(img: &ColorImage, radius: f32) -> ColorImage {
-    //     let (w, h) = (img.size[0] as f32, img.size[1] as f32);
-    //     let mut out = img.clone();
-
-    //     for y in 0..img.size[1] {
-    //         for x in 0..img.size[0] {
-    //             let xf = x as f32;
-    //             let yf = y as f32;
-
-    //             // Distancias a los bordes (esquinas)
-    //             let dx = if xf < radius {
-    //                 radius - xf
-    //             } else if xf > w - radius {
-    //                 xf - (w - radius)
-    //             } else {
-    //                 0.0
-    //             };
-
-    //             let dy = if yf < radius {
-    //                 radius - yf
-    //             } else if yf > h - radius {
-    //                 yf - (h - radius)
-    //             } else {
-    //                 0.0
-    //             };
-
-    //             // Si estamos dentro del borde redondeado, mantenemos el pixel
-    //             // Si estamos fuera (más allá del radio), lo hacemos transparente
-    //             if dx > 0.0 && dy > 0.0 && (dx * dx + dy * dy).sqrt() > radius {
-    //                 let idx = y * img.size[0] + x;
-    //                 let mut color = out.pixels[idx];
-    //                 color = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 0);
-    //                 out.pixels[idx] = color;
-    //             }
-    //         }
-    //     }
-
-    //     out
-    // }
-
-    // fn _show_rounded_image(ui: &mut Ui, tex: eframe::egui::TextureHandle, size: Vec2) {
-    //     let (rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
-    //     let rounding = egui::CornerRadius::same(20);
-    //     let painter = ui.painter();
-
-    //     // Fondo y borde
-    //     painter.rect_filled(rect, rounding, egui::Color32::from_gray(30));
-    //     painter.rect_stroke(
-    //         rect,
-    //         rounding,
-    //         egui::Stroke::new(2.0, egui::Color32::LIGHT_GRAY),
-    //         egui::StrokeKind::Outside,
-    //     );
-
-    //     painter.image(
-    //         tex.id(),
-    //         rect,
-    //         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-    //         egui::Color32::WHITE,
-    //     );
-    // }
 }
