@@ -22,7 +22,7 @@ struct IncomingFile {
 }
 
 impl IncomingFile {
-    pub fn new(filename: Option<String>, incoming_file: Option<File>, expected_size: Option<u64>) -> Self {
+    pub fn new(_filename: Option<String>, incoming_file: Option<File>, expected_size: Option<u64>) -> Self {
         Self {
             // filename: filename,
             incoming_file: incoming_file,
@@ -52,8 +52,7 @@ impl IncomingFile {
 pub struct SctpStats {
     endpoint: Endpoint, 
     assoc: Option<Association>,
-    assoc_handle: Option<AssociationHandle>,
-    local: SocketAddr, 
+    assoc_handle: Option<AssociationHandle>, 
     remote: SocketAddr, 
     pending_file: Option<FilePathPacket>,
 
@@ -77,9 +76,9 @@ pub struct SctpStats {
 //    Si el SCTP Handshake ya se completó y hay archivo pendiente para enviar, se envía primero el Header
 //    para crear el Strcut IncomingFile. 
 // 6. Se envía por último el contenido del archivo 
-pub fn start_sctp_thread(local_adder: SocketAddr, remote_adder: SocketAddr, is_initiator: &Arc<AtomicBool>, in_call: &Arc<AtomicBool>, rx_file: Receiver<FilePathPacket>, mut dtls_stream: SslStream<MuxedUdpStream>) -> Result<(), SctpError> {
+pub fn start_sctp_thread(remote_adder: SocketAddr, is_initiator: &Arc<AtomicBool>, in_call: &Arc<AtomicBool>, rx_file: Receiver<FilePathPacket>, mut dtls_stream: SslStream<MuxedUdpStream>) -> Result<(), SctpError> {
 
-    let mut sctpstats = SctpStats::new(local_adder, remote_adder, is_initiator, None);
+    let mut sctpstats = SctpStats::new(remote_adder, is_initiator, None);
 
     if is_initiator.load(Ordering::SeqCst) {
         let client_config = ClientConfig::new(); 
@@ -152,7 +151,7 @@ pub fn start_sctp_thread(local_adder: SocketAddr, remote_adder: SocketAddr, is_i
 }
 
 impl SctpStats {
-    pub fn new(local: SocketAddr, remote: SocketAddr, is_initiator: &Arc<AtomicBool>, pending_file: Option<FilePathPacket>) -> Self {
+    pub fn new(remote: SocketAddr, is_initiator: &Arc<AtomicBool>, pending_file: Option<FilePathPacket>) -> Self {
 
         let endpoint_config = EndpointConfig::new(); 
         if !is_initiator.load(Ordering::SeqCst) {
@@ -163,8 +162,7 @@ impl SctpStats {
             Self {
                 endpoint: endpoint, 
                 assoc: None, 
-                assoc_handle: None, 
-                local: local,
+                assoc_handle: None,
                 remote: remote,  
                 pending_file: pending_file, 
                 occupied_stream_id: HashSet::new(), 
@@ -180,7 +178,6 @@ impl SctpStats {
                 endpoint: endpoint, 
                 assoc: None, 
                 assoc_handle: None, 
-                local: local,
                 remote: remote,  
                 pending_file: pending_file, 
                 occupied_stream_id: HashSet::new(), 
@@ -226,7 +223,7 @@ impl SctpStats {
                                         StreamEvent::Readable { id } => {
                                             if self.handshake_completed.load(Ordering::SeqCst) {
                                                if let Ok(mut stream) = assoc.stream(id) {
-                                                    while let Ok(Some(mut chunks)) = stream.read_sctp() {
+                                                    while let Ok(Some(chunks)) = stream.read_sctp() {
                                                         println!("[SCTP] Se recibió un CHUNK"); 
                                                         let mut buffer = vec![0u8; 10*1024]; 
                                                         if let Ok(n) = chunks.read(&mut buffer) {

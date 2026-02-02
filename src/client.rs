@@ -206,9 +206,6 @@ impl Client {
         let socket_rtcp_out = socket_send.try_clone().map_err(ClientErrors::CantClone)?;
 
         // Direcciones para SCTP
-        let local_adder = socket_recev
-            .local_addr()
-            .map_err(|_| ClientErrors::SocketNotInitialized)?;
         let remote_adder = socket_recev
             .peer_addr()
             .map_err(|_| ClientErrors::SocketNotInitialized)?;
@@ -257,7 +254,6 @@ impl Client {
             println!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
             log_c!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
             match start_sctp_thread(
-                local_adder,
                 remote_adder,
                 &is_initiator,
                 &in_call_sctp,

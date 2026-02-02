@@ -39,3 +39,254 @@
 [28-01-26 01.24.34] [SDP] Offer recieved from: usuario1)
 [28-01-26 01.24.34] [SDP] Generating answer...
 [28-01-26 01.24.34] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.27.07] [CLIENT] Starting encripted transmission
+
+[02-02-26 11.27.59] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.27.59] [SDP] Initialize handshake with admin
+[02-02-26 11.27.59] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.27.59] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.27.59] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.27.59] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.27.59] [SDP] Gathered 3 candidates
+[02-02-26 11.27.59] [SDP] Calling to: admin
+[02-02-26 11.28.01] [SDP] Answer recieved
+[02-02-26 11.28.01] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.28.01] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.28.01] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.28.01] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.28.01] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.28.01] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.28.02] [DTLS] Iniciando Handshake (mux). Rol Cliente: true
+[02-02-26 11.28.02] [DTLS] Handshake Exitoso!
+[02-02-26 11.28.02] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.28.02] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.33.15] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.33.15] [SDP] Initialize handshake with admin
+[02-02-26 11.33.15] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.33.15] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.33.15] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.33.15] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.33.15] [SDP] Gathered 3 candidates
+[02-02-26 11.33.15] [SDP] Calling to: admin
+[02-02-26 11.33.16] [SDP] Answer recieved
+[02-02-26 11.33.16] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.33.16] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.33.16] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.33.16] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.33.16] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.33.16] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.33.17] [DTLS] Iniciando Handshake (mux). Rol Cliente: true
+[02-02-26 11.33.17] [DTLS] Handshake Exitoso!
+[02-02-26 11.33.17] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.33.17] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.33.22] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.33.22] [SDP] Initialize handshake with admin
+[02-02-26 11.33.22] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.33.22] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.33.22] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.33.22] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.33.22] [SDP] Gathered 3 candidates
+[02-02-26 11.33.22] [SDP] Calling to: admin
+[02-02-26 11.33.22] [AppUI] admin rejected the call
+[02-02-26 11.33.24] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.33.24] [SDP] Initialize handshake with admin
+[02-02-26 11.33.24] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.33.24] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.33.24] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.33.24] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.33.24] [SDP] Gathered 3 candidates
+[02-02-26 11.33.24] [SDP] Calling to: admin
+[02-02-26 11.33.25] [AppUI] admin rejected the call
+[02-02-26 11.33.26] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.33.26] [SDP] Initialize handshake with admin
+[02-02-26 11.33.26] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.33.26] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.33.26] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.33.26] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.33.26] [SDP] Gathered 3 candidates
+[02-02-26 11.33.26] [SDP] Calling to: admin
+[02-02-26 11.33.27] [SDP] Answer recieved
+[02-02-26 11.33.27] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.33.27] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.33.27] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.33.27] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.33.27] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.33.27] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.33.28] [DTLS] Iniciando Handshake (mux). Rol Cliente: true
+[02-02-26 11.33.28] [DTLS] Handshake Exitoso!
+[02-02-26 11.33.28] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.33.28] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.33.33] [AppUI] Incomming call from admin
+[02-02-26 11.33.34] [CLIENT] Rejected call from admin
+[02-02-26 11.33.35] [AppUI] Incomming call from admin
+[02-02-26 11.33.36] [CLIENT] Called accepted from: admin
+[02-02-26 11.33.36] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.33.36] [SDP] Initialize handshake with admin
+[02-02-26 11.33.36] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.33.36] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.33.36] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.33.36] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.33.36] [SDP] Gathered 3 candidates
+[02-02-26 11.33.36] [SDP] Offer recieved from: admin)
+[02-02-26 11.33.36] [SDP] Generating answer...
+[02-02-26 11.33.36] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.33.36] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.33.36] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.33.36] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.33.36] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.33.36] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.33.37] [DTLS] Iniciando Handshake (mux). Rol Cliente: false
+[02-02-26 11.33.37] [DTLS] Handshake Exitoso!
+[02-02-26 11.33.37] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.33.37] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.33.59] [AppUI] Incomming call from admin
+[02-02-26 11.34.00] [CLIENT] Called accepted from: admin
+[02-02-26 11.34.00] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.34.00] [SDP] Initialize handshake with admin
+[02-02-26 11.34.00] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.34.00] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.34.00] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.34.00] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.34.00] [SDP] Gathered 3 candidates
+[02-02-26 11.34.00] [SDP] Offer recieved from: admin)
+[02-02-26 11.34.00] [SDP] Generating answer...
+[02-02-26 11.34.00] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.34.00] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.34.00] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.34.00] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.34.00] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.34.00] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.34.00] [DTLS] Iniciando Handshake (mux). Rol Cliente: false
+[02-02-26 11.34.00] [DTLS] Handshake Exitoso!
+[02-02-26 11.34.00] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.34.00] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.34.17] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.34.17] [SDP] Initialize handshake with admin
+[02-02-26 11.34.17] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.34.17] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.34.17] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.34.17] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.34.17] [SDP] Gathered 3 candidates
+[02-02-26 11.34.17] [SDP] Calling to: admin
+[02-02-26 11.34.38] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.34.38] [SDP] Initialize handshake with admin
+[02-02-26 11.34.38] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.34.38] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.34.38] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.34.38] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.34.38] [SDP] Gathered 3 candidates
+[02-02-26 11.34.38] [SDP] Calling to: admin
+[02-02-26 11.34.39] [SDP] Answer recieved
+[02-02-26 11.34.39] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.34.39] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.34.39] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.34.39] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.34.39] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.34.39] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.34.39] [DTLS] Iniciando Handshake (mux). Rol Cliente: true
+[02-02-26 11.34.39] [DTLS] Handshake Exitoso!
+[02-02-26 11.34.39] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.34.39] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.34.50] [AppUI] admin finished the call
+[02-02-26 11.35.08] [AppUI] Incomming call from admin
+[02-02-26 11.35.10] [CLIENT] Called accepted from: admin
+[02-02-26 11.35.10] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.35.10] [SDP] Initialize handshake with admin
+[02-02-26 11.35.10] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.35.10] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.35.10] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.35.10] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.35.10] [SDP] Gathered 3 candidates
+[02-02-26 11.35.10] [SDP] Offer recieved from: admin)
+[02-02-26 11.35.10] [SDP] Generating answer...
+[02-02-26 11.35.10] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.35.10] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.35.10] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.35.10] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.35.10] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.35.10] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.35.11] [DTLS] Iniciando Handshake (mux). Rol Cliente: false
+[02-02-26 11.35.11] [DTLS] Handshake Exitoso!
+[02-02-26 11.35.11] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.35.11] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.37.03] [RTCP] Recibido BYE. Cerrando llamada.
+[02-02-26 11.37.23] [DEBUG THREAD] Starting sdp_handshake...
+[02-02-26 11.37.23] [SDP] Initialize handshake with admin
+[02-02-26 11.37.23] [SDP] Created host candidate: 192.168.0.15:8092
+[02-02-26 11.37.23] [SDP] Created host candidate: 192.168.0.15:8081
+[02-02-26 11.37.23] [SDP] Created host candidate: 192.168.0.15:8059
+[02-02-26 11.37.23] [SDP] Gathered 3 candidates on 3 sockets
+[02-02-26 11.37.23] [SDP] Gathered 3 candidates
+[02-02-26 11.37.23] [SDP] Calling to: admin
+[02-02-26 11.37.24] [SDP] Answer recieved
+[02-02-26 11.37.24] [ICE] Trying to connect with 3 peer candidates
+[02-02-26 11.37.24] [ICE] Peer candidate: 192.168.0.26:8092
+[02-02-26 11.37.24] [ICE] Peer candidate: 192.168.0.26:8081
+[02-02-26 11.37.24] [ICE] Peer candidate: 192.168.0.26:8059
+[02-02-26 11.37.24] [ICE] Trying connection to 192.168.0.26:8092
+[02-02-26 11.37.24] [ICE] Successful connection to 192.168.0.26:8092
+[02-02-26 11.37.25] [DTLS] Iniciando Handshake (mux). Rol Cliente: true
+[02-02-26 11.37.26] [DTLS] Handshake Exitoso!
+[02-02-26 11.37.26] [DTLS] Keying Material Exportado (Simulado)
+[02-02-26 11.37.26] [DTLS] Iniciando manejo de recepción DTLS/SCTP
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.15] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.16] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.17] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.17] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.18] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.19] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.20] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.20] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.20] Audio Send failed: Resource temporarily unavailable (os error 11)
+[02-02-26 11.38.20] Audio Send failed: Resource temporarily unavailable (os error 11)
