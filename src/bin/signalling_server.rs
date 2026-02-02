@@ -657,6 +657,73 @@ fn handle_client(
                             }
                         }
                     }
+                    Some(ClientMessage::FileSendingRequest {
+                        username,
+                        target_user,
+                        filename,
+                    }) => {
+                        let mut clients_map = connected_clients
+                            .lock()
+                            .map_err(|e| std::io::Error::other(format!("Sync Error: {e}")))?;
+                        if let Some(target_stream) = clients_map.get_mut(&target_user) {
+                            let response = ServerMessage::FileSendingRequestForwarded {
+                                from_user: username.clone(),
+                                filename: filename.clone(),
+                            };
+                            if let Ok(mut tls_s) = target_stream.lock() {
+                                let _ = write_all_nonblocking(
+                                    &mut *tls_s,
+                                    response.to_json_line().as_bytes(),
+                                );
+                                let _ = tls_s.flush();
+                            }
+                        }
+                    }
+                    Some(ClientMessage::FileSendingAccept {
+                        username,
+                        target_user,
+                        filename,
+                    }) => {
+                        let mut clients_map = connected_clients
+                            .lock()
+                            .map_err(|e| std::io::Error::other(format!("Sync Error: {e}")))?;
+                        if let Some(target_stream) = clients_map.get_mut(&target_user) {
+                            let response = ServerMessage::FileSendingAccepted {
+                                from_user: username.clone(),
+                                filename: filename.clone(),
+                            };
+                            if let Ok(mut tls_s) = target_stream.lock() {
+                                let _ = write_all_nonblocking(
+                                    &mut *tls_s,
+                                    response.to_json_line().as_bytes(),
+                                );
+                                let _ = tls_s.flush();
+                            }
+                        }
+                    }
+                    Some(ClientMessage::FileSendingReject {
+                        username,
+                        target_user,
+                        filename,
+                    }) => {
+                        let mut clients_map = connected_clients
+                            .lock()
+                            .map_err(|e| std::io::Error::other(format!("Sync Error: {e}")))?;
+                        if let Some(target_stream) = clients_map.get_mut(&target_user) {
+                            let response = ServerMessage::FileSendingRejected {
+                                from_user: username.clone(),
+                                filename: filename.clone(),
+                            };
+                            if let Ok(mut tls_s) = target_stream.lock() {
+                                let _ = write_all_nonblocking(
+                                    &mut *tls_s,
+                                    response.to_json_line().as_bytes(),
+                                );
+                                let _ = tls_s.flush();
+                            }
+                        }
+                    }
+
                     None => {
                         eprintln!("[ERROR] Failed to parse JSON");
                         let response = ServerMessage::Error {

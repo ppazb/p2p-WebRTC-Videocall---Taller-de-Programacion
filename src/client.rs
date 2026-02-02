@@ -8,17 +8,9 @@ use crate::rtp::RtpPackage;
 use crate::sdp_protocol::*;
 use crate::video_processing_errors::VideoProcessingErrors;
 use opencv::core::{Mat, MatTraitConst};
-use std::collections::{BTreeMap, HashMap};
-use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::SyncSender;
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::vec;
-use std::{net::UdpSocket, thread};
-
-// Imports de OpenSSL
+use std::collections::{BTreeMap, HashMap, VecDeque};
+//use std::io::{Read, Write};
+use crate::log_c;
 use openssl::asn1::Asn1Time;
 use openssl::bn::BigNum;
 use openssl::hash::MessageDigest;
@@ -26,6 +18,23 @@ use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
 use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod, SslVerifyMode};
 use openssl::x509::X509;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::vec;
+use std::{net::UdpSocket, thread};
+// modulo de audio local
+use crate::audio_processing::{AudioSystem, g711};
+
+// Imports para manejo de archivos y SCTP
+use crate::file_path::FilePathPacket;
+use crate::sctp::{MuxedUdpStream, start_sctp_thread};
+
+// Relacion de muestras en el buffer de audio, mantener un numero razonable que siga la linea de
+// frecuecia Hz del microfno / muestras, en nuestro caso 8k / 2.4k es alrededor de 300 ms
+const MAX_REMOTE_AUDIO_BUFFER_SAMPLES: usize = 2400;
 
 #[derive(Debug, Default)]
 pub struct RtcStats {
@@ -44,7 +53,7 @@ pub struct RtcStats {
     pub last_arrival_time: Option<Instant>,
     pub initialized: bool,
 
-    // Stats for calculating rates
+    // Stats para calcular rates
     last_bytes: u32,
     last_packets: u32,
     last_rate_update: Option<Instant>,
@@ -119,15 +128,16 @@ impl JitterBuffer {
     }
 }
 
-#[derive(Debug)]
 pub struct Client {
     socket_send: Option<UdpSocket>,
     socket_recev: Option<UdpSocket>,
     tx_remoto: SyncSender<Mat>,
+    rx_file: Option<Receiver<FilePathPacket>>, // Receiver para archivos
     in_call: Arc<AtomicBool>,
     is_active_comunicator: Arc<AtomicBool>,
     camera: Arc<Mutex<Camera>>,
     stats: Arc<Mutex<RtcStats>>,
+    //audio_system: Option<Arc<AudioSystem>>,
 }
 
 impl Client {
@@ -135,6 +145,7 @@ impl Client {
     /// tambien recive channel para comunicarse con la UI.
     pub fn new(
         tx_remoto: SyncSender<Mat>,
+        rx_file: Receiver<FilePathPacket>,
         in_call: Arc<AtomicBool>,
         camera: Arc<Mutex<Camera>>,
     ) -> Result<Self, ClientErrors> {
@@ -142,10 +153,12 @@ impl Client {
             socket_recev: None,
             socket_send: None,
             tx_remoto,
+            rx_file: Some(rx_file),
             in_call,
             is_active_comunicator: Arc::new(AtomicBool::new(false)),
             camera,
             stats: Arc::new(Mutex::new(RtcStats::default())),
+            //audio_system: None,
         })
     }
 
@@ -167,6 +180,7 @@ impl Client {
             Err(e) => return eprintln!("{}", e),
         };
         println!("[Session Description] {}", peer_session_description);
+        log_c!("[Session Description] {}", peer_session_description);
     }
 
     ///Inicia la comunicacion entre 2 clientes genera 2 hilos de ejecucion uno como receptor y otro como emsior
@@ -174,7 +188,8 @@ impl Client {
     /// Ademas cada hilo levanta los recursos necesarios: camara, decoder, encoder que necesite.
     /// Finalmente llama a metodo privados para encargar de toda la logica y manejo interno de la comunicacion.
     pub fn initialize_call(
-        &self,
+        &mut self,
+        audio_system: &Arc<AudioSystem>,
     ) -> Result<Vec<JoinHandle<Result<(), ClientErrors>>>, ClientErrors> {
         let socket_recev = self
             .socket_recev
@@ -190,33 +205,64 @@ impl Client {
             .map_err(ClientErrors::CantClone)?;
         let socket_rtcp_out = socket_send.try_clone().map_err(ClientErrors::CantClone)?;
 
+        // Direcciones para SCTP
+        let remote_adder = socket_recev
+            .peer_addr()
+            .map_err(|_| ClientErrors::SocketNotInitialized)?;
+
+        // Canal para demultiplexar paquetes DTLS desde el receiver hacia el hilo SCTP
+        let (tx_dtls, rx_dtls) = mpsc::sync_channel::<Vec<u8>>(256);
+
         let tx_remoto = self.tx_remoto.clone();
         let in_call = Arc::clone(&self.in_call);
         let stats_recv = Arc::clone(&self.stats);
 
-        // --- HANDSHAKE DTLS ROBUSTO ---
-        if let Err(e) = self.perform_dtls_handshake() {
-            eprintln!(
-                "[DTLS] Error Fatal: {:?}. La conexión no será segura o fallará.",
-                e
-            );
-            // Podríamos retornar error aquí si la seguridad es obligatoria
-        } else {
-            println!("[DTLS] Handshake Completado Correctamente.");
-        }
+        let (tx_audio_internal, rx_audio_sender) = std::sync::mpsc::channel();
+        let remote_audio_buffer = Arc::new(Mutex::new(VecDeque::new()));
+
+        audio_system
+            .as_ref()
+            .connect_audio(tx_audio_internal, remote_audio_buffer.clone());
 
         let receiver_thread = thread::spawn(move || -> Result<(), ClientErrors> {
             let res = Self::reciver(
                 &socket_recev,
                 &socket_rtcp_out,
                 &tx_remoto,
+                tx_dtls, // Pasamos el sender DTLS
                 &in_call,
                 &stats_recv,
+                remote_audio_buffer,
             );
             if let Err(ref e) = res {
                 eprintln!("[CRITICAL] Receiver thread died: {:?}", e);
+                log_c!("[CRITICAL] Receiver thread died: {:?}", e);
             }
             res
+        });
+
+        let ssl_muxed_stream = self.perform_dtls_handshake_mux(rx_dtls)?;
+
+        let rx_file = self
+            .rx_file
+            .take()
+            .ok_or(ClientErrors::SocketNotInitialized)?;
+        let in_call_sctp = Arc::clone(&self.in_call);
+        let is_initiator = Arc::clone(&self.is_active_comunicator);
+
+        let dtls_thread = std::thread::spawn(move || -> Result<(), ClientErrors> {
+            println!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
+            log_c!("[DTLS] Iniciando manejo de recepción DTLS/SCTP");
+            match start_sctp_thread(
+                remote_adder,
+                &is_initiator,
+                &in_call_sctp,
+                rx_file,
+                ssl_muxed_stream,
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(ClientErrors::SctpError(e)),
+            }
         });
 
         let in_call = Arc::clone(&self.in_call);
@@ -224,14 +270,21 @@ impl Client {
         let stats_sender = Arc::clone(&self.stats);
 
         let sender_thread = thread::spawn(move || -> Result<(), ClientErrors> {
-            let res = Self::sender(&socket_send, &camera, &in_call, &stats_sender);
+            let res = Self::sender(
+                &socket_send,
+                &camera,
+                &in_call,
+                &stats_sender,
+                rx_audio_sender,
+            );
             if let Err(ref e) = res {
                 eprintln!("[CRITICAL] Sender thread died: {:?}", e);
+                log_c!("[CRITICAL] Sender thread died: {:?}", e);
             }
             res
         });
 
-        Ok(vec![receiver_thread, sender_thread])
+        Ok(vec![receiver_thread, sender_thread, dtls_thread])
     }
 
     ///Levanta la camara, y se queda constantemente enviando mensajes por medio de la funcion
@@ -243,10 +296,17 @@ impl Client {
         camera: &Arc<Mutex<Camera>>,
         in_call: &Arc<AtomicBool>,
         stats: &Arc<Mutex<RtcStats>>,
+        rx_audio: Receiver<Vec<u8>>,
     ) -> Result<(), ClientErrors> {
         let mut encoder = EncoderRtc::new_encoding()?;
         let mut last_sender_report_time = Instant::now();
         let sender_report_interval = Duration::from_secs(5);
+        //numero de secuencia para los paquetes RTP, cada media debe tener el suyo para que la reconstruccion
+        //tenga sentido por lo tanto tenemos seq de audio y seq de video
+        let mut audio_seq_num: u16 = 0;
+        let mut audio_timestamp: u32 = 0;
+        let mut last_video_sent = Instant::now();
+        let video_interval = Duration::from_millis(33); // Aprox 30 FPS (33ms)
 
         loop {
             // Corte de llamada y notificación remota
@@ -264,7 +324,48 @@ impl Client {
                 return Ok(());
             }
 
-            Self::send_message(socket_send, camera, &mut encoder, stats)?;
+            // calculamos cuánto tiempo falta para el próximo frame de video
+            let now = Instant::now();
+            let time_since_last_video = now.duration_since(last_video_sent);
+            let timeout = video_interval
+                .checked_sub(time_since_last_video)
+                .unwrap_or(Duration::ZERO);
+
+            // bloqueamos el hilo hasta que llegue audio o pase el tiempo de timeout
+            if let Ok(audio_data) = rx_audio.recv_timeout(timeout) {
+                let mut rtp = RtpPackage::new(audio_seq_num, audio_data);
+                rtp.payload_type = 8; //marca de que el paquete RTP es de audio
+                rtp.time_stamp = audio_timestamp;
+                let samples_in_packet = rtp.payload.len() as u32;
+                audio_timestamp = audio_timestamp.wrapping_add(samples_in_packet);
+                audio_seq_num = audio_seq_num.wrapping_add(1);
+
+                let rtp_bytes = rtp.to_bytes();
+                if let Err(e) = socket_send.send(&rtp_bytes)
+                    && !e.to_string().contains("Connection reset")
+                {
+                    eprintln!("Audio Send failed: {}", e);
+                    log_c!("Audio Send failed: {}", e);
+                }
+
+                //Revisamos si hay para leer audio del channel, si es asi armamos el paquete RTP de audio
+                while let Ok(audio_data) = rx_audio.try_recv() {
+                    let mut rtp = RtpPackage::new(audio_seq_num, audio_data);
+                    rtp.payload_type = 8;
+                    rtp.time_stamp = audio_timestamp;
+                    let samples = rtp.payload.len() as u32;
+                    audio_timestamp = audio_timestamp.wrapping_add(samples);
+                    audio_seq_num = audio_seq_num.wrapping_add(1);
+
+                    let _ = socket_send.send(&rtp.to_bytes());
+                }
+            }
+
+            //Si paso el tiempo suficiente enviamos audio
+            if last_video_sent.elapsed() >= video_interval {
+                Self::send_message(socket_send, camera, &mut encoder, stats)?;
+                last_video_sent = Instant::now();
+            }
 
             if last_sender_report_time.elapsed() >= sender_report_interval {
                 let (packets, bytes) = {
@@ -284,6 +385,12 @@ impl Client {
             }
         }
     }
+
+    fn is_dtls_packet(pkt: &[u8]) -> bool {
+        let first_byte = pkt[0];
+        (20..=64).contains(&first_byte)
+    }
+
     ///Crea un decoder, y una tabla de hash y luego se queda escuchando constantemente por el socket
     /// detecta el tipo de mensaje que se recive y delega la responsabilidad a la funcion determinada
     /// pasando los recursos necesarios para permitir el funcionamiento correcto
@@ -293,8 +400,10 @@ impl Client {
         socket_recev: &UdpSocket,
         socket_rtcp_out: &UdpSocket,
         tx_remoto: &SyncSender<Mat>,
+        tx_dtls: SyncSender<Vec<u8>>,
         in_call: &Arc<AtomicBool>,
         stats: &Arc<Mutex<RtcStats>>,
+        audio_buffer: Arc<Mutex<VecDeque<f32>>>,
     ) -> Result<(), ClientErrors> {
         let mut decoder = DecoderRtc::new_decoder()?;
         // Hash map de los fragmentos rtp
@@ -322,6 +431,11 @@ impl Client {
                         continue;
                     }
 
+                    if Self::is_dtls_packet(data) {
+                        let _ = tx_dtls.send(data.to_vec());
+                        continue;
+                    }
+
                     let package_type: u8 = data[1];
                     let mut processed_as_rtcp = false;
 
@@ -331,24 +445,57 @@ impl Client {
                         processed_as_rtcp = true;
                         if let RtcpPacket::Bye(_) = package {
                             println!("[RTCP] Recibido BYE. Cerrando llamada.");
+                            log_c!("[RTCP] Recibido BYE. Cerrando llamada.");
                             in_call.store(false, Ordering::SeqCst);
                             return Ok(());
                         }
                     }
-                    if !processed_as_rtcp && let Some(msg) = Message::deserializable(data) {
-                        match msg.content {
-                            Content::Signal(signal) => Self::signal_handle(signal, in_call),
-                            Content::Text(_text) => continue,
-                            Content::Binary(media) => {
-                                if let Some(rtp_package) = RtpPackage::from_bytes(&media) {
-                                    Self::update_rtp_stats(stats, &rtp_package, n);
+
+                    if !processed_as_rtcp {
+                        // Si el payload type es 8, sabemos que es audio
+                        if let Some(rtp) = RtpPackage::from_bytes(data)
+                            && rtp.payload_type == 8
+                        {
+                            // Decodificar y mandar al buffer de reproducción
+                            match audio_buffer.lock() {
+                                Ok(mut buffer) => {
+                                    for &byte in &rtp.payload {
+                                        let pcm_val = g711::alaw_to_linear(byte); //reconstruimos el audio
+                                        //aseguramos que la muestra sea f32 y este entre los parametros esperados
+                                        let mut sample = (pcm_val as f32) / (i16::MAX as f32);
+                                        sample = sample.clamp(-1.0, 1.0);
+                                        buffer.push_back(sample);
+                                        let excess = buffer
+                                            .len()
+                                            .saturating_sub(MAX_REMOTE_AUDIO_BUFFER_SAMPLES);
+                                        //si tenemos exceso es decir audio de "mas" o viejo lo que hacemos es dropearlo por completo
+                                        //esto no permite evitar reproducir audio viejo y tener una mejor relacion envio-escuche
+                                        if excess > 0 {
+                                            buffer.drain(0..excess);
+                                        }
+                                    }
                                 }
-                                if let Some((ts, full_frame)) =
-                                    Self::reassemble_frame(media, &mut chunks_hash)
-                                {
-                                    jitter_buffer.push(ts, full_frame);
-                                    width = msg.dimension.0;
-                                    height = msg.dimension.1;
+                                Err(_) => {
+                                    //Si todo fallo, no se deberia reproducir nada, por ende silencio
+                                }
+                            }
+                            continue;
+                        }
+                        if let Some(msg) = Message::deserializable(data) {
+                            match msg.content {
+                                Content::Signal(signal) => Self::signal_handle(signal, in_call),
+                                Content::Text(_text) => continue,
+                                Content::Binary(media) => {
+                                    if let Some(rtp_package) = RtpPackage::from_bytes(&media) {
+                                        Self::update_rtp_stats(stats, &rtp_package, n);
+                                    }
+                                    if let Some((ts, full_frame)) =
+                                        Self::reassemble_frame(media, &mut chunks_hash)
+                                    {
+                                        jitter_buffer.push(ts, full_frame);
+                                        width = msg.dimension.0;
+                                        height = msg.dimension.1;
+                                    }
                                 }
                             }
                         }
@@ -547,7 +694,10 @@ impl Client {
     /// y matchea si el hadnshake fue exitoso.
     /// El unico factor importante es el seteo de "cliente activo" para saber quien actuara de cliente
     /// y quien de servidor. Si el handshake falla la comunicacion deberia cortarse puesto que no es segura
-    pub fn perform_dtls_handshake(&self) -> Result<bool, ClientErrors> {
+    pub fn perform_dtls_handshake_mux(
+        &mut self,
+        rx_dtls: std::sync::mpsc::Receiver<Vec<u8>>,
+    ) -> Result<openssl::ssl::SslStream<MuxedUdpStream>, ClientErrors> {
         let socket = self
             .socket_send
             .as_ref()
@@ -557,6 +707,7 @@ impl Client {
             .set_nonblocking(true)
             .map_err(ClientErrors::CantConect)?;
 
+        // --- Cert self-signed (igual que ya tenés)
         let rsa = Rsa::generate(2048).map_err(|_| ClientErrors::SocketNotInitialized)?;
         let pkey = PKey::from_rsa(rsa).map_err(|_| ClientErrors::SocketNotInitialized)?;
         let mut x509 = X509::builder().map_err(|_| ClientErrors::SocketNotInitialized)?;
@@ -570,23 +721,31 @@ impl Client {
         x509.set_pubkey(&pkey).unwrap();
         x509.sign(&pkey, MessageDigest::sha256()).unwrap();
         let cert = x509.build();
-        let mut connector_builder = SslConnector::builder(SslMethod::dtls()).unwrap();
-        connector_builder.set_certificate(&cert).unwrap();
-        connector_builder.set_private_key(&pkey).unwrap();
-        connector_builder.set_verify(SslVerifyMode::NONE);
-        connector_builder
-            .set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80")
-            .unwrap();
-        let connector = connector_builder.build();
 
         let is_client = self.is_active_comunicator.load(Ordering::SeqCst);
+
+        // --- Transport correcto: MuxedUdpStream (lee desde rx_dtls, escribe al socket)
+        let mux = MuxedUdpStream::new(socket_clone, rx_dtls);
+
         println!(
-            "[DTLS] Iniciando Handshake (Non-blocking). Rol Cliente: {}",
+            "[DTLS] Iniciando Handshake (mux). Rol Cliente: {}",
             is_client
         );
-        let udp_stream = UdpStream(socket_clone);
+        log_c!(
+            "[DTLS] Iniciando Handshake (mux). Rol Cliente: {}",
+            is_client
+        );
+
         let mut stream_result = if is_client {
-            connector.connect("localhost", udp_stream)
+            let mut connector_builder = SslConnector::builder(SslMethod::dtls()).unwrap();
+            connector_builder.set_certificate(&cert).unwrap();
+            connector_builder.set_private_key(&pkey).unwrap();
+            connector_builder.set_verify(SslVerifyMode::NONE);
+            connector_builder
+                .set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80")
+                .unwrap();
+            let connector = connector_builder.build();
+            connector.connect("localhost", mux)
         } else {
             let mut acceptor_builder =
                 SslAcceptor::mozilla_intermediate(SslMethod::dtls()).unwrap();
@@ -597,13 +756,15 @@ impl Client {
                 .set_tlsext_use_srtp("SRTP_AES128_CM_SHA1_80")
                 .unwrap();
             let acceptor = acceptor_builder.build();
-            acceptor.accept(udp_stream)
+            acceptor.accept(mux)
         };
+
         let start = Instant::now();
         loop {
             match stream_result {
                 Ok(ssl_stream) => {
                     println!("[DTLS] Handshake Exitoso!");
+                    log_c!("[DTLS] Handshake Exitoso!");
                     let mut material = [0u8; 60];
                     let _ = ssl_stream.ssl().export_keying_material(
                         &mut material,
@@ -611,26 +772,32 @@ impl Client {
                         None,
                     );
                     println!("[DTLS] Keying Material Exportado (Simulado)");
-                    return Ok(true);
+                    log_c!("[DTLS] Keying Material Exportado (Simulado)");
+                    return Ok(ssl_stream);
                 }
                 Err(HandshakeError::WouldBlock(mid_stream)) => {
                     if start.elapsed() > Duration::from_secs(15) {
                         eprintln!("[DTLS] Timeout esperando handshake.");
+                        log_c!("[DTLS] Timeout esperando handshake.");
                         return Err(ClientErrors::SocketNotInitialized);
                     }
                     stream_result = mid_stream.handshake();
+                    std::thread::sleep(Duration::from_millis(2));
                 }
                 Err(HandshakeError::Failure(_)) => {
-                    eprintln!("[DTLS] Error fatal:");
+                    eprintln!("[DTLS] Error fatal");
+                    log_c!("[DTLS] Error fatal");
                     return Err(ClientErrors::SocketNotInitialized);
                 }
                 Err(HandshakeError::SetupFailure(_)) => {
-                    eprintln!("[DTLS] Error setup:");
+                    eprintln!("[DTLS] Error setup");
+                    log_c!("[DTLS] Error setup");
                     return Err(ClientErrors::SocketNotInitialized);
                 }
             }
         }
     }
+
     pub fn copy_stats(&self) -> Arc<Mutex<RtcStats>> {
         Arc::clone(&self.stats)
     }
@@ -638,19 +805,20 @@ impl Client {
 
 // creamos un wrapper para poder usar OpenSSL ya que espera cierta firma
 //para recivir y enviar por socket
-struct UdpStream(UdpSocket);
+// #[derive(Debug)]
+// struct UdpStream(UdpSocket);
 
-impl Read for UdpStream {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.0.recv(buf)
-    }
-}
+// impl Read for UdpStream {
+//     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+//         self.0.recv(buf)
+//     }
+// }
 
-impl Write for UdpStream {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.send(buf)
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
+// impl Write for UdpStream {
+//     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+//         self.0.send(buf)
+//     }
+//     fn flush(&mut self) -> std::io::Result<()> {
+//         Ok(())
+//     }
+// }

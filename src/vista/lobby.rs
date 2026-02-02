@@ -1,5 +1,5 @@
-use crate::{camera::Camera, vista::cambio::CambioVista};
-use eframe::egui::{self, Color32, Frame, RichText};
+use crate::{audio_processing::AudioSystem, camera::Camera, vista::cambio::CambioVista};
+use eframe::egui::{self, Color32, Frame, RichText, TextureHandle};
 use rustls::StreamOwned;
 use std::{
     net::TcpStream,
@@ -7,19 +7,23 @@ use std::{
 };
 
 pub struct VistaLobby {
+    username: String,
     pub users_list: Vec<String>,
+    preview_texture: Option<TextureHandle>,
 }
 
 impl Default for VistaLobby {
     fn default() -> Self {
-        Self::new()
+        Self::new(" ".to_string())
     }
 }
 
 impl VistaLobby {
-    pub fn new() -> Self {
+    pub fn new(username: String) -> Self {
         Self {
+            username,
             users_list: Vec::new(),
+            preview_texture: None,
         }
     }
 
@@ -27,6 +31,7 @@ impl VistaLobby {
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
         _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
@@ -35,14 +40,19 @@ impl VistaLobby {
             .exact_height(50.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.heading("Lobby - Usuarios Conectados");
+                    ui.heading("Usuarios Conectados");
                     ui.separator();
 
-                    ui.add_space(ui.available_width() - 120.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(10.0);
+                        if ui.button("Cerrar Sesión").clicked() {
+                            cambio = CambioVista::ToLogin;
+                        }
 
-                    if ui.button("Cerrar Sesión").clicked() {
-                        cambio = CambioVista::ToLogin;
-                    }
+                        ui.add_space(20.0);
+
+                        ui.label(RichText::new(self.username.to_string()).color(Color32::WHITE));
+                    });
                 });
             });
 
@@ -50,7 +60,12 @@ impl VistaLobby {
             return cambio;
         }
 
-        crate::vista::Vista::camera_preview_side_panel(ctx, camara);
+        cambio = crate::vista::Vista::camera_preview_side_panel(
+            ctx,
+            camara,
+            audio_system,
+            &mut self.preview_texture,
+        );
 
         egui::CentralPanel::default().show(ctx, |ui| {
             Frame::new()

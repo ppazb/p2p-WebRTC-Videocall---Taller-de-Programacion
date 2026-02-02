@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use eframe::egui::{self, Color32, Frame, RichText};
+use eframe::egui::{self, Color32, Frame, RichText, TextureHandle};
 
-use crate::{camera::Camera, vista::cambio::CambioVista};
+use crate::{audio_processing::AudioSystem, camera::Camera, vista::cambio::CambioVista};
 
-pub struct VistaCalledUserBusy {}
+pub struct VistaCalledUserBusy {
+    preview_texture: Option<TextureHandle>,
+}
 
 impl Default for VistaCalledUserBusy {
     fn default() -> Self {
@@ -14,9 +16,17 @@ impl Default for VistaCalledUserBusy {
 
 impl VistaCalledUserBusy {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            preview_texture: None,
+        }
     }
-    pub fn ui(&mut self, ctx: &egui::Context, camara: &Option<Arc<Mutex<Camera>>>) -> CambioVista {
+
+    pub fn ui(
+        &mut self,
+        ctx: &egui::Context,
+        camara: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::TopBottomPanel::top("menu_bar")
@@ -30,8 +40,17 @@ impl VistaCalledUserBusy {
                 });
             });
 
+        if cambio != CambioVista::None {
+            return cambio;
+        }
+
         // Mostramos la vista previa de la cámara local mientras esperamos
-        crate::vista::Vista::camera_preview_side_panel(ctx, camara);
+        cambio = crate::vista::Vista::camera_preview_side_panel(
+            ctx,
+            camara,
+            audio_system,
+            &mut self.preview_texture,
+        );
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.centered_and_justified(|ui| {

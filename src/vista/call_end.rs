@@ -3,12 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use eframe::egui;
+use eframe::egui::{self, TextureHandle};
 use rustls::StreamOwned;
 
-use crate::{camera::Camera, vista::cambio::CambioVista};
+use crate::{audio_processing::AudioSystem, camera::Camera, vista::cambio::CambioVista};
 
-pub struct VistaCallEnd {}
+pub struct VistaCallEnd {
+    preview_texture: Option<TextureHandle>,
+}
 
 impl Default for VistaCallEnd {
     fn default() -> Self {
@@ -18,12 +20,16 @@ impl Default for VistaCallEnd {
 
 impl VistaCallEnd {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            preview_texture: None,
+        }
     }
+
     pub fn ui(
         &mut self,
         ctx: &egui::Context,
         camara: &Option<Arc<Mutex<Camera>>>,
+        audio_system: &Arc<AudioSystem>,
         _tls_tcp: &mut Arc<std::sync::Mutex<StreamOwned<rustls::ClientConnection, TcpStream>>>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
@@ -39,7 +45,16 @@ impl VistaCallEnd {
                 });
             });
 
-        let _ = crate::vista::Vista::camera_preview_side_panel(ctx, camara);
+        if cambio != CambioVista::None {
+            return cambio;
+        }
+
+        cambio = crate::vista::Vista::camera_preview_side_panel(
+            ctx,
+            camara,
+            audio_system,
+            &mut self.preview_texture,
+        );
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Centramos verticalmente el contenido restante

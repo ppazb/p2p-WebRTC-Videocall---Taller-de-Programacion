@@ -15,4 +15,19 @@ pub enum CambioVista {
     ToCallEnd,
     CamEnable,
     CamDisable,
+
+    SendFile,
+    SendFileQuit,
+    SendFileConfirmed(String),
+    SendFileRequested { from_user: String, filename: String },
+    SendFileAccepted { from_user: String, filename: String },
+    SendFileRejected { from_user: String, filename: String },
+    SendFileNoticeClosed,
+
+    TargetUserSendFileAccepted { from_user: String, filename: String },
+    TargetUserSendFileRejected { from_user: String, filename: String },
+
+    MicEnable,
+    MicDisable,
+    PlaybackToggle { state: bool },
 }
