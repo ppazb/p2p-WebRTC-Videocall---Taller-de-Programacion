@@ -274,7 +274,7 @@ impl Vista {
                     // Cargo imagen a partir del frame obtenido
                     let image = latest_frame
                         .as_ref()
-                        .and_then(|f| Self::generar_imagen(f))
+                        .and_then(Self::generar_imagen)
                         .or_else(Self::no_camera_texture);
 
                     let content_height = buttons_height + preview_size.y + 10.0;
@@ -308,13 +308,11 @@ impl Vista {
                         {
                             cambio = CambioVista::CamDisable;
                         }
-                    } else {
-                        if ui
-                            .add_sized([200.0, 32.0], egui::Button::new("Encender cámara"))
-                            .clicked()
-                        {
-                            cambio = CambioVista::CamEnable;
-                        }
+                    } else if ui
+                        .add_sized([200.0, 32.0], egui::Button::new("Encender cámara"))
+                        .clicked()
+                    {
+                        cambio = CambioVista::CamEnable;
                     }
 
                     if !audio_system.is_capturing() {

@@ -84,13 +84,11 @@ impl VistaLlamada {
                         {
                             cambio = CambioVista::CamDisable;
                         }
-                    } else {
-                        if ui
-                            .add_sized([150.0, 32.0], egui::Button::new("Encender cámara"))
-                            .clicked()
-                        {
-                            cambio = CambioVista::CamEnable;
-                        }
+                    } else if ui
+                        .add_sized([150.0, 32.0], egui::Button::new("Encender cámara"))
+                        .clicked()
+                    {
+                        cambio = CambioVista::CamEnable;
                     }
 
                     if !audio_system.is_capturing() {
@@ -100,13 +98,11 @@ impl VistaLlamada {
                         {
                             cambio = CambioVista::MicEnable;
                         }
-                    } else {
-                        if ui
-                            .add_sized([150.0, 32.0], egui::Button::new("Apagar micrófono"))
-                            .clicked()
-                        {
-                            cambio = CambioVista::MicDisable;
-                        }
+                    } else if ui
+                        .add_sized([150.0, 32.0], egui::Button::new("Apagar micrófono"))
+                        .clicked()
+                    {
+                        cambio = CambioVista::MicDisable;
                     }
 
                     if ui
@@ -191,7 +187,7 @@ impl VistaLlamada {
                     let image = self
                         .last_local_img
                         .as_ref()
-                        .or_else(|| self.no_camera_img.as_ref());
+                        .or(self.no_camera_img.as_ref());
 
                     // Muestro la imagen contenida en el panel
                     Self::in_call_camera_feed(

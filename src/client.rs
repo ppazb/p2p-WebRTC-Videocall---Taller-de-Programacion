@@ -260,9 +260,9 @@ impl Client {
                 rx_file,
                 ssl_muxed_stream,
             ) {
-                Ok(_) => return Ok(()),
-                Err(e) => return Err(ClientErrors::SctpError(e)),
-            };
+                Ok(_) => Ok(()),
+                Err(e) => Err(ClientErrors::SctpError(e)),
+            }
         });
 
         let in_call = Arc::clone(&self.in_call);
@@ -341,12 +341,11 @@ impl Client {
                 audio_seq_num = audio_seq_num.wrapping_add(1);
 
                 let rtp_bytes = rtp.to_bytes();
-                if let Err(e) = socket_send.send(&rtp_bytes) {
-                    if !e.to_string().contains("Connection reset") {
+                if let Err(e) = socket_send.send(&rtp_bytes)
+                    && !e.to_string().contains("Connection reset") {
                         eprintln!("Audio Send failed: {}", e);
                         log_c!("Audio Send failed: {}", e);
                     }
-                }
 
                 //Revisamos si hay para leer audio del channel, si es asi armamos el paquete RTP de audio
                 while let Ok(audio_data) = rx_audio.try_recv() {
@@ -439,8 +438,8 @@ impl Client {
                     let package_type: u8 = data[1];
                     let mut processed_as_rtcp = false;
 
-                    if (200..=204).contains(&package_type) {
-                        if let Some(package) = RtcpPacket::from_bytes(data) {
+                    if (200..=204).contains(&package_type)
+                        && let Some(package) = RtcpPacket::from_bytes(data) {
                             processed_as_rtcp = true;
                             if let RtcpPacket::Bye(_) = package {
                                 println!("[RTCP] Recibido BYE. Cerrando llamada.");
@@ -449,12 +448,11 @@ impl Client {
                                 return Ok(());
                             }
                         }
-                    }
 
                     if !processed_as_rtcp {
                         // Si el payload type es 8, sabemos que es audio
-                        if let Some(rtp) = RtpPackage::from_bytes(data) {
-                            if rtp.payload_type == 8 {
+                        if let Some(rtp) = RtpPackage::from_bytes(data)
+                            && rtp.payload_type == 8 {
                                 // Decodificar y mandar al buffer de reproducción
                                 match audio_buffer.lock() {
                                     Ok(mut buffer) => {
@@ -480,7 +478,6 @@ impl Client {
                                 }
                                 continue;
                             }
-                        }
                         if let Some(msg) = Message::deserializable(data) {
                             match msg.content {
                                 Content::Signal(signal) => Self::signal_handle(signal, in_call),

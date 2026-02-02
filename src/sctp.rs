@@ -25,8 +25,8 @@ impl IncomingFile {
     pub fn new(_filename: Option<String>, incoming_file: Option<File>, expected_size: Option<u64>) -> Self {
         Self {
             // filename: filename,
-            incoming_file: incoming_file,
-            expected_size: expected_size,
+            incoming_file,
+            expected_size,
             //header_buffer: Vec::new(),
             written_size: 0
         }
@@ -106,9 +106,7 @@ pub fn start_sctp_thread(remote_adder: SocketAddr, is_initiator: &Arc<AtomicBool
                 },
                 Ok(n) => {
                     println!("[DTLS] Nuevos datos leídos: {:?}", &buffer[..n]);
-                    if let Err(e) = sctpstats.handle_network_data(&buffer[..n], &mut dtls_stream) {
-                        return Err(e); 
-                    };
+                    sctpstats.handle_network_data(&buffer[..n], &mut dtls_stream)?;;
                     sctpstats.transmit_pending(&mut dtls_stream);
                 },
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -134,10 +132,7 @@ pub fn start_sctp_thread(remote_adder: SocketAddr, is_initiator: &Arc<AtomicBool
         // Enviar primero el Header y después el contenido del archivo. 
         if sctpstats.handshake_completed.load(Ordering::SeqCst) && sctpstats.pending_file.is_some() {
             println!("[SCTP] Arranco con el envío de Archivo"); 
-            let selected_stream_id = match sctpstats.send_file_header() {
-                Ok(stream) =>  stream, 
-                Err(e) => return Err(e)
-            };
+            let selected_stream_id = sctpstats.send_file_header()?;
             sctpstats.transmit_pending(&mut dtls_stream);
             sctpstats.send_file_content(&mut dtls_stream, selected_stream_id);
             sctpstats.transmit_pending(&mut dtls_stream);
@@ -160,11 +155,11 @@ impl SctpStats {
             println!("[SCTP] ENPOINT RECEPTOR de Archivo creado"); 
 
             Self {
-                endpoint: endpoint, 
+                endpoint, 
                 assoc: None, 
                 assoc_handle: None,
-                remote: remote,  
-                pending_file: pending_file, 
+                remote,  
+                pending_file, 
                 occupied_stream_id: HashSet::new(), 
                 incoming_files: HashMap::new(),
                 handshake_completed: Arc::new(AtomicBool::new(false)), 
@@ -175,11 +170,11 @@ impl SctpStats {
             println!("[SCTP] ENPOINT EMISOR de Archivo creado"); 
 
             Self {
-                endpoint: endpoint, 
+                endpoint, 
                 assoc: None, 
                 assoc_handle: None, 
-                remote: remote,  
-                pending_file: pending_file, 
+                remote,  
+                pending_file, 
                 occupied_stream_id: HashSet::new(), 
                 incoming_files: HashMap::new(),
                 handshake_completed: Arc::new(AtomicBool::new(false)),
@@ -202,7 +197,7 @@ impl SctpStats {
                     if let Some(assoc) = self.assoc.as_mut() {
                         assoc.handle_event(assoc_ev);
 
-                        if let Some(_) =  assoc.accept_stream() {
+                        if assoc.accept_stream().is_some() {
                                 println!("[SCTP STREAM] A Stream has been accepted")
                         }; 
                         
@@ -221,8 +216,8 @@ impl SctpStats {
                                         StreamEvent::Opened => println!("[SCPT] Stream Opened"), 
                                         StreamEvent::Available => println!("[SCPT] Stream Available"), 
                                         StreamEvent::Readable { id } => {
-                                            if self.handshake_completed.load(Ordering::SeqCst) {
-                                               if let Ok(mut stream) = assoc.stream(id) {
+                                            if self.handshake_completed.load(Ordering::SeqCst)
+                                               && let Ok(mut stream) = assoc.stream(id) {
                                                     while let Ok(Some(chunks)) = stream.read_sctp() {
                                                         println!("[SCTP] Se recibió un CHUNK"); 
                                                         let mut buffer = vec![0u8; 10*1024]; 
@@ -231,7 +226,6 @@ impl SctpStats {
                                                         }
                                                     }
                                                }
-                                            }
                                         }
                                         _  => {}
                                     }
@@ -249,9 +243,7 @@ impl SctpStats {
 
         self.transmit_pending(dtls_stream);
         for (id, payload) in incoming_payloads {
-            if let Err(e) = self.process_incoming_payload_by_stream(id, &payload) {
-                return Err(e); 
-            };
+            self.process_incoming_payload_by_stream(id, &payload)?;;
         }
 
         Ok(())
@@ -336,7 +328,7 @@ impl SctpStats {
             return Ok(stream_id); 
         }
 
-        return Err(SctpError::AssociationNotEstablished); 
+        Err(SctpError::AssociationNotEstablished)
     }
 
     // Función que se necarga de mandar el contenido del archivo. sctp-proto se encarga de Chunkear el archivo 
@@ -392,7 +384,7 @@ impl SctpStats {
     // Procesa el payload entrante, usamos un stream para cada archivo 
     fn process_incoming_payload_by_stream(&mut self, stream_id: u16, payload: &[u8]) -> Result<(), SctpError> {
 
-        if !self.incoming_files.contains_key(&stream_id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.incoming_files.entry(stream_id) {
             // Nuevo archivo
 
             if payload.len() < 11 {
@@ -432,19 +424,16 @@ impl SctpStats {
             };
 
             let new_file = IncomingFile::new(Some(filename), Some(f), Some(file_size)); 
-            self.incoming_files.insert(stream_id, new_file); 
-        } else {
+            e.insert(new_file); 
+        } else if let Some(incoming) = self.incoming_files.get_mut(&stream_id) {
+            if let Some(file) = incoming.incoming_file.as_mut() {
+                let _ = file.write_all(payload); 
+            }
+            incoming.written_size += payload.len() as u64; 
 
-            if let Some(incoming) = self.incoming_files.get_mut(&stream_id) {
-                if let Some(file) = incoming.incoming_file.as_mut() {
-                    let _ = file.write_all(payload); 
-                }
-                incoming.written_size += payload.len() as u64; 
-
-                if incoming.is_complete() {
-                    println!("[SCTP] Archivo en Stream {} finalizado.", stream_id);
-                    self.incoming_files.remove(&stream_id);
-                }
+            if incoming.is_complete() {
+                println!("[SCTP] Archivo en Stream {} finalizado.", stream_id);
+                self.incoming_files.remove(&stream_id);
             }
         }
 
@@ -480,13 +469,12 @@ impl SctpStats {
     fn handle_timeout(&mut self, dtls_stream: &mut SslStream<MuxedUdpStream>) {
         let now = Instant::now(); 
 
-        if let Some(assoc) = self.assoc.as_mut() {
-            if let Some(timeout_chk) = assoc.poll_timeout() 
+        if let Some(assoc) = self.assoc.as_mut()
+            && let Some(timeout_chk) = assoc.poll_timeout() 
                 && now >= timeout_chk {
                     assoc.handle_timeout(now);
                     self.transmit_pending(dtls_stream);
                 }
-            }
         
     }
 

@@ -516,8 +516,7 @@ impl AppUI {
             }
             CambioVista::SendFileConfirmed(path) => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
-                {
-                    if let Some(writer) = &mut self.server_writer {
+                    && let Some(writer) = &mut self.server_writer {
                         let msg = ClientMessage::FileSendingRequest {
                             username: user.clone(),
                             target_user: target.clone(),
@@ -543,8 +542,7 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    };
-                };
+                    };;
 
                 self.pop_vista();
                 // if let Some(c) = &self.cliente {
@@ -568,8 +566,7 @@ impl AppUI {
                 filename,
             } => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
-                {
-                    if let Some(writer) = &mut self.server_writer {
+                    && let Some(writer) = &mut self.server_writer {
                         let msg = ClientMessage::FileSendingAccept {
                             username: user.clone(),
                             target_user: target.clone(),
@@ -597,8 +594,7 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    };
-                };
+                    };;
 
                 self.pop_vista();
             }
@@ -607,8 +603,7 @@ impl AppUI {
                 filename,
             } => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
-                {
-                    if let Some(writer) = &mut self.server_writer {
+                    && let Some(writer) = &mut self.server_writer {
                         let msg = ClientMessage::FileSendingReject {
                             username: user.clone(),
                             target_user: target.clone(),
@@ -629,8 +624,7 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    };
-                };
+                    };;
 
                 self.pop_vista();
             }

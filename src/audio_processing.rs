@@ -84,7 +84,7 @@ impl AudioSystem {
             loopback_buffer: Mutex::new(VecDeque::new()),
         });
 
-        return Ok(audio_system);
+        Ok(audio_system)
     }
 
     pub fn build_input_stream(audio: Arc<AudioSystem>) -> Result<cpal::Stream, String> {
@@ -183,8 +183,8 @@ impl AudioSystem {
             let avg = (sum / count as f32).clamp(-1.0, 1.0);
 
             // El buffer de loopback usa la misma muestra downsampleada
-            if self.mic_test_enabled.load(Ordering::Relaxed) {
-                if let Ok(mut lb) = self.loopback_buffer.lock() {
+            if self.mic_test_enabled.load(Ordering::Relaxed)
+                && let Ok(mut lb) = self.loopback_buffer.lock() {
                     lb.push_back(avg);
 
                     // Límite de buffer (se libera el exceso de muestras)
@@ -193,7 +193,6 @@ impl AudioSystem {
                         lb.drain(0..excess);
                     }
                 }
-            }
 
             // Convertimos el flotante en el rango a un entero de 16 bits redondeando
             let pcm16 = (avg * i16::MAX as f32)
@@ -206,13 +205,11 @@ impl AudioSystem {
         }
 
         // Envío el audio por red si existe un channel
-        if let Ok(lock) = self.tx_audio_packets.lock() {
-            if let Some(tx) = lock.as_ref() {
-                if !compressed_chunk.is_empty() {
+        if let Ok(lock) = self.tx_audio_packets.lock()
+            && let Some(tx) = lock.as_ref()
+                && !compressed_chunk.is_empty() {
                     let _ = tx.send(compressed_chunk);
                 }
-            }
-        }
     }
 
     pub fn build_output_stream(audio: Arc<AudioSystem>) -> Result<cpal::Stream, String> {
@@ -266,7 +263,7 @@ impl AudioSystem {
     }
 
     fn process_output_f32(&self, data: &mut [f32]) {
-        let channels = self.channels_out as usize;
+        let channels = self.channels_out;
         let frames = data.len() / channels;
 
         // Variables para almacenar la muestra, y cantidad de veces para repetirla
@@ -290,18 +287,16 @@ impl AudioSystem {
     fn next_output_sample(&self) -> f32 {
         // Sacamos la muestra del frente del buffer y se devuelve para cargarlo en data
         // El buffer de mic test tiene prioridad
-        if self.mic_test_enabled.load(Ordering::Relaxed) {
-            if let Ok(mut lb) = self.loopback_buffer.lock() {
-                if let Some(s) = lb.pop_front() {
+        if self.mic_test_enabled.load(Ordering::Relaxed)
+            && let Ok(mut lb) = self.loopback_buffer.lock()
+                && let Some(s) = lb.pop_front() {
                     return s;
                 }
-            }
-        }
 
         // Durante una llamada, saco muestras del buffer de audio remoto
-        if let Ok(remote_opt) = self.remote_audio_buffer.lock() {
-            if let Some(remote) = remote_opt.as_ref() {
-                if let Ok(mut rb) = remote.lock() {
+        if let Ok(remote_opt) = self.remote_audio_buffer.lock()
+            && let Some(remote) = remote_opt.as_ref()
+                && let Ok(mut rb) = remote.lock() {
                     // Límite de buffer (se libera el exceso de muestras)
                     if rb.len() > MAX_REMOTE_AUDIO_BUFFER_SAMPLES {
                         let excess = rb.len() - MAX_REMOTE_AUDIO_BUFFER_SAMPLES;
@@ -312,15 +307,13 @@ impl AudioSystem {
                         return s;
                     }
                 }
-            }
-        }
 
         // No hay datos, o los buffer no están inicializados
         0.0
     }
 
     fn process_output_i16(&self, data: &mut [i16]) {
-        let channels = self.channels_out as usize;
+        let channels = self.channels_out;
         let frames = data.len() / channels;
 
         // Variables para almacenar la muestra, y cantidad de veces para repetirla
@@ -345,7 +338,7 @@ impl AudioSystem {
     }
 
     fn process_output_u16(&self, data: &mut [u16]) {
-        let channels = self.channels_out as usize;
+        let channels = self.channels_out;
         let frames = data.len() / channels;
 
         // Variables para almacenar la muestra, y cantidad de veces para repetirla
@@ -378,13 +371,11 @@ impl AudioSystem {
                 lb.clear();
             }
 
-            if let Ok(mut rb_opt) = self.remote_audio_buffer.lock() {
-                if let Some(rb) = rb_opt.as_mut() {
-                    if let Ok(mut rb_lock) = rb.lock() {
+            if let Ok(mut rb_opt) = self.remote_audio_buffer.lock()
+                && let Some(rb) = rb_opt.as_mut()
+                    && let Ok(mut rb_lock) = rb.lock() {
                         rb_lock.clear();
                     }
-                }
-            }
         }
     }
 
