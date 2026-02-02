@@ -13,6 +13,7 @@ use crate::client_errors::ClientErrors;
 use crate::config::AppParameters;
 use crate::file_path::FilePathPacket;
 use crate::ice::{crear_conexion_ice, elegir_codec};
+use crate::log_c;
 use crate::sdp_errors::SdpError;
 use crate::sdp_protocol::sdp_handshake;
 use crate::signalling_protocol::{ClientMessage, ServerMessage, write_all_nonblocking};
@@ -24,14 +25,12 @@ use crate::vista::incoming_call::VistaIncomingCall;
 use crate::vista::lobby::VistaLobby;
 use crate::vista::sign_up::VistaSignUp;
 use crate::vista::{Vista, cambio::CambioVista, llamada::VistaLlamada, login::VistaLogin};
-use crate::log_c;
 use eframe::egui;
 use opencv::core::Mat;
 use rustls::StreamOwned;
 
-
 // COMENTARIO: Dsp se borra esto
-// Puse comentarios en las partes que modifiqué para que puedan saber donde están 
+// Puse comentarios en las partes que modifiqué para que puedan saber donde están
 
 pub enum AppEvent {
     LoginSuccess(String),
@@ -208,14 +207,32 @@ impl AppUI {
                                         let _ = tx.send(AppEvent::CalledUserBusy);
                                     }
                                     // Agregados para testear envío de archivos
-                                    ServerMessage::FileSendingRequestForwarded { from_user, filename } => {
-                                        let _ = tx.send(AppEvent::FileSendingRequest { from_user, filename }); 
+                                    ServerMessage::FileSendingRequestForwarded {
+                                        from_user,
+                                        filename,
+                                    } => {
+                                        let _ = tx.send(AppEvent::FileSendingRequest {
+                                            from_user,
+                                            filename,
+                                        });
                                     }
-                                    ServerMessage::FileSendingAccepted { from_user, filename } => {
-                                        let _ = tx.send(AppEvent::FileSendingAccepted { from_user, filename }); 
+                                    ServerMessage::FileSendingAccepted {
+                                        from_user,
+                                        filename,
+                                    } => {
+                                        let _ = tx.send(AppEvent::FileSendingAccepted {
+                                            from_user,
+                                            filename,
+                                        });
                                     }
-                                    ServerMessage::FileSendingRejected { from_user, filename } => {
-                                        let _ = tx.send(AppEvent::FileSendingRejected { from_user, filename }); 
+                                    ServerMessage::FileSendingRejected {
+                                        from_user,
+                                        filename,
+                                    } => {
+                                        let _ = tx.send(AppEvent::FileSendingRejected {
+                                            from_user,
+                                            filename,
+                                        });
                                     }
                                     _ => {}
                                 }
@@ -226,7 +243,7 @@ impl AppUI {
             });
 
             // Inicializo AudioSystem, y guardo referencias a los streams
-            let audio_system = match AudioSystem::new_2() {
+            let audio_system = match AudioSystem::new() {
                 Ok(s) => s,
                 Err(_) => return None,
             };
@@ -343,7 +360,12 @@ impl AppUI {
                 self.target_username = None;
                 self.pending_offer = None;
                 self.crear_camara();
-                self.vista_actual = Vista::VistaLobby(VistaLobby::new());
+
+                if let Some(u) = &self.current_username {
+                    self.vista_actual = Vista::VistaLobby(VistaLobby::new(u.to_string()));
+                } else {
+                    self.vista_actual = Vista::VistaLobby(VistaLobby::default());
+                }
             }
             CambioVista::ToCallStart { username } => {
                 self.target_username = Some(username.clone());
@@ -480,19 +502,21 @@ impl AppUI {
                     }
                 }
                 self.liberar_recursos();
-                self.audio_system.end_call();
+                self.audio_system.disconnect_audio();
                 self.crear_camara();
                 self.vista_actual = Vista::VistaCallEnd(VistaCallEnd::new());
             }
             CambioVista::SendFile => {
-                self.push_vista(Vista::VistaSendFile(crate::vista::file_sending::VistaSendFile::new()));
+                self.push_vista(Vista::VistaSendFile(
+                    crate::vista::file_sending::VistaSendFile::new(),
+                ));
             }
             CambioVista::SendFileQuit => {
                 self.pop_vista();
             }
             CambioVista::SendFileConfirmed(path) => {
-
-                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
+                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
+                {
                     if let Some(writer) = &mut self.server_writer {
                         let msg = ClientMessage::FileSendingRequest {
                             username: user.clone(),
@@ -500,7 +524,10 @@ impl AppUI {
                             filename: path.clone(),
                         };
                         // Se genera acá el FilePathPacket con el FilePath
-                        self.file_path = Some(FilePathPacket::new(Some(PathBuf::from(path.clone())), false));
+                        self.file_path = Some(FilePathPacket::new(
+                            Some(PathBuf::from(path.clone())),
+                            false,
+                        ));
 
                         let writer_arc = Arc::clone(writer);
                         let write_handle = std::thread::spawn(move || {
@@ -516,8 +543,8 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    }; 
-                }; 
+                    };
+                };
 
                 self.pop_vista();
                 // if let Some(c) = &self.cliente {
@@ -530,12 +557,18 @@ impl AppUI {
                 //     ))
                 // }
             }
-            CambioVista::SendFileRequested { from_user, filename } => {
+            CambioVista::SendFileRequested {
+                from_user,
+                filename,
+            } => {
                 self.push_vista(Vista::VistaFileSendingRequested(from_user, filename));
             }
-            CambioVista::SendFileAccepted {from_user: _, filename} => {
-
-                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
+            CambioVista::SendFileAccepted {
+                from_user: _,
+                filename,
+            } => {
+                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
+                {
                     if let Some(writer) = &mut self.server_writer {
                         let msg = ClientMessage::FileSendingAccept {
                             username: user.clone(),
@@ -546,7 +579,7 @@ impl AppUI {
                         // self.file_path = Some(FilePathPacket::new(None, true));
                         // if let Some(file_pkt_ref) = &self.file_path {
                         //     if let Some(tx_file) = &self.tx_file {
-                        //         tx_file.send(file_pkt_ref.clone()); 
+                        //         tx_file.send(file_pkt_ref.clone());
                         //     }
                         // }
 
@@ -564,14 +597,17 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    }; 
-                }; 
+                    };
+                };
 
                 self.pop_vista();
             }
-            CambioVista::SendFileRejected { from_user: _, filename } => {
-
-                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username) {
+            CambioVista::SendFileRejected {
+                from_user: _,
+                filename,
+            } => {
+                if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
+                {
                     if let Some(writer) = &mut self.server_writer {
                         let msg = ClientMessage::FileSendingReject {
                             username: user.clone(),
@@ -593,16 +629,26 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    }; 
-                }; 
+                    };
+                };
 
                 self.pop_vista();
             }
-            CambioVista::TargetUserSendFileAccepted { from_user, filename } => {
-                self.push_vista(Vista::VistaTargetUserFileSendingAccepted(from_user, filename));
+            CambioVista::TargetUserSendFileAccepted {
+                from_user,
+                filename,
+            } => {
+                self.push_vista(Vista::VistaTargetUserFileSendingAccepted(
+                    from_user, filename,
+                ));
             }
-            CambioVista::TargetUserSendFileRejected { from_user, filename } => {
-                self.push_vista(Vista::VistaTargetUserFileSendingRejected(from_user, filename));
+            CambioVista::TargetUserSendFileRejected {
+                from_user,
+                filename,
+            } => {
+                self.push_vista(Vista::VistaTargetUserFileSendingRejected(
+                    from_user, filename,
+                ));
             }
             CambioVista::SendFileNoticeClosed => {
                 self.pop_vista();
@@ -618,16 +664,19 @@ impl AppUI {
             }
             CambioVista::MicDisable => {
                 self.detener_mic();
-            },
+            }
+            CambioVista::PlaybackToggle { state } => {
+                self.audio_system.set_mic_test(state);
+            }
         }
     }
 
     fn iniciar_mic(&self) {
-        self.audio_system.enable_capture();
+        self.audio_system.set_capture(true);
     }
 
     fn detener_mic(&self) {
-        self.audio_system.disable_capture();
+        self.audio_system.set_capture(false);
     }
 
     fn liberar_recursos(&mut self) {
@@ -728,7 +777,12 @@ impl AppUI {
         self.rx_remoto = Some(rx_remoto);
         self.tx_file = Some(tx_remoto_file); // Sender para archivo
         if let Some(cam) = &self.camara {
-            let cliente = Client::new(tx_remoto, rx_remoto_file, Arc::clone(&self.in_call), Arc::clone(cam));
+            let cliente = Client::new(
+                tx_remoto,
+                rx_remoto_file,
+                Arc::clone(&self.in_call),
+                Arc::clone(cam),
+            );
             if let Ok(mut c) = cliente {
                 let _ = c.add_peer(socket);
                 c.set_rol(is_active);
@@ -861,20 +915,38 @@ impl eframe::App for AppUI {
                         login.error_msg = Some("Conection lost".into());
                     }
                 }
-                AppEvent::FileSendingRequest { from_user, filename } => {
-                    self.cambiar_vista(CambioVista::SendFileRequested { from_user, filename });
+                AppEvent::FileSendingRequest {
+                    from_user,
+                    filename,
+                } => {
+                    self.cambiar_vista(CambioVista::SendFileRequested {
+                        from_user,
+                        filename,
+                    });
                 }
-                AppEvent::FileSendingAccepted { from_user, filename } => {
+                AppEvent::FileSendingAccepted {
+                    from_user,
+                    filename,
+                } => {
                     // Si el Receptor del archivo aceptó la solicitud mando el FilePathPacket al Client
                     self.tx_file.as_ref().map(|tx| {
                         if let Some(path) = &self.file_path {
                             let _ = tx.send(path.clone());
                         }
                     });
-                    self.cambiar_vista(CambioVista::TargetUserSendFileAccepted { from_user, filename });
+                    self.cambiar_vista(CambioVista::TargetUserSendFileAccepted {
+                        from_user,
+                        filename,
+                    });
                 }
-                AppEvent::FileSendingRejected { from_user, filename } => {
-                    self.cambiar_vista(CambioVista::TargetUserSendFileRejected { from_user, filename });
+                AppEvent::FileSendingRejected {
+                    from_user,
+                    filename,
+                } => {
+                    self.cambiar_vista(CambioVista::TargetUserSendFileRejected {
+                        from_user,
+                        filename,
+                    });
                 }
             }
         }
@@ -909,7 +981,9 @@ impl eframe::App for AppUI {
         }
 
         if let Some(stream) = &mut self.server_writer {
-            let cambio = self.vista_actual.ui(ctx, &self.camara, stream, &self.audio_system);
+            let cambio = self
+                .vista_actual
+                .ui(ctx, &self.camara, stream, &self.audio_system);
             self.cambiar_vista(cambio);
         }
 

@@ -7,25 +7,32 @@ use eframe::egui::{self, Color32, ColorImage, Frame, Margin, TextureHandle, Vec2
 use rustls::StreamOwned;
 
 use crate::{
-    audio_processing::AudioSystem, camera::Camera, vista::{
-        call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy, cambio::CambioVista, file_sending::VistaSendFile, incoming_call::VistaIncomingCall, llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin, sign_up::VistaSignUp
-    }
+    audio_processing::AudioSystem,
+    camera::Camera,
+    vista::{
+        call_end::VistaCallEnd, call_start::VistaCallStart, called_user_busy::VistaCalledUserBusy,
+        cambio::CambioVista, file_sending::VistaSendFile, incoming_call::VistaIncomingCall,
+        llamada::VistaLlamada, lobby::VistaLobby, login::VistaLogin, sign_up::VistaSignUp,
+    },
 };
 use opencv::{
     core::{Mat, MatTraitConst, MatTraitConstManual},
     imgproc,
 };
 
+// Relación de aspecto para capturas de video
+const CAPTURE_ASPECT_RATIO: f32 = 4.0 / 3.0;
+
 pub mod call_end;
 pub mod call_start;
 pub mod called_user_busy;
 pub mod cambio;
+pub mod file_sending;
 pub mod incoming_call;
 pub mod llamada;
 pub mod lobby;
 pub mod login;
 pub mod sign_up;
-pub mod file_sending;
 
 pub enum Vista {
     VistaLogin(VistaLogin),
@@ -59,14 +66,24 @@ impl Vista {
             Vista::VistaCallEnd(view) => view.ui(ctx, camara, audio_system, tls_tcp),
             Vista::VistaIncomingCall(view) => view.ui(ctx, camara, tls_tcp),
             Vista::VistaCalledUserBusy(view) => view.ui(ctx, camara, audio_system),
-            Vista::VistaSendFile(view) => view.ui(ctx), 
-            Vista::VistaFileSendingRequested(from_user, filename) => Self::file_sending_requested_pop_up(ctx, from_user, filename), 
-            Vista::VistaTargetUserFileSendingAccepted(from_user, filename) => Self::file_sending_accepted_pop_up(ctx, from_user, filename),
-            Vista::VistaTargetUserFileSendingRejected(from_user, filename) => Self::file_sending_rejected_pop_up(ctx, from_user, filename),
+            Vista::VistaSendFile(view) => view.ui(ctx),
+            Vista::VistaFileSendingRequested(from_user, filename) => {
+                Self::file_sending_requested_pop_up(ctx, from_user, filename)
+            }
+            Vista::VistaTargetUserFileSendingAccepted(from_user, filename) => {
+                Self::file_sending_accepted_pop_up(ctx, from_user, filename)
+            }
+            Vista::VistaTargetUserFileSendingRejected(from_user, filename) => {
+                Self::file_sending_rejected_pop_up(ctx, from_user, filename)
+            }
         }
     }
 
-    fn file_sending_requested_pop_up(ctx: &egui::Context, from_user: &str, filename: &str) -> CambioVista {
+    fn file_sending_requested_pop_up(
+        ctx: &egui::Context,
+        from_user: &str,
+        filename: &str,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::Window::new("Solicitud de envío de archivo")
@@ -75,16 +92,25 @@ impl Vista {
             .default_width(300.0)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label(format!("Usuario {} quiere enviarte un archivo: {}", from_user, filename));
+                ui.label(format!(
+                    "Usuario {} quiere enviarte un archivo: {}",
+                    from_user, filename
+                ));
 
                 ui.horizontal(|ui| {
                     if ui.button("Aceptar").clicked() {
                         // Lógica para aceptar el envío
-                        cambio = CambioVista::SendFileAccepted { from_user: from_user.to_string(), filename: filename.to_string() }; 
+                        cambio = CambioVista::SendFileAccepted {
+                            from_user: from_user.to_string(),
+                            filename: filename.to_string(),
+                        };
                     }
                     if ui.button("Rechazar").clicked() {
                         // Lógica para rechazar el envío
-                        cambio = CambioVista::SendFileRejected { from_user: from_user.to_string(), filename: filename.to_string() }; 
+                        cambio = CambioVista::SendFileRejected {
+                            from_user: from_user.to_string(),
+                            filename: filename.to_string(),
+                        };
                     }
                 });
             });
@@ -92,7 +118,11 @@ impl Vista {
         cambio
     }
 
-    fn file_sending_accepted_pop_up(ctx: &egui::Context, from_user: &str, filename: &str) -> CambioVista {
+    fn file_sending_accepted_pop_up(
+        ctx: &egui::Context,
+        from_user: &str,
+        filename: &str,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::Window::new("Solicitud Aceptada")
@@ -101,17 +131,24 @@ impl Vista {
             .default_width(500.0)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label(format!("El usuario {} ha aceptado recibir el archivo: {}", from_user, filename));
+                ui.label(format!(
+                    "El usuario {} ha aceptado recibir el archivo: {}",
+                    from_user, filename
+                ));
 
                 if ui.button("Cerrar").clicked() {
-                    cambio = CambioVista::SendFileNoticeClosed; 
+                    cambio = CambioVista::SendFileNoticeClosed;
                 }
             });
 
         cambio
     }
 
-    fn file_sending_rejected_pop_up(ctx: &egui::Context, from_user: &str, filename: &str) -> CambioVista {
+    fn file_sending_rejected_pop_up(
+        ctx: &egui::Context,
+        from_user: &str,
+        filename: &str,
+    ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
         egui::Window::new("Solicitud Rechazada")
@@ -120,10 +157,13 @@ impl Vista {
             .default_width(500.0)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label(format!("El usuario {} ha rechazado recibir el archivo: {}", from_user, filename));
+                ui.label(format!(
+                    "El usuario {} ha rechazado recibir el archivo: {}",
+                    from_user, filename
+                ));
 
                 if ui.button("Cerrar").clicked() {
-                    cambio = CambioVista::None; 
+                    cambio = CambioVista::None;
                 }
             });
 
@@ -165,7 +205,7 @@ impl Vista {
         ctx: &egui::Context,
         camera: &Option<Arc<Mutex<Camera>>>,
         audio_system: &Arc<AudioSystem>,
-        texture: &mut Option<TextureHandle>
+        texture: &mut Option<TextureHandle>,
     ) -> CambioVista {
         let mut cambio = CambioVista::None;
 
@@ -201,14 +241,14 @@ impl Vista {
                 // Vista previa de cámara + controles
                 ui.vertical_centered(|ui| {
                     // Mediciones de vista previa
-                    let aspect_ratio = 4.0 / 3.0;
+                    let aspect_ratio = CAPTURE_ASPECT_RATIO;
 
                     // Calculo dimensiones en base al espacio disponible
                     let max_size = ui.available_size();
                     let buttons_height = 100.0;
                     let side_padding = 40.0;
 
-                    let max_width  = (max_size.x - side_padding).max(0.0);
+                    let max_width = (max_size.x - side_padding).max(0.0);
                     let max_height = (max_size.y - buttons_height).max(0.0);
 
                     // Limito valores por aspect ratio
@@ -232,32 +272,29 @@ impl Vista {
                     };
 
                     // Cargo imagen a partir del frame obtenido
-                    let image = latest_frame.as_ref()
-                    .and_then(|f| Self::generar_imagen(f))
-                    .or_else(Self::no_camera_texture);
+                    let image = latest_frame
+                        .as_ref()
+                        .and_then(|f| Self::generar_imagen(f))
+                        .or_else(Self::no_camera_texture);
 
                     let content_height = buttons_height + preview_size.y + 10.0;
-                    let top_space = ((ui.available_height() - content_height).max(20.0))/2.0;
+                    let top_space = ((ui.available_height() - content_height).max(20.0)) / 2.0;
                     ui.add_space(top_space);
 
                     // Actualizo textura recibida de la vista
                     if let Some(img) = image {
                         let texture = texture.get_or_insert_with(|| {
-                            ctx.load_texture(
-                                "cam_local",
-                                img.clone(),
-                                egui::TextureOptions::LINEAR,
-                            )
+                            ctx.load_texture("cam_local", img.clone(), egui::TextureOptions::LINEAR)
                         });
                         texture.set(img.clone(), egui::TextureOptions::LINEAR);
 
                         // Dibujo la textura en un recuadro del tamaño calculado
                         let (rect, _) = ui.allocate_exact_size(preview_size, egui::Sense::hover());
                         Self::draw_frame_aspect_fill(
-                            ui, 
-                            texture, 
+                            ui,
+                            texture,
                             egui::vec2(img.width() as f32, img.height() as f32), // tamaño real del frame captado
-                            rect
+                            rect,
                         );
                     }
 
@@ -265,22 +302,42 @@ impl Vista {
 
                     // Controles
                     if cam_active {
-                        if ui.add_sized([200.0, 32.0], egui::Button::new("Apagar cámara")).clicked(){
+                        if ui
+                            .add_sized([200.0, 32.0], egui::Button::new("Apagar cámara"))
+                            .clicked()
+                        {
                             cambio = CambioVista::CamDisable;
                         }
                     } else {
-                        if ui.add_sized([200.0, 32.0], egui::Button::new("Encender cámara")).clicked(){
+                        if ui
+                            .add_sized([200.0, 32.0], egui::Button::new("Encender cámara"))
+                            .clicked()
+                        {
                             cambio = CambioVista::CamEnable;
                         }
                     }
-                    
+
                     if !audio_system.is_capturing() {
-                        if ui.add_sized([200.0, 32.0], egui::Button::new("Encender micrófono")).clicked(){
+                        if ui
+                            .add_sized([200.0, 32.0], egui::Button::new("Encender micrófono"))
+                            .clicked()
+                        {
                             cambio = CambioVista::MicEnable;
                         }
                     } else {
-                        if ui.add_sized([200.0, 32.0], egui::Button::new("Apagar micrófono")).clicked(){
+                        if ui
+                            .add_sized([200.0, 32.0], egui::Button::new("Apagar micrófono"))
+                            .clicked()
+                        {
                             cambio = CambioVista::MicDisable;
+                        }
+                        if ui
+                            .checkbox(&mut audio_system.is_playing_back(), "Escuchar audio")
+                            .changed()
+                        {
+                            cambio = CambioVista::PlaybackToggle {
+                                state: !audio_system.is_playing_back(),
+                            };
                         }
                     }
                 });
@@ -298,8 +355,7 @@ impl Vista {
         let rect_size = rect.size();
 
         // La escala indica qué proporción del frame puede dibujarse en el recuadro
-        let scale = (rect_size.x / frame_size.x)
-            .max(rect_size.y / frame_size.y);
+        let scale = (rect_size.x / frame_size.x).max(rect_size.y / frame_size.y);
         let scaled_size = frame_size * scale;
 
         // Sobrante por ajuste de aspect ratio
@@ -310,10 +366,7 @@ impl Vista {
             (excess.x / scaled_size.x) / 2.0,
             (excess.y / scaled_size.y) / 2.0,
         );
-        let uv_max = egui::pos2(
-            1.0 - uv_min.x,
-            1.0 - uv_min.y,
-        );
+        let uv_max = egui::pos2(1.0 - uv_min.x, 1.0 - uv_min.y);
 
         // Dibujo la textura
         ui.painter().image(

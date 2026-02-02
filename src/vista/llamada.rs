@@ -4,14 +4,20 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
         mpsc::Receiver,
-    }, time::Instant,
+    },
+    time::Instant,
 };
 
 use eframe::egui::{self, Color32, ColorImage, Frame, Margin, RichText, TextureHandle, Vec2};
 use opencv::prelude::*;
 use rustls::StreamOwned;
 
-use crate::{audio_processing::AudioSystem, camera::Camera, client::RtcStats, vista::cambio::CambioVista};
+use crate::{
+    audio_processing::AudioSystem,
+    camera::Camera,
+    client::RtcStats,
+    vista::{CAPTURE_ASPECT_RATIO, cambio::CambioVista},
+};
 
 pub struct VistaLlamada {
     rx_remoto: Option<Receiver<Mat>>,
@@ -72,30 +78,54 @@ impl VistaLlamada {
                     };
 
                     if cam_active {
-                        if ui.add_sized([150.0, 32.0], egui::Button::new("Apagar cámara")).clicked(){
+                        if ui
+                            .add_sized([150.0, 32.0], egui::Button::new("Apagar cámara"))
+                            .clicked()
+                        {
                             cambio = CambioVista::CamDisable;
                         }
                     } else {
-                        if ui.add_sized([150.0, 32.0], egui::Button::new("Encender cámara")).clicked(){
+                        if ui
+                            .add_sized([150.0, 32.0], egui::Button::new("Encender cámara"))
+                            .clicked()
+                        {
                             cambio = CambioVista::CamEnable;
                         }
                     }
-                    
+
                     if !audio_system.is_capturing() {
-                        if ui.add_sized([150.0, 32.0], egui::Button::new("Encender micrófono")).clicked(){
+                        if ui
+                            .add_sized([150.0, 32.0], egui::Button::new("Encender micrófono"))
+                            .clicked()
+                        {
                             cambio = CambioVista::MicEnable;
                         }
                     } else {
-                        if ui.add_sized([150.0, 32.0], egui::Button::new("Apagar micrófono")).clicked(){
+                        if ui
+                            .add_sized([150.0, 32.0], egui::Button::new("Apagar micrófono"))
+                            .clicked()
+                        {
                             cambio = CambioVista::MicDisable;
                         }
                     }
 
-                    if ui.add_sized([150.0, 32.0], egui::Button::new("Enviar archivo")).clicked() {
+                    if ui
+                        .add_sized([150.0, 32.0], egui::Button::new("Enviar archivo"))
+                        .clicked()
+                    {
                         cambio = CambioVista::SendFile;
                     }
 
-                    if ui.add_sized([150.0, 32.0], egui::Button::new(RichText::new("Finalizar llamada").color(Color32::WHITE)).fill(Color32::DARK_RED)).clicked() {
+                    if ui
+                        .add_sized(
+                            [150.0, 32.0],
+                            egui::Button::new(
+                                RichText::new("Finalizar llamada").color(Color32::WHITE),
+                            )
+                            .fill(Color32::DARK_RED),
+                        )
+                        .clicked()
+                    {
                         cambio = CambioVista::ToCallEnd;
 
                         // Cambio el estado del flag, notificando a los threads del cliente
@@ -119,7 +149,6 @@ impl VistaLlamada {
                             },
                         );
                     });
-                    
                 })
             });
 
@@ -133,7 +162,7 @@ impl VistaLlamada {
             .show_separator_line(true)
             .min_width(panel_width)
             .default_width(panel_width)
-            .max_width(screen_width * (1.0-panel_ratio))
+            .max_width(screen_width * (1.0 - panel_ratio))
             .frame(
                 Frame::default()
                     .inner_margin(Margin::same(0))
@@ -159,26 +188,37 @@ impl VistaLlamada {
                         self.last_local_img = None;
                     }
 
-                    let image = self.last_local_img
+                    let image = self
+                        .last_local_img
                         .as_ref()
                         .or_else(|| self.no_camera_img.as_ref());
-                    
+
                     // Muestro la imagen contenida en el panel
-                    Self::in_call_camera_feed(ctx, ui, &mut self.tex_local, "cam_local".to_string(), image);
+                    Self::in_call_camera_feed(
+                        ctx,
+                        ui,
+                        &mut self.tex_local,
+                        "cam_local".to_string(),
+                        image,
+                    );
                 });
             });
 
-        egui::CentralPanel::default()
-            .show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 // Carga de frame
-                let latest_img = if let Some(rx) = &self.rx_remoto && let Ok(frame) = rx.try_recv() {
+                let latest_img = if let Some(rx) = &self.rx_remoto
+                    && let Ok(frame) = rx.try_recv()
+                {
                     let img = crate::vista::Vista::generar_imagen(&frame);
                     self.last_remote_img = img;
                     self.last_remote_img.as_ref()
                 } else {
                     let now = Instant::now();
-                    if let Ok(s) = self.stats.lock() && let Some(last_arrival) = s.last_arrival_time && now.duration_since(last_arrival).as_millis() as f64 > 3000.0 {
+                    if let Ok(s) = self.stats.lock()
+                        && let Some(last_arrival) = s.last_arrival_time
+                        && now.duration_since(last_arrival).as_millis() as f64 > 3000.0
+                    {
                         self.no_camera_img.as_ref()
                     } else {
                         self.last_remote_img.as_ref()
@@ -186,21 +226,33 @@ impl VistaLlamada {
                 };
 
                 // Cargo imagen a partir del frame obtenido
-                Self::in_call_camera_feed(ctx, ui, &mut self.tex_remoto, "cam_remota".to_string(), latest_img);
+                Self::in_call_camera_feed(
+                    ctx,
+                    ui,
+                    &mut self.tex_remoto,
+                    "cam_remota".to_string(),
+                    latest_img,
+                );
             });
         });
         cambio
     }
 
-    fn in_call_camera_feed(ctx: &egui::Context, ui: &mut egui::Ui, tex: &mut Option<TextureHandle>, id: String, image: Option<&ColorImage>) {
+    fn in_call_camera_feed(
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        tex: &mut Option<TextureHandle>,
+        id: String,
+        image: Option<&ColorImage>,
+    ) {
         // Mediciones de vista previa
-        let aspect_ratio = 4.0 / 3.0;
+        let aspect_ratio = CAPTURE_ASPECT_RATIO;
 
         // Calculo dimensiones en base al espacio disponible
         let max_size = ui.available_size();
         let side_padding = 40.0;
 
-        let max_width  = (max_size.x - side_padding).max(0.0);
+        let max_width = (max_size.x - side_padding).max(0.0);
         let max_height = (max_size.y).max(0.0);
 
         // Limito valores por aspect ratio
@@ -212,27 +264,23 @@ impl VistaLlamada {
             egui::vec2(max_width, max_width / aspect_ratio)
         };
 
-        let top_space = ((ui.available_height() - preview_size.y).max(20.0))/2.0;
+        let top_space = ((ui.available_height() - preview_size.y).max(20.0)) / 2.0;
         ui.add_space(top_space);
 
         // Actualizo textura recibida de la vista
         if let Some(img) = image {
             let texture = tex.get_or_insert_with(|| {
-                ctx.load_texture(
-                    id,
-                    img.clone(),
-                    egui::TextureOptions::LINEAR,
-                )
+                ctx.load_texture(id, img.clone(), egui::TextureOptions::LINEAR)
             });
             texture.set(img.clone(), egui::TextureOptions::LINEAR);
 
             // Dibujo la textura en un recuadro del tamaño calculado
             let (rect, _) = ui.allocate_exact_size(preview_size, egui::Sense::hover());
             crate::vista::Vista::draw_frame_aspect_fill(
-                ui, 
-                texture, 
+                ui,
+                texture,
                 egui::vec2(img.width() as f32, img.height() as f32), // tamaño real del frame captado
-                rect
+                rect,
             );
         }
     }
@@ -271,28 +319,30 @@ impl VistaLlamada {
             let widget = Self::jitter_indicator(ui, color);
 
             // Completo tooltip con más estadísticas
-            widget.on_hover_ui(|ui| {
-                ui.set_min_width(150.0);
+            widget
+                .on_hover_ui(|ui| {
+                    ui.set_min_width(150.0);
 
-                ui.label("Recepción (Video)");
-                ui.separator();
+                    ui.label("Recepción (Video)");
+                    ui.separator();
 
-                ui.label(format!("Jitter: {:.2} ms", s.get_jitter()));
-                ui.label(format!(
-                    "Bitrate: {}",
-                    Self::format_bitrate(s.get_bitrate())
-                ));
-                ui.label(format!("Paquetes: {}", Self::format_pps(s.get_pps())));
-                ui.separator();
+                    ui.label(format!("Jitter: {:.2} ms", s.get_jitter()));
+                    ui.label(format!(
+                        "Bitrate: {}",
+                        Self::format_bitrate(s.get_bitrate())
+                    ));
+                    ui.label(format!("Paquetes: {}", Self::format_pps(s.get_pps())));
+                    ui.separator();
 
-                // ui.label(format!(
-                //     "Totales:\n\
-                //     \t- Paquetes: {}\n\
-                //     \t- Bytes: {}",
-                //     s.packets_received,
-                //     s.bytes_received,
-                // ));
-            }).hover_pos();
+                    // ui.label(format!(
+                    //     "Totales:\n\
+                    //     \t- Paquetes: {}\n\
+                    //     \t- Bytes: {}",
+                    //     s.packets_received,
+                    //     s.bytes_received,
+                    // ));
+                })
+                .hover_pos();
         }
     }
 
