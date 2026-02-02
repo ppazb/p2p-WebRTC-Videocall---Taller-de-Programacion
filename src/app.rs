@@ -542,7 +542,7 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    };;
+                    };
 
                 self.pop_vista();
                 // if let Some(c) = &self.cliente {
@@ -624,7 +624,7 @@ impl AppUI {
                         });
 
                         self.handles.push(write_handle);
-                    };;
+                    };
 
                 self.pop_vista();
             }

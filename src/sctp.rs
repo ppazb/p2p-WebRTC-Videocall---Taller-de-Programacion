@@ -106,7 +106,7 @@ pub fn start_sctp_thread(remote_adder: SocketAddr, is_initiator: &Arc<AtomicBool
                 },
                 Ok(n) => {
                     println!("[DTLS] Nuevos datos leídos: {:?}", &buffer[..n]);
-                    sctpstats.handle_network_data(&buffer[..n], &mut dtls_stream)?;;
+                    sctpstats.handle_network_data(&buffer[..n], &mut dtls_stream)?;
                     sctpstats.transmit_pending(&mut dtls_stream);
                 },
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -243,7 +243,7 @@ impl SctpStats {
 
         self.transmit_pending(dtls_stream);
         for (id, payload) in incoming_payloads {
-            self.process_incoming_payload_by_stream(id, &payload)?;;
+            self.process_incoming_payload_by_stream(id, &payload)?;
         }
 
         Ok(())
