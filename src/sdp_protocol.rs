@@ -7,11 +7,11 @@
 // a=rtpmap:0 PCMU/8000
 // a=candidate: 196.168.0.1 80000
 
-use rustls::StreamOwned;
-use crate::log_c;
 use crate::config::SdpHandshakeParameters;
+use crate::log_c;
 use crate::sdp_errors::SdpError;
 use crate::signalling_protocol::{ClientMessage, ServerMessage, write_all_nonblocking};
+use rustls::StreamOwned;
 // use crate::stun::get_stun_candidate; //STUN esta implementado pero no se usa por falta de TURN
 use std::net::{TcpStream, UdpSocket};
 use std::sync::Arc;
@@ -526,7 +526,8 @@ pub fn gather_candidates(
                         local_addr.ip(),
                         local_addr.port()
                     );
-                    log_c!("[SDP] Created host candidate: {}:{}",
+                    log_c!(
+                        "[SDP] Created host candidate: {}:{}",
                         local_addr.ip(),
                         local_addr.port()
                     );
@@ -560,7 +561,11 @@ pub fn gather_candidates(
         candidates.len(),
         sockets.len()
     );
-    log_c!("[SDP] Gathered {} candidates on {} sockets", candidates.len(), sockets.len());
+    log_c!(
+        "[SDP] Gathered {} candidates on {} sockets",
+        candidates.len(),
+        sockets.len()
+    );
     Ok((sockets, candidates))
 }
 

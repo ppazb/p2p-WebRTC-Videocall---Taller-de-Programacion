@@ -516,33 +516,32 @@ impl AppUI {
             }
             CambioVista::SendFileConfirmed(path) => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
-                    && let Some(writer) = &mut self.server_writer {
-                        let msg = ClientMessage::FileSendingRequest {
-                            username: user.clone(),
-                            target_user: target.clone(),
-                            filename: path.clone(),
-                        };
-                        // Se genera acá el FilePathPacket con el FilePath
-                        self.file_path = Some(FilePathPacket::new(
-                            Some(PathBuf::from(path.clone())),
-                            false,
-                        ));
-
-                        let writer_arc = Arc::clone(writer);
-                        let write_handle = std::thread::spawn(move || {
-                            let mut guard_write = match writer_arc.lock() {
-                                Ok(gw) => gw,
-                                Err(_) => return,
-                            };
-
-                            let _ = write_all_nonblocking(
-                                &mut *guard_write,
-                                msg.to_json_line().as_bytes(),
-                            );
-                        });
-
-                        self.handles.push(write_handle);
+                    && let Some(writer) = &mut self.server_writer
+                {
+                    let msg = ClientMessage::FileSendingRequest {
+                        username: user.clone(),
+                        target_user: target.clone(),
+                        filename: path.clone(),
                     };
+                    // Se genera acá el FilePathPacket con el FilePath
+                    self.file_path = Some(FilePathPacket::new(
+                        Some(PathBuf::from(path.clone())),
+                        false,
+                    ));
+
+                    let writer_arc = Arc::clone(writer);
+                    let write_handle = std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
+                        };
+
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
+
+                    self.handles.push(write_handle);
+                };
 
                 self.pop_vista();
                 // if let Some(c) = &self.cliente {
@@ -566,35 +565,34 @@ impl AppUI {
                 filename,
             } => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
-                    && let Some(writer) = &mut self.server_writer {
-                        let msg = ClientMessage::FileSendingAccept {
-                            username: user.clone(),
-                            target_user: target.clone(),
-                            filename: filename.clone(),
+                    && let Some(writer) = &mut self.server_writer
+                {
+                    let msg = ClientMessage::FileSendingAccept {
+                        username: user.clone(),
+                        target_user: target.clone(),
+                        filename: filename.clone(),
+                    };
+
+                    // self.file_path = Some(FilePathPacket::new(None, true));
+                    // if let Some(file_pkt_ref) = &self.file_path {
+                    //     if let Some(tx_file) = &self.tx_file {
+                    //         tx_file.send(file_pkt_ref.clone());
+                    //     }
+                    // }
+
+                    let writer_arc = Arc::clone(writer);
+                    let write_handle = std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
                         };
 
-                        // self.file_path = Some(FilePathPacket::new(None, true));
-                        // if let Some(file_pkt_ref) = &self.file_path {
-                        //     if let Some(tx_file) = &self.tx_file {
-                        //         tx_file.send(file_pkt_ref.clone());
-                        //     }
-                        // }
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
 
-                        let writer_arc = Arc::clone(writer);
-                        let write_handle = std::thread::spawn(move || {
-                            let mut guard_write = match writer_arc.lock() {
-                                Ok(gw) => gw,
-                                Err(_) => return,
-                            };
-
-                            let _ = write_all_nonblocking(
-                                &mut *guard_write,
-                                msg.to_json_line().as_bytes(),
-                            );
-                        });
-
-                        self.handles.push(write_handle);
-                    };;
+                    self.handles.push(write_handle);
+                };
 
                 self.pop_vista();
             }
@@ -603,28 +601,27 @@ impl AppUI {
                 filename,
             } => {
                 if let (Some(user), Some(target)) = (&self.current_username, &self.target_username)
-                    && let Some(writer) = &mut self.server_writer {
-                        let msg = ClientMessage::FileSendingReject {
-                            username: user.clone(),
-                            target_user: target.clone(),
-                            filename: filename.clone(),
+                    && let Some(writer) = &mut self.server_writer
+                {
+                    let msg = ClientMessage::FileSendingReject {
+                        username: user.clone(),
+                        target_user: target.clone(),
+                        filename: filename.clone(),
+                    };
+
+                    let writer_arc = Arc::clone(writer);
+                    let write_handle = std::thread::spawn(move || {
+                        let mut guard_write = match writer_arc.lock() {
+                            Ok(gw) => gw,
+                            Err(_) => return,
                         };
 
-                        let writer_arc = Arc::clone(writer);
-                        let write_handle = std::thread::spawn(move || {
-                            let mut guard_write = match writer_arc.lock() {
-                                Ok(gw) => gw,
-                                Err(_) => return,
-                            };
+                        let _ =
+                            write_all_nonblocking(&mut *guard_write, msg.to_json_line().as_bytes());
+                    });
 
-                            let _ = write_all_nonblocking(
-                                &mut *guard_write,
-                                msg.to_json_line().as_bytes(),
-                            );
-                        });
-
-                        self.handles.push(write_handle);
-                    };
+                    self.handles.push(write_handle);
+                };
 
                 self.pop_vista();
             }

@@ -342,10 +342,11 @@ impl Client {
 
                 let rtp_bytes = rtp.to_bytes();
                 if let Err(e) = socket_send.send(&rtp_bytes)
-                    && !e.to_string().contains("Connection reset") {
-                        eprintln!("Audio Send failed: {}", e);
-                        log_c!("Audio Send failed: {}", e);
-                    }
+                    && !e.to_string().contains("Connection reset")
+                {
+                    eprintln!("Audio Send failed: {}", e);
+                    log_c!("Audio Send failed: {}", e);
+                }
 
                 //Revisamos si hay para leer audio del channel, si es asi armamos el paquete RTP de audio
                 while let Ok(audio_data) = rx_audio.try_recv() {
@@ -439,45 +440,47 @@ impl Client {
                     let mut processed_as_rtcp = false;
 
                     if (200..=204).contains(&package_type)
-                        && let Some(package) = RtcpPacket::from_bytes(data) {
-                            processed_as_rtcp = true;
-                            if let RtcpPacket::Bye(_) = package {
-                                println!("[RTCP] Recibido BYE. Cerrando llamada.");
-                                log_c!("[RTCP] Recibido BYE. Cerrando llamada.");
-                                in_call.store(false, Ordering::SeqCst);
-                                return Ok(());
-                            }
+                        && let Some(package) = RtcpPacket::from_bytes(data)
+                    {
+                        processed_as_rtcp = true;
+                        if let RtcpPacket::Bye(_) = package {
+                            println!("[RTCP] Recibido BYE. Cerrando llamada.");
+                            log_c!("[RTCP] Recibido BYE. Cerrando llamada.");
+                            in_call.store(false, Ordering::SeqCst);
+                            return Ok(());
                         }
+                    }
 
                     if !processed_as_rtcp {
                         // Si el payload type es 8, sabemos que es audio
                         if let Some(rtp) = RtpPackage::from_bytes(data)
-                            && rtp.payload_type == 8 {
-                                // Decodificar y mandar al buffer de reproducción
-                                match audio_buffer.lock() {
-                                    Ok(mut buffer) => {
-                                        for &byte in &rtp.payload {
-                                            let pcm_val = g711::alaw_to_linear(byte); //reconstruimos el audio
-                                            //aseguramos que la muestra sea f32 y este entre los parametros esperados
-                                            let mut sample = (pcm_val as f32) / (i16::MAX as f32);
-                                            sample = sample.clamp(-1.0, 1.0);
-                                            buffer.push_back(sample);
-                                            let excess = buffer
-                                                .len()
-                                                .saturating_sub(MAX_REMOTE_AUDIO_BUFFER_SAMPLES);
-                                            //si tenemos exceso es decir audio de "mas" o viejo lo que hacemos es dropearlo por completo
-                                            //esto no permite evitar reproducir audio viejo y tener una mejor relacion envio-escuche
-                                            if excess > 0 {
-                                                buffer.drain(0..excess);
-                                            }
+                            && rtp.payload_type == 8
+                        {
+                            // Decodificar y mandar al buffer de reproducción
+                            match audio_buffer.lock() {
+                                Ok(mut buffer) => {
+                                    for &byte in &rtp.payload {
+                                        let pcm_val = g711::alaw_to_linear(byte); //reconstruimos el audio
+                                        //aseguramos que la muestra sea f32 y este entre los parametros esperados
+                                        let mut sample = (pcm_val as f32) / (i16::MAX as f32);
+                                        sample = sample.clamp(-1.0, 1.0);
+                                        buffer.push_back(sample);
+                                        let excess = buffer
+                                            .len()
+                                            .saturating_sub(MAX_REMOTE_AUDIO_BUFFER_SAMPLES);
+                                        //si tenemos exceso es decir audio de "mas" o viejo lo que hacemos es dropearlo por completo
+                                        //esto no permite evitar reproducir audio viejo y tener una mejor relacion envio-escuche
+                                        if excess > 0 {
+                                            buffer.drain(0..excess);
                                         }
                                     }
-                                    Err(_) => {
-                                        //Si todo fallo, no se deberia reproducir nada, por ende silencio
-                                    }
                                 }
-                                continue;
+                                Err(_) => {
+                                    //Si todo fallo, no se deberia reproducir nada, por ende silencio
+                                }
                             }
+                            continue;
+                        }
                         if let Some(msg) = Message::deserializable(data) {
                             match msg.content {
                                 Content::Signal(signal) => Self::signal_handle(signal, in_call),

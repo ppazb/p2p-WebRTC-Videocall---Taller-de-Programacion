@@ -1,4 +1,4 @@
-use crate::{json_parser::json_clasify};
+use crate::json_parser::json_clasify;
 use std::io::{self, ErrorKind, Write};
 
 /// Mensajes que envía el cliente al servidor
@@ -56,22 +56,22 @@ pub enum ClientMessage {
     },
 
     FileSendingRequest {
-        username: String, 
-        target_user: String, 
-        filename: String
-    }, 
+        username: String,
+        target_user: String,
+        filename: String,
+    },
 
     FileSendingReject {
-        username: String, 
-        target_user: String, 
-        filename: String
-    }, 
+        username: String,
+        target_user: String,
+        filename: String,
+    },
 
     FileSendingAccept {
-        username: String, 
-        target_user: String, 
-        filename: String
-    }, 
+        username: String,
+        target_user: String,
+        filename: String,
+    },
 }
 
 /// Mensajes que envía el servidor al cliente
@@ -105,16 +105,16 @@ pub enum ServerMessage {
     CallRejected { from_user: String },
 
     // Servidor al recibir el request de un Client de mandar un archivo a otro Client
-    // envía un Message al Client solicitado para recibir el archivo 
-    FileSendingRequestForwarded { from_user: String, filename: String }, 
+    // envía un Message al Client solicitado para recibir el archivo
+    FileSendingRequestForwarded { from_user: String, filename: String },
 
-    // El Client Receptor del archivo cuando RECHAZA la solicitud de 
-    // envío de archivo, el Servidor le manda al Client Emisor un Mensaje de Rechazo 
-    FileSendingRejected { from_user: String, filename: String }, 
+    // El Client Receptor del archivo cuando RECHAZA la solicitud de
+    // envío de archivo, el Servidor le manda al Client Emisor un Mensaje de Rechazo
+    FileSendingRejected { from_user: String, filename: String },
 
-    // El Client Receptor del archivo cuando ACEPTA la solicitud de envío de archivo, 
+    // El Client Receptor del archivo cuando ACEPTA la solicitud de envío de archivo,
     // el Servidor le manda al Client Emisor un Mensaje de Aceptación
-    FileSendingAccepted { from_user: String, filename: String}, 
+    FileSendingAccepted { from_user: String, filename: String },
 
     Error { reason: String },
 }
@@ -207,21 +207,33 @@ impl ClientMessage {
                 replace_special_character(target_user)
             ),
 
-            ClientMessage::FileSendingRequest { username, target_user, filename } => format!(
+            ClientMessage::FileSendingRequest {
+                username,
+                target_user,
+                filename,
+            } => format!(
                 "{{\"type\":\"file_sending_request\",\"username\":\"{}\",\"target_user\":\"{}\",\"filename\":\"{}\"}}\n",
                 replace_special_character(username),
                 replace_special_character(target_user),
                 replace_special_character(filename)
             ),
 
-            ClientMessage::FileSendingReject { username, target_user, filename } => format!(
+            ClientMessage::FileSendingReject {
+                username,
+                target_user,
+                filename,
+            } => format!(
                 "{{\"type\":\"file_sending_deny\",\"username\":\"{}\",\"target_user\":\"{}\",\"filename\":\"{}\"}}\n",
                 replace_special_character(username),
                 replace_special_character(target_user),
                 replace_special_character(filename)
             ),
 
-            ClientMessage::FileSendingAccept { username, target_user, filename } => format!(
+            ClientMessage::FileSendingAccept {
+                username,
+                target_user,
+                filename,
+            } => format!(
                 "{{\"type\":\"file_sending_accept\",\"username\":\"{}\",\"target_user\":\"{}\",\"filename\":\"{}\"}}\n",
                 replace_special_character(username),
                 replace_special_character(target_user),
@@ -379,19 +391,28 @@ impl ServerMessage {
                 replace_special_character(reason)
             ),
 
-            ServerMessage::FileSendingRequestForwarded { from_user, filename } => format!(
+            ServerMessage::FileSendingRequestForwarded {
+                from_user,
+                filename,
+            } => format!(
                 "{{\"type\":\"file_sending_request_forwarded\",\"from_user\":\"{}\",\"filename\":\"{}\"}}\n",
                 replace_special_character(from_user),
                 replace_special_character(filename)
             ),
 
-            ServerMessage::FileSendingRejected { from_user, filename } => format!(
+            ServerMessage::FileSendingRejected {
+                from_user,
+                filename,
+            } => format!(
                 "{{\"type\":\"file_sending_rejected\",\"from_user\":\"{}\",\"filename\":\"{}\"}}\n",
                 replace_special_character(from_user),
                 replace_special_character(filename)
             ),
 
-            ServerMessage::FileSendingAccepted { from_user, filename } => format!(
+            ServerMessage::FileSendingAccepted {
+                from_user,
+                filename,
+            } => format!(
                 "{{\"type\":\"file_sending_accepted\",\"from_user\":\"{}\",\"filename\":\"{}\"}}\n",
                 replace_special_character(from_user),
                 replace_special_character(filename)

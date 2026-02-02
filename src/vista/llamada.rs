@@ -184,10 +184,7 @@ impl VistaLlamada {
                         self.last_local_img = None;
                     }
 
-                    let image = self
-                        .last_local_img
-                        .as_ref()
-                        .or(self.no_camera_img.as_ref());
+                    let image = self.last_local_img.as_ref().or(self.no_camera_img.as_ref());
 
                     // Muestro la imagen contenida en el panel
                     Self::in_call_camera_feed(

@@ -657,7 +657,11 @@ fn handle_client(
                             }
                         }
                     }
-                    Some(ClientMessage::FileSendingRequest { username, target_user, filename }) => {
+                    Some(ClientMessage::FileSendingRequest {
+                        username,
+                        target_user,
+                        filename,
+                    }) => {
                         let mut clients_map = connected_clients
                             .lock()
                             .map_err(|e| std::io::Error::other(format!("Sync Error: {e}")))?;
@@ -675,7 +679,11 @@ fn handle_client(
                             }
                         }
                     }
-                    Some(ClientMessage::FileSendingAccept { username, target_user, filename }) => {
+                    Some(ClientMessage::FileSendingAccept {
+                        username,
+                        target_user,
+                        filename,
+                    }) => {
                         let mut clients_map = connected_clients
                             .lock()
                             .map_err(|e| std::io::Error::other(format!("Sync Error: {e}")))?;
@@ -693,7 +701,11 @@ fn handle_client(
                             }
                         }
                     }
-                    Some(ClientMessage::FileSendingReject { username, target_user, filename }) => {
+                    Some(ClientMessage::FileSendingReject {
+                        username,
+                        target_user,
+                        filename,
+                    }) => {
                         let mut clients_map = connected_clients
                             .lock()
                             .map_err(|e| std::io::Error::other(format!("Sync Error: {e}")))?;

@@ -1,6 +1,6 @@
 use crate::ice_errors::IceErrors;
-use std::net::UdpSocket;
 use crate::log_c;
+use std::net::UdpSocket;
 // Lista de códecs en orden de prioridad
 const PRIORIDAD_CODECS: [&str; 1] = ["H264"];
 
@@ -23,7 +23,10 @@ pub fn crear_conexion_ice(
         "[ICE] Trying to connect with {} peer candidates",
         peer_candidates.len()
     );
-    log_c!("[ICE] Trying to connect with {} peer candidates", peer_candidates.len());
+    log_c!(
+        "[ICE] Trying to connect with {} peer candidates",
+        peer_candidates.len()
+    );
 
     // obtengo las direcciones de los candidatos del otro
     // formato ejemplo: 1 1 UDP 2130706431 192.168.1.100 5000 typ host

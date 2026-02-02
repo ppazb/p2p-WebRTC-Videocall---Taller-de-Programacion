@@ -184,15 +184,16 @@ impl AudioSystem {
 
             // El buffer de loopback usa la misma muestra downsampleada
             if self.mic_test_enabled.load(Ordering::Relaxed)
-                && let Ok(mut lb) = self.loopback_buffer.lock() {
-                    lb.push_back(avg);
+                && let Ok(mut lb) = self.loopback_buffer.lock()
+            {
+                lb.push_back(avg);
 
-                    // Límite de buffer (se libera el exceso de muestras)
-                    if lb.len() > MAX_REMOTE_AUDIO_BUFFER_SAMPLES {
-                        let excess = lb.len() - MAX_REMOTE_AUDIO_BUFFER_SAMPLES;
-                        lb.drain(0..excess);
-                    }
+                // Límite de buffer (se libera el exceso de muestras)
+                if lb.len() > MAX_REMOTE_AUDIO_BUFFER_SAMPLES {
+                    let excess = lb.len() - MAX_REMOTE_AUDIO_BUFFER_SAMPLES;
+                    lb.drain(0..excess);
                 }
+            }
 
             // Convertimos el flotante en el rango a un entero de 16 bits redondeando
             let pcm16 = (avg * i16::MAX as f32)
@@ -207,9 +208,10 @@ impl AudioSystem {
         // Envío el audio por red si existe un channel
         if let Ok(lock) = self.tx_audio_packets.lock()
             && let Some(tx) = lock.as_ref()
-                && !compressed_chunk.is_empty() {
-                    let _ = tx.send(compressed_chunk);
-                }
+            && !compressed_chunk.is_empty()
+        {
+            let _ = tx.send(compressed_chunk);
+        }
     }
 
     pub fn build_output_stream(audio: Arc<AudioSystem>) -> Result<cpal::Stream, String> {
@@ -289,24 +291,26 @@ impl AudioSystem {
         // El buffer de mic test tiene prioridad
         if self.mic_test_enabled.load(Ordering::Relaxed)
             && let Ok(mut lb) = self.loopback_buffer.lock()
-                && let Some(s) = lb.pop_front() {
-                    return s;
-                }
+            && let Some(s) = lb.pop_front()
+        {
+            return s;
+        }
 
         // Durante una llamada, saco muestras del buffer de audio remoto
         if let Ok(remote_opt) = self.remote_audio_buffer.lock()
             && let Some(remote) = remote_opt.as_ref()
-                && let Ok(mut rb) = remote.lock() {
-                    // Límite de buffer (se libera el exceso de muestras)
-                    if rb.len() > MAX_REMOTE_AUDIO_BUFFER_SAMPLES {
-                        let excess = rb.len() - MAX_REMOTE_AUDIO_BUFFER_SAMPLES;
-                        rb.drain(0..excess);
-                    }
+            && let Ok(mut rb) = remote.lock()
+        {
+            // Límite de buffer (se libera el exceso de muestras)
+            if rb.len() > MAX_REMOTE_AUDIO_BUFFER_SAMPLES {
+                let excess = rb.len() - MAX_REMOTE_AUDIO_BUFFER_SAMPLES;
+                rb.drain(0..excess);
+            }
 
-                    if let Some(s) = rb.pop_front() {
-                        return s;
-                    }
-                }
+            if let Some(s) = rb.pop_front() {
+                return s;
+            }
+        }
 
         // No hay datos, o los buffer no están inicializados
         0.0
@@ -373,9 +377,10 @@ impl AudioSystem {
 
             if let Ok(mut rb_opt) = self.remote_audio_buffer.lock()
                 && let Some(rb) = rb_opt.as_mut()
-                    && let Ok(mut rb_lock) = rb.lock() {
-                        rb_lock.clear();
-                    }
+                && let Ok(mut rb_lock) = rb.lock()
+            {
+                rb_lock.clear();
+            }
         }
     }
 

@@ -4,10 +4,9 @@ use std::path::PathBuf;
 // al Client, después lo dejé porque SCTP maneja con FilePathPacket
 #[derive(Debug, Clone)]
 pub struct FilePathPacket {
-    path: Option<PathBuf>, 
-    is_server: bool
+    path: Option<PathBuf>,
+    is_server: bool,
 }
-
 
 impl FilePathPacket {
     pub fn new(path: Option<PathBuf>, is_server: bool) -> Self {
@@ -20,5 +19,5 @@ impl FilePathPacket {
 
     pub fn is_server(&self) -> bool {
         self.is_server
-    } 
+    }
 }

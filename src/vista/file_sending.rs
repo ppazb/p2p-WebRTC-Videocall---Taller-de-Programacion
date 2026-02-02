@@ -1,9 +1,9 @@
 use eframe::egui;
 
-use crate::{vista::cambio::CambioVista};
+use crate::vista::cambio::CambioVista;
 
 pub struct VistaSendFile {
-    file_path: String, 
+    file_path: String,
     error_message: Option<String>,
 }
 
@@ -14,7 +14,6 @@ impl Default for VistaSendFile {
 }
 
 impl VistaSendFile {
-
     pub fn new() -> Self {
         Self {
             file_path: String::new(),
@@ -44,14 +43,12 @@ impl VistaSendFile {
                     } else {
                         self.error_message = None;
                         cambio = CambioVista::SendFileConfirmed(self.file_path.clone());
-
-                        
                     }
                 }
 
                 if ui.button("Volver").clicked() {
                     self.error_message = None;
-                    cambio = CambioVista::SendFileQuit; 
+                    cambio = CambioVista::SendFileQuit;
                 }
             });
 

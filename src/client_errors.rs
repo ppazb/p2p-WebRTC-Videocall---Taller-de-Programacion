@@ -19,7 +19,7 @@ pub enum ClientErrors {
     DecodingError(DecodingErrors),
     SerializeBits,
     SendBits,
-    SctpError(SctpError), 
+    SctpError(SctpError),
     SdpError(SdpError),
     IceError(IceErrors),
     SocketNotInitialized,
