@@ -249,14 +249,14 @@ impl Vista {
                                 egui::TextureOptions::LINEAR,
                             )
                         });
-                        texture.set(img, egui::TextureOptions::LINEAR);
+                        texture.set(img.clone(), egui::TextureOptions::LINEAR);
 
                         // Dibujo la textura en un recuadro del tamaño calculado
                         let (rect, _) = ui.allocate_exact_size(preview_size, egui::Sense::hover());
                         Self::draw_frame_aspect_fill(
                             ui, 
                             texture, 
-                            egui::vec2(1280.0, 720.0), // tamaño real del frame captado
+                            egui::vec2(img.width() as f32, img.height() as f32), // tamaño real del frame captado
                             rect
                         );
                     }
@@ -283,58 +283,6 @@ impl Vista {
                             cambio = CambioVista::MicDisable;
                         }
                     }
-
-                    // ui.set_width(ui.available_width());
-
-                    // let top_space = (ui.available_height() - 240.0 - 10.0).max(0.0) / 2.0;
-                    // ui.add_space(top_space);
-
-                    // if let Some(cam) = camera {
-                    //     if let Ok(cam) = cam.lock()
-                    //         && cam.is_active()
-                    //     {
-                    //         let frame = cam.get_last_frame();
-
-                    //         let imagen;
-                    //         if let Some(f) = &frame {
-                    //             imagen = Self::generar_imagen(f);
-                    //         } else {
-                    //             imagen = Self::no_camera_texture();
-                    //         }
-
-                    //         if let Some(img) = imagen {
-                    //             let textura = ctx.load_texture(
-                    //                 "cam_local",
-                    //                 img,
-                    //                 egui::TextureOptions::LINEAR,
-                    //             );
-                    //             ui.image((textura.id(), egui::vec2(320.0, 240.0)));
-                    //         };
-
-                    //         ui.add_space(10.0);
-
-                    //         if ui.button("Apagar cámara").clicked() {
-                    //             cambio = CambioVista::CamDisable;
-                    //         }
-                    //     } else {
-                    //         let imagen = Self::no_camera_texture();
-
-                    //         if let Some(img) = imagen {
-                    //             let textura = ctx.load_texture(
-                    //                 "cam_local",
-                    //                 img,
-                    //                 egui::TextureOptions::LINEAR,
-                    //             );
-                    //             ui.image((textura.id(), egui::vec2(320.0, 240.0)));
-                    //         };
-
-                    //         ui.add_space(10.0);
-
-                    //         if ui.button("Encender cámara").clicked() {
-                    //             cambio = CambioVista::CamEnable;
-                    //         }
-                    //     }
-                    // }
                 });
             });
 
